@@ -1,0 +1,65 @@
+syntax = "proto3";
+
+package v1;
+option go_package = "github.com/XaviFP/toshokan/api/deck/proto/v1";
+
+service DecksAPI {
+  rpc GetDeck (GetDeckRequest) returns (GetDeckResponse) {}
+  rpc GetDecks (GetDecksRequest) returns (GetDecksResponse) {}
+  rpc CreateDeck (CreateDeckRequest) returns (CreateDeckResponse) {}
+  rpc DeleteDeck (DeleteDeckRequest) returns (DeleteDeckResponse) {}
+}
+
+// The request message containing the user's name.
+message GetDeckRequest {
+  string deck_id = 1;
+  string user_id = 2;
+}
+
+message GetDeckResponse {
+    Deck deck = 1;
+}
+
+message GetDecksRequest {
+}
+  
+message GetDecksResponse {
+    repeated Deck decks = 1;
+}
+
+message CreateDeckRequest {
+    Deck deck = 1;
+}
+
+message CreateDeckResponse {
+    Deck deck = 1;
+}
+
+message DeleteDeckRequest {
+    string id = 1;
+}
+
+message DeleteDeckResponse {}
+
+message Deck {
+    string id = 1;
+    string author_id = 2;
+    string title = 3;
+    string description = 4;
+    repeated Card cards = 5;
+
+}
+
+message Card {
+    string id = 1;
+    string deck_id = 2;
+    string title = 3;
+    repeated Answer possible_answers = 4;
+}
+
+message Answer {
+    string id = 1;
+    string card_id = 2;
+    string text = 3;
+    bool is_correct = 4;
+}
