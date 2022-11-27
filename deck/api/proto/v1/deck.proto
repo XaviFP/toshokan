@@ -21,6 +21,7 @@ message GetDeckResponse {
 }
 
 message GetDecksRequest {
+    string user_id = 1;
 }
   
 message GetDecksResponse {

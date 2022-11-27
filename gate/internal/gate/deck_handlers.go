@@ -29,7 +29,12 @@ func GetDeck(ctx *gin.Context, usersClient pbUser.UserAPIClient, decksClient pbD
 }
 
 func GetDecks(ctx *gin.Context, usersClient pbUser.UserAPIClient, decksClient pbDeck.DecksAPIClient) {
-	req := &pbDeck.GetDecksRequest{}
+	userID := getUserID(ctx)
+	if userID == "" {
+		ctx.IndentedJSON(http.StatusInternalServerError, nil)
+		return
+	}
+	req := &pbDeck.GetDecksRequest{UserId: userID}
 
 	res, err := decksClient.GetDecks(ctx, req)
 	if err != nil {

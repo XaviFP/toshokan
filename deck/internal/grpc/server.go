@@ -57,7 +57,10 @@ func (s *Server) GetDeck(ctx context.Context, req *pb.GetDeckRequest) (*pb.GetDe
 			return &pb.GetDeckResponse{}, status.Error(codes.NotFound, errors.Trace(err).Error())
 		}
 		return &pb.GetDeckResponse{}, errors.Trace(err)
+	}
 
+	if d.AuthorID.String() != req.UserId && !d.Public {
+		return nil, errors.New("not authorized")
 	}
 
 	return &pb.GetDeckResponse{Deck: toGRPCDeck(d)}, nil
@@ -69,7 +72,14 @@ func (s *Server) GetDecks(ctx context.Context, req *pb.GetDecksRequest) (*pb.Get
 		return &pb.GetDecksResponse{}, errors.Trace(err)
 	}
 
-	return &pb.GetDecksResponse{Decks: toGRPCDecks(decks)}, nil
+	var out []deck.Deck
+	for _, d := range decks {
+		if d.Public || d.AuthorID.String() == req.UserId {
+			out = append(out, d)
+		}
+	}
+
+	return &pb.GetDecksResponse{Decks: toGRPCDecks(out)}, nil
 }
 
 func (s *Server) CreateDeck(ctx context.Context, req *pb.CreateDeckRequest) (*pb.CreateDeckResponse, error) {
