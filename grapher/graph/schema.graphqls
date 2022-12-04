@@ -1,0 +1,77 @@
+type Profile {
+  id: ID!
+  username: String!
+  displayName: String
+  bio: String
+}
+
+type Deck {
+  id: ID!
+  title: String!
+  description: String!
+  cards: [Card]
+}
+
+type Card {
+  id: ID!
+  title: String!
+  answers: [Answer]
+}
+
+type Answer {
+  id: ID!
+  text: String!
+  isCorrect: Boolean!
+}
+
+type PopularDecksConnection {
+  edges: [PopularDeckEdge!]
+  pageInfo: PageInfo!
+}
+
+type PopularDeckEdge {
+  node: Deck
+  cursor: String
+}
+
+type PageInfo {
+  hasPreviousPage: Boolean!
+  hasNextPage: Boolean!
+  startCursor: String
+  endCursor: String
+}
+
+type Query {
+  deck(id: ID!): Deck
+  popularDecks: PopularDecksConnection
+}
+
+input CreateDeckInput {
+  title: String!
+  description: String!
+  isPublic: Boolean!
+  cards: [CreateCardInput!]!
+}
+
+input CreateCardInput {
+  title: String!
+  answers: [CreateAnswerInput!]!
+}
+
+input CreateAnswerInput {
+  text: String!
+  isCorrect: Boolean!
+}
+
+type CreateDeckResponse {
+  deck: Deck
+}
+
+type DeleteDeckResponse {
+  success: Boolean
+}
+
+type Mutation {
+  createDeck(input: CreateDeckInput!): CreateDeckResponse
+  deleteDeck(id: ID!): DeleteDeckResponse
+}

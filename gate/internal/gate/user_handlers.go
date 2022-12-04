@@ -12,6 +12,16 @@ type tokenResponse struct {
 	Token string `json:"token"`
 }
 
+func RegisterUserRoutes(r *gin.Engine, userClient userPB.UserAPIClient) {
+	r.POST("/signup", func(ctx *gin.Context) {
+		signUp(ctx, userClient)
+	})
+
+	r.POST("/login", func(ctx *gin.Context) {
+		logIn(ctx, userClient)
+	})
+}
+
 func signUp(ctx *gin.Context, userClient userPB.UserAPIClient) {
 	var req userPB.SignUpRequest
 
@@ -44,14 +54,4 @@ func logIn(ctx *gin.Context, userClient userPB.UserAPIClient) {
 	}
 
 	ctx.IndentedJSON(http.StatusOK, tokenResponse{res.Token})
-}
-
-func RegisterUserRoutes(r *gin.Engine, userClient userPB.UserAPIClient) {
-	r.POST("/signup", func(ctx *gin.Context) {
-		signUp(ctx, userClient)
-	})
-
-	r.POST("/login", func(ctx *gin.Context) {
-		logIn(ctx, userClient)
-	})
 }
