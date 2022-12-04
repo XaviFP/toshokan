@@ -1,6 +1,7 @@
 package gate
 
 import (
+	"context"
 	"net/http"
 	"strings"
 
@@ -85,7 +86,7 @@ func DeleteDeck(ctx *gin.Context, usersClient pbUser.UserAPIClient, decksClient 
 	ctx.IndentedJSON(http.StatusOK, nil)
 }
 
-func RegisterlibraryRoutes(r *gin.RouterGroup, usersClient pbUser.UserAPIClient, decksClient pbDeck.DecksAPIClient) {
+func RegisterDeckRoutes(r *gin.RouterGroup, usersClient pbUser.UserAPIClient, decksClient pbDeck.DecksAPIClient) {
 	r.GET("/decks/:id", func(ctx *gin.Context) {
 		GetDeck(ctx, usersClient, decksClient)
 	})
@@ -156,4 +157,12 @@ func getUserID(ctx *gin.Context) string {
 	out, _ := userID.(string)
 
 	return out
+}
+
+func GinContextToContextMiddleware() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		ctx := context.WithValue(c.Request.Context(), "GinContextKey", c)
+		c.Request = c.Request.WithContext(ctx)
+		c.Next() // TODO: Good practice?
+	}
 }

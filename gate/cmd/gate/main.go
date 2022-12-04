@@ -10,6 +10,7 @@ import (
 
 	pbDeck "github.com/XaviFP/toshokan/deck/api/proto/v1"
 	"github.com/XaviFP/toshokan/gate/internal/gate"
+	"github.com/XaviFP/toshokan/grapher"
 	pbUser "github.com/XaviFP/toshokan/user/api/proto/v1"
 )
 
@@ -54,9 +55,15 @@ func main() {
 	deckClient := pbDeck.NewDecksAPIClient(deckGRPCConn)
 
 	router := gin.Default()
+	router.Use(gate.GinContextToContextMiddleware())
+
+	queryPath := "/query"
+	router.GET("/play", grapher.NewPlaygroundHandler(queryPath))
+
 	authorized := router.Group("/")
 	gate.RegisterMiddlewares(authorized, userClient, deckClient)
-	gate.RegisterlibraryRoutes(authorized, userClient, deckClient)
+	authorized.POST(queryPath, grapher.NewGraphqlHandler(deckClient, userClient))
+	gate.RegisterDeckRoutes(authorized, userClient, deckClient)
 	gate.RegisterUserRoutes(router, userClient)
 
 	if err := router.Run(c.gate.HTTPAddress()); err != nil {
