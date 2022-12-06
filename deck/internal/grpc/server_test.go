@@ -9,6 +9,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 
+	"github.com/XaviFP/toshokan/common/pagination"
 	pb "github.com/XaviFP/toshokan/deck/api/proto/v1"
 	"github.com/XaviFP/toshokan/deck/internal/deck"
 )
@@ -177,5 +178,69 @@ func TestServer_DeleteDeck(t *testing.T) {
 		res, err := srv.DeleteDeck(context.Background(), &deckReq)
 		assert.Error(t, err)
 		assert.Equal(t, &pb.DeleteDeckResponse{}, res)
+	})
+}
+
+func TestServer_GetPopularDecks(t *testing.T) {
+	repoMock := &deck.RepositoryMock{}
+	srv := &Server{Repository: repoMock}
+
+	t.Run("success", func(t *testing.T) {
+		repoMock.On("GetPopularDecks", mock.Anything, pagination.Pagination{
+			First: 2,
+			After: pagination.Cursor("9999"),
+		},
+		).Return(deck.PopularDecksConnection{
+			Edges: []deck.PopularDeckEdge{
+				{
+					DeckID: uuid.MustParse("f79aea77-9aa0-4a84-b4c8-d000a27d2c52"),
+					Cursor: pagination.Cursor("9999"),
+				},
+				{
+					DeckID: uuid.MustParse("6363e2c6-d89e-4610-92e8-1e1d2fea49ec"),
+					Cursor: pagination.Cursor("8888"),
+				},
+			},
+			PageInfo: pagination.PageInfo{
+				HasNextPage: true,
+				StartCursor: pagination.Cursor("9999"),
+				EndCursor:   pagination.Cursor("8888"),
+			},
+		}, nil)
+
+		res, err := srv.GetPopularDecks(context.Background(), &pb.GetPopularDecksRequest{
+			Pagination: &pb.Pagination{
+				First: 2,
+				After: "9999",
+			},
+		})
+		assert.NoError(t, err)
+
+		assert.Equal(t, &pb.GetPopularDecksResponse{Connection: &pb.PopularDecksConnection{
+			Edges: []*pb.PopularDecksConnection_Edge{
+				{
+					DeckId: "f79aea77-9aa0-4a84-b4c8-d000a27d2c52",
+					Cursor: "9999",
+				},
+				{
+					DeckId: "6363e2c6-d89e-4610-92e8-1e1d2fea49ec",
+					Cursor: "8888",
+				},
+			},
+			PageInfo: &pb.PageInfo{
+				HasNextPage: true,
+				StartCursor: "9999",
+				EndCursor:   "8888",
+			},
+		}}, res)
+	})
+
+	t.Run("error", func(t *testing.T) {
+		repoMock.On("GetPopularDecks", mock.Anything, pagination.Pagination{}).Return(
+			deck.PopularDecksConnection{},
+			assert.AnError,
+		)
+		_, err := srv.GetPopularDecks(context.Background(), &pb.GetPopularDecksRequest{Pagination: &pb.Pagination{}})
+		assert.ErrorIs(t, err, assert.AnError)
 	})
 }

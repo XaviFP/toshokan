@@ -5,7 +5,6 @@ package graph
 
 import (
 	"context"
-	"fmt"
 
 	v1 "github.com/XaviFP/toshokan/deck/api/proto/v1"
 	"github.com/XaviFP/toshokan/grapher/graph/generated"
@@ -65,8 +64,67 @@ func (r *queryResolver) Deck(ctx context.Context, id string) (*model.Deck, error
 }
 
 // PopularDecks is the resolver for the popularDecks field.
-func (r *queryResolver) PopularDecks(ctx context.Context) (*model.PopularDecksConnection, error) {
-	panic(fmt.Errorf("not implemented: PopularDecks - popularDecks"))
+func (r *queryResolver) PopularDecks(ctx context.Context, first *int, after *string, last *int, before *string) (*model.PopularDecksConnection, error) {
+	res, err := r.DeckClient.GetPopularDecks(ctx, &v1.GetPopularDecksRequest{Pagination: paginationFromInput(
+		first, after, last, before,
+	)})
+	if err != nil {
+		return nil, errors.Trace(err)
+	}
+
+	out, err := r.connectionToModel(ctx, res.Connection)
+	if err != nil {
+		return nil, errors.Trace(err)
+	}
+
+	return out, nil
+}
+
+func paginationFromInput(first *int, after *string, last *int, before *string) *v1.Pagination {
+	var out v1.Pagination
+	if first != nil {
+		out.First = int64(*first)
+	}
+
+	if after != nil {
+		out.After = *after
+	}
+
+	if last != nil {
+		out.Last = int64(*last)
+	}
+
+	if before != nil {
+		out.Before = *before
+	}
+
+	return &out
+}
+
+func (r *queryResolver) connectionToModel(ctx context.Context, conn *v1.PopularDecksConnection) (*model.PopularDecksConnection, error) {
+	var edges []*model.PopularDeckEdge
+
+	for _, e := range conn.Edges {
+		deck, err := r.Deck(ctx, e.DeckId)
+		if err != nil {
+			return nil, errors.Trace(err)
+		}
+
+		edges = append(edges, &model.PopularDeckEdge{
+			Node:   deck,
+			Cursor: &e.Cursor,
+		})
+	}
+
+	return &model.PopularDecksConnection{
+		Edges: edges,
+		PageInfo: &model.PageInfo{
+			HasPreviousPage: conn.PageInfo.HasPreviousPage,
+			HasNextPage:     conn.PageInfo.HasNextPage,
+			StartCursor:     &conn.PageInfo.StartCursor,
+			EndCursor:       &conn.PageInfo.EndCursor,
+		},
+	}, nil
 }
 
 // Mutation returns generated.MutationResolver implementation.

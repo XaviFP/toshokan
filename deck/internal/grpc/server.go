@@ -10,6 +10,7 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 
+	"github.com/XaviFP/toshokan/common/pagination"
 	pb "github.com/XaviFP/toshokan/deck/api/proto/v1"
 	"github.com/XaviFP/toshokan/deck/internal/deck"
 )
@@ -59,7 +60,7 @@ func (s *Server) GetDeck(ctx context.Context, req *pb.GetDeckRequest) (*pb.GetDe
 		return &pb.GetDeckResponse{}, errors.Trace(err)
 	}
 
-	if d.AuthorID.String() != req.UserId && !d.Public {
+	if (d.AuthorID.String() != req.UserId) && !d.Public {
 		return nil, errors.New("not authorized")
 	}
 
@@ -80,6 +81,47 @@ func (s *Server) GetDecks(ctx context.Context, req *pb.GetDecksRequest) (*pb.Get
 	}
 
 	return &pb.GetDecksResponse{Decks: toGRPCDecks(out)}, nil
+}
+
+func (s *Server) GetPopularDecks(ctx context.Context, req *pb.GetPopularDecksRequest) (*pb.GetPopularDecksResponse, error) {
+	res, err := s.Repository.GetPopularDecks(ctx, paginationFromProto(req.Pagination))
+	if err != nil {
+		return nil, errors.Trace(err)
+	}
+
+	return &pb.GetPopularDecksResponse{
+		Connection: connectionToProto(res),
+	}, nil
+}
+
+func paginationFromProto(p *pb.Pagination) pagination.Pagination {
+	return pagination.Pagination{
+		Before: pagination.Cursor(p.Before),
+		After:  pagination.Cursor(p.After),
+		First:  int(p.First),
+		Last:   int(p.Last),
+	}
+}
+
+func connectionToProto(conn deck.PopularDecksConnection) *pb.PopularDecksConnection {
+	var edges []*pb.PopularDecksConnection_Edge
+
+	for _, e := range conn.Edges {
+		edges = append(edges, &pb.PopularDecksConnection_Edge{
+			DeckId: e.DeckID.String(),
+			Cursor: string(e.Cursor),
+		})
+	}
+
+	return &pb.PopularDecksConnection{
+		Edges: edges,
+		PageInfo: &pb.PageInfo{
+			HasPreviousPage: conn.PageInfo.HasPreviousPage,
+			HasNextPage:     conn.PageInfo.HasNextPage,
+			StartCursor:     string(conn.PageInfo.StartCursor),
+			EndCursor:       string(conn.PageInfo.EndCursor),
+		},
+	}
 }
 
 func (s *Server) CreateDeck(ctx context.Context, req *pb.CreateDeckRequest) (*pb.CreateDeckResponse, error) {
