@@ -3,6 +3,7 @@ package deck
 import (
 	"context"
 
+	"github.com/XaviFP/toshokan/common/pagination"
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/mock"
 )
@@ -41,4 +42,10 @@ func (m *RepositoryMock) GetCardAnswers(ctx context.Context, id uuid.UUID) ([]An
 	args := m.Called(ctx, id)
 
 	return args[0].([]Answer), args.Error(1)
+}
+
+func (m *RepositoryMock) GetPopularDecks(ctx context.Context, p pagination.Pagination) (PopularDecksConnection, error) {
+	args := m.Called(ctx, p)
+
+	return args.Get(0).(PopularDecksConnection), args.Error(1)
 }

@@ -37,3 +37,17 @@ func IsConstraintError(err error, constraintName string) bool {
 
 	return pgErr.Constraint == constraintName
 }
+
+type Argumenter struct {
+	values []any
+}
+
+func (a *Argumenter) Add(v any) string {
+	a.values = append(a.values, v)
+
+	return fmt.Sprintf("$%d", len(a.values))
+}
+
+func (a *Argumenter) Values() []any {
+	return a.values
+}

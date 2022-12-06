@@ -8,6 +8,8 @@ service DecksAPI {
   rpc GetDecks (GetDecksRequest) returns (GetDecksResponse) {}
   rpc CreateDeck (CreateDeckRequest) returns (CreateDeckResponse) {}
   rpc DeleteDeck (DeleteDeckRequest) returns (DeleteDeckResponse) {}
+
+  rpc GetPopularDecks (GetPopularDecksRequest) returns (GetPopularDecksResponse) {}
 }
 
 // The request message containing the user's name.
@@ -41,6 +43,38 @@ message DeleteDeckRequest {
 }
 
 message DeleteDeckResponse {}
+
+message GetPopularDecksRequest {
+    Pagination pagination = 1;
+}
+
+message GetPopularDecksResponse {
+    PopularDecksConnection connection = 1;
+}
+
+message PageInfo {
+	bool has_previous_page = 1;
+	bool has_next_page = 2;
+	string start_cursor = 3;
+	string end_cursor = 4;
+}
+
+message PopularDecksConnection {
+    message Edge {
+        string deck_id = 1;
+        string cursor = 2;
+    }
+
+	repeated Edge edges = 1;
+	PageInfo page_info = 2;
+}
+
+message Pagination {
+    int64 last = 1;
+    int64 first = 2;
+    string after = 3;
+    string before = 4;
+}
 
 message Deck {
     string id = 1;

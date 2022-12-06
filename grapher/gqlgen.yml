@@ -18,10 +18,10 @@ model:
   package: model
 
 # Where should the resolver implementations go?
-resolver:
-  layout: follow-schema
-  dir: graph
-  package: graph
+# resolver:
+#   layout: follow-schema
+#   dir: graph
+#   package: graph
 
 # Optional: turn on use ` + "`" + `gqlgen:"fieldName"` + "`" + ` tags in your models
 # struct_tag: json

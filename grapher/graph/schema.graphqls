@@ -43,7 +43,7 @@ type PageInfo {
 
 type Query {
   deck(id: ID!): Deck
-  popularDecks: PopularDecksConnection
+  popularDecks(first: Int, after: String, last: Int, before: String): PopularDecksConnection
 }
 
 input CreateDeckInput {

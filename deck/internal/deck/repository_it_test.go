@@ -4,9 +4,11 @@ import (
 	"context"
 	"database/sql"
 	"testing"
+	"time"
 
 	"github.com/XaviFP/toshokan/common/config"
 	"github.com/XaviFP/toshokan/common/db"
+	"github.com/XaviFP/toshokan/common/pagination"
 
 	"github.com/golang-migrate/migrate/v4"
 	"github.com/golang-migrate/migrate/v4/database/postgres"
@@ -58,6 +60,7 @@ func TestRepository_GetDeck(t *testing.T) {
 			AuthorID:    uuid.MustParse("4e37a600-c29e-4d0f-af44-66f2cd8cc1c9"),
 			Title:       "Programming languages",
 			Description: "Compiled or interpreted?",
+			Public:      true,
 		}, d)
 	})
 
@@ -82,6 +85,35 @@ func TestRepository_GetDecks(t *testing.T) {
 				AuthorID:    uuid.MustParse("4e37a600-c29e-4d0f-af44-66f2cd8cc1c9"),
 				Title:       "Programming languages",
 				Description: "Compiled or interpreted?",
+				Public:      true,
+			},
+			{
+				ID:          uuid.MustParse("334ddbf8-1acc-405b-86d8-49f0d1ca636c"),
+				AuthorID:    uuid.MustParse("4e37a600-c29e-4d0f-af44-66f2cd8cc1c9"),
+				Title:       "Greek Mythology",
+				Description: "Bits of Greek Mythology",
+				Public:      true,
+			},
+			{
+				ID:          uuid.MustParse("60766223-ff9f-4871-a497-f765c05a0c5e"),
+				AuthorID:    uuid.MustParse("4e37a600-c29e-4d0f-af44-66f2cd8cc1c9"),
+				Title:       "Biology 101",
+				Description: "The Biology Beginners Course",
+				Public:      true,
+			},
+			{
+				ID:          uuid.MustParse("6363e2c6-d89e-4610-92e8-1e1d2fea49ec"),
+				AuthorID:    uuid.MustParse("4e37a600-c29e-4d0f-af44-66f2cd8cc1c9"),
+				Title:       "Presocratic Philosophy II",
+				Description: "Advanced Presocratic Philosophy",
+				Public:      true,
+			},
+			{
+				ID:          uuid.MustParse("f79aea77-9aa0-4a84-b4c8-d000a27d2c52"),
+				AuthorID:    uuid.MustParse("4e37a600-c29e-4d0f-af44-66f2cd8cc1c9"),
+				Title:       "Music Theory",
+				Description: "From Zero to Hero",
+				Public:      true,
 			},
 		}
 
@@ -194,6 +226,156 @@ func TestRepository_GetCardAnswers(t *testing.T) {
 	})
 }
 
+func TestRepository_GetPopularDecks(t *testing.T) {
+	h := newTestHarness(t)
+	repo := NewPGRepository(h.db)
+	cursors := []Cursor{
+		{
+			ID:        uuid.MustParse("f79aea77-9aa0-4a84-b4c8-d000a27d2c52"),
+			CreatedAt: time.Date(2000, time.January, 5, 0, 0, 0, 0, time.UTC),
+		},
+		{
+			ID:        uuid.MustParse("6363e2c6-d89e-4610-92e8-1e1d2fea49ec"),
+			CreatedAt: time.Date(2000, time.January, 4, 0, 0, 0, 0, time.UTC),
+		},
+		{
+			ID:        uuid.MustParse("60766223-ff9f-4871-a497-f765c05a0c5e"),
+			CreatedAt: time.Date(2000, time.January, 3, 0, 0, 0, 0, time.UTC),
+		},
+		{
+			ID:        uuid.MustParse("334ddbf8-1acc-405b-86d8-49f0d1ca636c"),
+			CreatedAt: time.Date(2000, time.January, 2, 0, 0, 0, 0, time.UTC),
+		},
+		{
+			ID:        uuid.MustParse("fb9ffe2c-ad66-4766-9b7b-46fd5d9acd72"),
+			CreatedAt: time.Date(2000, time.January, 1, 0, 0, 0, 0, time.UTC),
+		},
+	}
+
+	t.Run("forward_pagination", func(t *testing.T) {
+		conn, err := repo.GetPopularDecks(context.Background(), pagination.Pagination{First: 2})
+		assert.NoError(t, err)
+
+		assert.Equal(t, PopularDecksConnection{
+			Edges: []PopularDeckEdge{
+				{
+					DeckID: cursors[0].ID,
+					Cursor: mustToCursor(t, cursors[0]),
+				},
+				{
+					DeckID: cursors[1].ID,
+					Cursor: mustToCursor(t, cursors[1]),
+				},
+			},
+			PageInfo: pagination.PageInfo{
+				HasNextPage: true,
+				StartCursor: mustToCursor(t, cursors[0]),
+				EndCursor:   mustToCursor(t, cursors[1]),
+			},
+		}, conn)
+
+		conn, err = repo.GetPopularDecks(context.Background(), pagination.Pagination{First: 2, After: conn.PageInfo.EndCursor})
+		assert.NoError(t, err)
+
+		assert.Equal(t, PopularDecksConnection{
+			Edges: []PopularDeckEdge{
+				{
+					DeckID: cursors[2].ID,
+					Cursor: mustToCursor(t, cursors[2]),
+				},
+				{
+					DeckID: cursors[3].ID,
+					Cursor: mustToCursor(t, cursors[3]),
+				},
+			},
+			PageInfo: pagination.PageInfo{
+				HasNextPage: true,
+				StartCursor: mustToCursor(t, cursors[2]),
+				EndCursor:   mustToCursor(t, cursors[3]),
+			},
+		}, conn)
+
+		conn, err = repo.GetPopularDecks(context.Background(), pagination.Pagination{First: 2, After: conn.PageInfo.EndCursor})
+		assert.NoError(t, err)
+
+		assert.Equal(t, PopularDecksConnection{
+			Edges: []PopularDeckEdge{
+				{
+					DeckID: cursors[4].ID,
+					Cursor: mustToCursor(t, cursors[4]),
+				},
+			},
+			PageInfo: pagination.PageInfo{
+				HasNextPage: false,
+			},
+		}, conn)
+	})
+
+	t.Run("backward_pagination", func(t *testing.T) {
+		conn, err := repo.GetPopularDecks(context.Background(), pagination.Pagination{Last: 2})
+		assert.NoError(t, err)
+
+		assert.Equal(t, PopularDecksConnection{
+			Edges: []PopularDeckEdge{
+				{
+					DeckID: cursors[3].ID,
+					Cursor: mustToCursor(t, cursors[3]),
+				},
+				{
+					DeckID: cursors[4].ID,
+					Cursor: mustToCursor(t, cursors[4]),
+				},
+			},
+			PageInfo: pagination.PageInfo{
+				HasPreviousPage: true,
+				StartCursor:     mustToCursor(t, cursors[3]),
+				EndCursor:       mustToCursor(t, cursors[4]),
+			},
+		}, conn)
+
+		conn, err = repo.GetPopularDecks(context.Background(), pagination.Pagination{Last: 2, Before: conn.PageInfo.StartCursor})
+		assert.NoError(t, err)
+
+		assert.Equal(t, PopularDecksConnection{
+			Edges: []PopularDeckEdge{
+				{
+					DeckID: cursors[1].ID,
+					Cursor: mustToCursor(t, cursors[1]),
+				},
+				{
+					DeckID: cursors[2].ID,
+					Cursor: mustToCursor(t, cursors[2]),
+				},
+			},
+			PageInfo: pagination.PageInfo{
+				HasPreviousPage: true,
+				StartCursor:     mustToCursor(t, cursors[1]),
+				EndCursor:       mustToCursor(t, cursors[2]),
+			},
+		}, conn)
+
+		conn, err = repo.GetPopularDecks(context.Background(), pagination.Pagination{Last: 2, Before: conn.PageInfo.StartCursor})
+		assert.NoError(t, err)
+
+		assert.Equal(t, PopularDecksConnection{
+			Edges: []PopularDeckEdge{
+				{
+					DeckID: cursors[0].ID,
+					Cursor: mustToCursor(t, cursors[0]),
+				},
+			},
+			PageInfo: pagination.PageInfo{
+				HasPreviousPage: false,
+			},
+		}, conn)
+	})
+
+	t.Run("ErrInvalidCursor", func(t *testing.T) {
+		_, err := repo.GetPopularDecks(context.Background(), pagination.Pagination{After: pagination.Cursor("This Cursor is not valid")})
+		assert.ErrorIs(t, err, ErrInvalidCursor)
+	})
+}
+
 type testHarness struct {
 	db *sql.DB
 }
@@ -238,13 +420,46 @@ func newTestHarness(t *testing.T) testHarness {
 func populateTestDB(pg *sql.DB) error {
 	_, err := pg.Exec(`
 		INSERT INTO
-			decks (id, author_id, title, description, created_at)
+			decks (id, author_id, title, description, created_at, is_public)
 		VALUES (
 			'fb9ffe2c-ad66-4766-9b7b-46fd5d9acd72',
 			'4e37a600-c29e-4d0f-af44-66f2cd8cc1c9',
 			'Programming languages',
 			'Compiled or interpreted?',
-			NOW()
+			'2000-01-01',
+			true
+		),
+		(
+			'334ddbf8-1acc-405b-86d8-49f0d1ca636c',
+			'4e37a600-c29e-4d0f-af44-66f2cd8cc1c9',
+			'Greek Mythology',
+			'Bits of Greek Mythology',
+			'2000-01-02',
+			true
+		),
+		(
+			'60766223-ff9f-4871-a497-f765c05a0c5e',
+			'4e37a600-c29e-4d0f-af44-66f2cd8cc1c9',
+			'Biology 101',
+			'The Biology Beginners Course',
+			'2000-01-03',
+			true
+		),
+		(
+			'6363e2c6-d89e-4610-92e8-1e1d2fea49ec',
+			'4e37a600-c29e-4d0f-af44-66f2cd8cc1c9',
+			'Presocratic Philosophy II',
+			'Advanced Presocratic Philosophy',
+			'2000-01-04',
+			true
+		),
+		(
+			'f79aea77-9aa0-4a84-b4c8-d000a27d2c52',
+			'4e37a600-c29e-4d0f-af44-66f2cd8cc1c9',
+			'Music Theory',
+			'From Zero to Hero',
+			'2000-01-05',
+			true
 		);
 
 		INSERT INTO
@@ -306,4 +521,11 @@ func populateTestDB(pg *sql.DB) error {
 	)
 
 	return errors.Trace(err)
+}
+
+func mustToCursor(t *testing.T, v any) pagination.Cursor {
+	out, err := pagination.ToCursor(v)
+	assert.NoError(t, err)
+
+	return out
 }

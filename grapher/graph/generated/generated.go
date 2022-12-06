@@ -101,7 +101,7 @@ type ComplexityRoot struct {
 
 	Query struct {
 		Deck         func(childComplexity int, id string) int
-		PopularDecks func(childComplexity int) int
+		PopularDecks func(childComplexity int, first *int, after *string, last *int, before *string) int
 	}
 }
 
@@ -111,7 +111,7 @@ type MutationResolver interface {
 }
 type QueryResolver interface {
 	Deck(ctx context.Context, id string) (*model.Deck, error)
-	PopularDecks(ctx context.Context) (*model.PopularDecksConnection, error)
+	PopularDecks(ctx context.Context, first *int, after *string, last *int, before *string) (*model.PopularDecksConnection, error)
 }
 
 type executableSchema struct {
@@ -338,7 +338,12 @@ func (e *executableSchema) Complexity(typeName, field string, childComplexity in
 			break
 		}
 
-		return e.complexity.Query.PopularDecks(childComplexity), true
+		args, err := ec.field_Query_popularDecks_args(context.TODO(), rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.complexity.Query.PopularDecks(childComplexity, args["first"].(*int), args["after"].(*string), args["last"].(*int), args["before"].(*string)), true
 
 	}
 	return 0, false
@@ -456,7 +461,7 @@ type PageInfo {
 
 type Query {
   deck(id: ID!): Deck
-  popularDecks: PopularDecksConnection
+  popularDecks(first: Int, after: String, last: Int, before: String): PopularDecksConnection
 }
 
 input CreateDeckInput {
@@ -553,6 +558,48 @@ func (ec *executionContext) field_Query_deck_args(ctx context.Context, rawArgs m
 		}
 	}
 	args["id"] = arg0
+	return args, nil
+}
+
+func (ec *executionContext) field_Query_popularDecks_args(ctx context.Context, rawArgs map[string]interface{}) (map[string]interface{}, error) {
+	var err error
+	args := map[string]interface{}{}
+	var arg0 *int
+	if tmp, ok := rawArgs["first"]; ok {
+		ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("first"))
+		arg0, err = ec.unmarshalOInt2ᚖint(ctx, tmp)
+		if err != nil {
+			return nil, err
+		}
+	}
+	args["first"] = arg0
+	var arg1 *string
+	if tmp, ok := rawArgs["after"]; ok {
+		ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("after"))
+		arg1, err = ec.unmarshalOString2ᚖstring(ctx, tmp)
+		if err != nil {
+			return nil, err
+		}
+	}
+	args["after"] = arg1
+	var arg2 *int
+	if tmp, ok := rawArgs["last"]; ok {
+		ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("last"))
+		arg2, err = ec.unmarshalOInt2ᚖint(ctx, tmp)
+		if err != nil {
+			return nil, err
+		}
+	}
+	args["last"] = arg2
+	var arg3 *string
+	if tmp, ok := rawArgs["before"]; ok {
+		ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("before"))
+		arg3, err = ec.unmarshalOString2ᚖstring(ctx, tmp)
+		if err != nil {
+			return nil, err
+		}
+	}
+	args["before"] = arg3
 	return args, nil
 }
 
@@ -1857,7 +1904,7 @@ func (ec *executionContext) _Query_popularDecks(ctx context.Context, field graph
 	}()
 	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
 		ctx = rctx // use context from middleware stack in children
-		return ec.resolvers.Query().PopularDecks(rctx)
+		return ec.resolvers.Query().PopularDecks(rctx, fc.Args["first"].(*int), fc.Args["after"].(*string), fc.Args["last"].(*int), fc.Args["before"].(*string))
 	})
 	if err != nil {
 		ec.Error(ctx, err)
@@ -1886,6 +1933,17 @@ func (ec *executionContext) fieldContext_Query_popularDecks(ctx context.Context,
 			}
 			return nil, fmt.Errorf("no field named %q was found under type PopularDecksConnection", field.Name)
 		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Query_popularDecks_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return
 	}
 	return fc, nil
 }
@@ -5198,6 +5256,22 @@ func (ec *executionContext) marshalODeleteDeckResponse2ᚖgithubᚗcomᚋXaviFP�
 		return graphql.Null
 	}
 	return ec._DeleteDeckResponse(ctx, sel, v)
+}
+
+func (ec *executionContext) unmarshalOInt2ᚖint(ctx context.Context, v interface{}) (*int, error) {
+	if v == nil {
+		return nil, nil
+	}
+	res, err := graphql.UnmarshalInt(v)
+	return &res, graphql.ErrorOnPath(ctx, err)
+}
+
+func (ec *executionContext) marshalOInt2ᚖint(ctx context.Context, sel ast.SelectionSet, v *int) graphql.Marshaler {
+	if v == nil {
+		return graphql.Null
+	}
+	res := graphql.MarshalInt(*v)
+	return res
 }
 
 func (ec *executionContext) marshalOPopularDeckEdge2ᚕᚖgithubᚗcomᚋXaviFPᚋtoshokanᚋgrapherᚋgraphᚋmodelᚐPopularDeckEdgeᚄ(ctx context.Context, sel ast.SelectionSet, v []*model.PopularDeckEdge) graphql.Marshaler {

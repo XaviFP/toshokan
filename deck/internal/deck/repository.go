@@ -5,8 +5,11 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"sort"
+	"strings"
 
 	"github.com/XaviFP/toshokan/common/db"
+	"github.com/XaviFP/toshokan/common/pagination"
 
 	_ "github.com/golang-migrate/migrate/v4/source/file"
 	"github.com/google/uuid"
@@ -25,6 +28,7 @@ var (
 	ErrNoTextAnswer      = errors.New("deck: all answers must have a non-empty text")
 	ErrDeckAlreadyExists = errors.New("deck: deck already exists")
 	ErrDeckInvalid       = errors.New("deck: invalid deck")
+	ErrInvalidCursor     = errors.New("deck: invalid cusror")
 )
 
 type Repository interface {
@@ -34,6 +38,8 @@ type Repository interface {
 	GetDeckCards(ctx context.Context, id uuid.UUID) ([]Card, error)
 	GetCardAnswers(ctx context.Context, id uuid.UUID) ([]Answer, error)
 	StoreDeck(ctx context.Context, d Deck) error
+
+	GetPopularDecks(ctx context.Context, p pagination.Pagination) (PopularDecksConnection, error)
 }
 
 type redisRepository struct {
@@ -105,6 +111,10 @@ func (r *redisRepository) StoreDeck(ctx context.Context, d Deck) error {
 	}
 
 	return nil
+}
+
+func (r *redisRepository) GetPopularDecks(ctx context.Context, p pagination.Pagination) (PopularDecksConnection, error) {
+	return r.pgRepo.GetPopularDecks(ctx, p)
 }
 
 func (r *redisRepository) getDeckFromDB(ctx context.Context, id uuid.UUID) (Deck, error) {
@@ -197,6 +207,97 @@ func (r *pgRepository) GetDecks(ctx context.Context) ([]Deck, error) {
 
 		out = append(out, d)
 	}
+
+	return out, nil
+}
+
+func (r *pgRepository) GetPopularDecks(ctx context.Context, p pagination.Pagination) (PopularDecksConnection, error) {
+	var (
+		out   PopularDecksConnection
+		arger db.Argumenter
+	)
+
+	whereConditions := []string{
+		"deleted_at IS NULL",
+		"is_public = true",
+	}
+
+	if !p.Cursor().IsEmpty() {
+		var cursor Cursor
+		if err := pagination.FromCursor(p.Cursor(), &cursor); err != nil {
+			return out, ErrInvalidCursor
+		}
+
+		whereConditions = append(
+			whereConditions,
+			fmt.Sprintf(
+				"(created_at, id) %s (%s, %s)",
+				p.Comparator(),
+				arger.Add(cursor.CreatedAt),
+				arger.Add(cursor.ID),
+			),
+		)
+	}
+
+	query := fmt.Sprintf(`
+		SELECT id, created_at
+		FROM decks
+		WHERE
+			%s
+		ORDER BY created_at %s, id %s
+		LIMIT %s`,
+		strings.Join(whereConditions, " AND "),
+		p.OrderBy(),
+		p.OrderBy(),
+		arger.Add(p.Limit()+1),
+	)
+
+	rows, err := r.db.Query(query, arger.Values()...)
+	if err != nil {
+		return out, errors.Trace(err)
+	}
+
+	for rows.Next() {
+		var c Cursor
+
+		if err := rows.Scan(&c.ID, &c.CreatedAt); err != nil {
+			return out, errors.Trace(err)
+		}
+
+		cursor, err := pagination.ToCursor(c)
+		if err != nil {
+			return out, errors.Trace(err)
+		}
+
+		out.Edges = append(out.Edges, PopularDeckEdge{
+			DeckID: c.ID,
+			Cursor: cursor,
+		})
+	}
+
+	hasMore := len(out.Edges) > p.Limit()
+
+	pageInfo := pagination.PageInfo{
+		HasPreviousPage: hasMore && !p.IsForward(),
+		HasNextPage:     hasMore && p.IsForward(),
+	}
+
+	if hasMore {
+		out.Edges = out.Edges[:len(out.Edges)-1]
+	}
+
+	if !p.IsForward() {
+		sort.SliceStable(out.Edges, func(i, j int) bool {
+			return i > j
+		})
+	}
+
+	if hasMore {
+		pageInfo.StartCursor = out.Edges[0].Cursor
+		pageInfo.EndCursor = out.Edges[len(out.Edges)-1].Cursor
+	}
+
+	out.PageInfo = pageInfo
 
 	return out, nil
 }
