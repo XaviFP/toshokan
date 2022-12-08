@@ -351,13 +351,13 @@ func (r *pgRepository) StoreDeck(ctx context.Context, d Deck) error {
 		return ErrDeckAlreadyExists
 	}
 
-	stmt, err := tx.Prepare(pq.CopyIn("cards", "id", "title"))
+	stmt, err := tx.Prepare(pq.CopyIn("cards", "id",  "deck_id", "title"))
 	if err != nil {
 		return errors.Trace(err)
 	}
 
 	for _, card := range d.Cards {
-		if _, err := stmt.Exec(card.ID, card.Title); err != nil {
+		if _, err := stmt.Exec(card.ID, d.ID, card.Title); err != nil {
 			return errors.Trace(err)
 		}
 	}
@@ -365,14 +365,14 @@ func (r *pgRepository) StoreDeck(ctx context.Context, d Deck) error {
 		return errors.Trace(err)
 	}
 
-	stmt, err = tx.Prepare(pq.CopyIn("answers", "id", "text", "is_correct"))
+	stmt, err = tx.Prepare(pq.CopyIn("answers", "id", "card_id", "text", "is_correct"))
 	if err != nil {
 		return errors.Trace(err)
 	}
 
 	for _, card := range d.Cards {
 		for _, answer := range card.PossibleAnswers {
-			if _, err := stmt.Exec(answer.ID, answer.Text, answer.IsCorrect); err != nil {
+			if _, err := stmt.Exec(answer.ID, card.ID, answer.Text, answer.IsCorrect); err != nil {
 				return errors.Trace(err)
 			}
 		}
