@@ -56,12 +56,21 @@ type Pagination struct {
 	Last   int
 }
 
+// Limit returns the pagination's limit.
+// By default, 1 is returned if no limit was specified.
 func (p *Pagination) Limit() int {
+	var limit int
 	if p.IsForward() {
-		return p.First
+		limit = p.First
+	} else {
+		limit = p.Last
 	}
 
-	return p.Last
+	if limit == 0 {
+		return 1
+	}
+
+	return limit
 }
 
 func (p *Pagination) Cursor() Cursor {
