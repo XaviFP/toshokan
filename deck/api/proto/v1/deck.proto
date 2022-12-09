@@ -45,7 +45,8 @@ message DeleteDeckRequest {
 message DeleteDeckResponse {}
 
 message GetPopularDecksRequest {
-    Pagination pagination = 1;
+    string user_id = 1; // Should be the access token instead
+    Pagination pagination = 2;
 }
 
 message GetPopularDecksResponse {

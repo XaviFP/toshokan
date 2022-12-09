@@ -84,7 +84,12 @@ func (s *Server) GetDecks(ctx context.Context, req *pb.GetDecksRequest) (*pb.Get
 }
 
 func (s *Server) GetPopularDecks(ctx context.Context, req *pb.GetPopularDecksRequest) (*pb.GetPopularDecksResponse, error) {
-	res, err := s.Repository.GetPopularDecks(ctx, paginationFromProto(req.Pagination))
+	userID, err := uuid.Parse(req.UserId)
+	if err != nil {
+		return nil, errors.Trace(err)
+	}
+
+	res, err := s.Repository.GetPopularDecks(ctx, userID, paginationFromProto(req.Pagination))
 	if err != nil {
 		return nil, errors.Trace(err)
 	}

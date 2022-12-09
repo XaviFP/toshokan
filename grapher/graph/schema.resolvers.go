@@ -65,9 +65,9 @@ func (r *queryResolver) Deck(ctx context.Context, id string) (*model.Deck, error
 
 // PopularDecks is the resolver for the popularDecks field.
 func (r *queryResolver) PopularDecks(ctx context.Context, first *int, after *string, last *int, before *string) (*model.PopularDecksConnection, error) {
-	res, err := r.DeckClient.GetPopularDecks(ctx, &v1.GetPopularDecksRequest{Pagination: paginationFromInput(
-		first, after, last, before,
-	)})
+	res, err := r.DeckClient.GetPopularDecks(ctx, &v1.GetPopularDecksRequest{
+		UserId:     r.getUserID(ctx),
+		Pagination: paginationFromInput(first, after, last, before)})
 	if err != nil {
 		return nil, errors.Trace(err)
 	}
