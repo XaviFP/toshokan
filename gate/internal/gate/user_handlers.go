@@ -12,10 +12,12 @@ type tokenResponse struct {
 	Token string `json:"token"`
 }
 
-func RegisterUserRoutes(r *gin.Engine, userClient userPB.UserAPIClient) {
-	r.POST("/signup", func(ctx *gin.Context) {
-		signUp(ctx, userClient)
-	})
+func RegisterUserRoutes(r *gin.Engine, enableSignup bool, userClient userPB.UserAPIClient) {
+	if enableSignup {
+		r.POST("/signup", func(ctx *gin.Context) {
+			signUp(ctx, userClient)
+		})
+	}
 
 	r.POST("/login", func(ctx *gin.Context) {
 		logIn(ctx, userClient)
