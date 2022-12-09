@@ -43,8 +43,10 @@ services:
       - deck
     ports:
       - "8080:8080"
+      - "443:443"
     expose:
       - "8080"
+      - "443"
     env_file: 
       - env/.common
       - env/.gate

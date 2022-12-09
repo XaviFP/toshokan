@@ -25,7 +25,13 @@ type config struct {
 
 type gateConfig struct {
 	config
-	signupEnabled bool
+	signupEnabled   bool
+	certificatePath string
+	privateKeyPath  string
+}
+
+func (c gateConfig) canListenTLS() bool {
+	return c.certificatePath != "" && c.privateKeyPath != ""
 }
 
 func (c config) HTTPAddress() string {
@@ -73,8 +79,14 @@ func main() {
 	gate.RegisterDeckRoutes(authorized, userClient, deckClient)
 	gate.RegisterUserRoutes(router, c.gate.signupEnabled, userClient)
 
-	if err := router.Run(c.gate.HTTPAddress()); err != nil {
-		panic(err)
+	if c.gate.canListenTLS() {
+		if err := router.RunTLS("", c.gate.certificatePath, c.gate.privateKeyPath); err != nil {
+			panic(err)
+		}
+	} else {
+		if err := router.Run(c.gate.HTTPAddress()); err != nil {
+			panic(err)
+		}
 	}
 }
 
@@ -82,12 +94,15 @@ func loadConfig() globalConfig {
 	gateConfig := gateConfig{}
 	gateConfig.httpHost = os.Getenv("HTTP_HOST")
 	gateConfig.httpPort = os.Getenv("HTTP_PORT")
+
 	signupEnabled, err := strconv.ParseBool(os.Getenv("SIGNUP_ENABLED"))
 	if err != nil {
 		panic(errors.Annotate(err, "wrong or missing configuration value for SIGNUP_ENABLED"))
 	}
-
 	gateConfig.signupEnabled = signupEnabled
+
+	gateConfig.certificatePath = os.Getenv("CERTIFICATE_PATH")
+	gateConfig.privateKeyPath = os.Getenv("PRIVATE_KEY_PATH")
 
 	usersConfig := config{}
 	usersConfig.grpcHost = os.Getenv("USERS_GRPC_SERVER_HOST")
