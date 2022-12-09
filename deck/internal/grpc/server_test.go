@@ -185,8 +185,10 @@ func TestServer_GetPopularDecks(t *testing.T) {
 	repoMock := &deck.RepositoryMock{}
 	srv := &Server{Repository: repoMock}
 
+	userID := uuid.MustParse("fb9ffe2c-ad66-4766-9b7b-46fd5d9acd72")
+
 	t.Run("success", func(t *testing.T) {
-		repoMock.On("GetPopularDecks", mock.Anything, pagination.Pagination{
+		repoMock.On("GetPopularDecks", mock.Anything, userID, pagination.Pagination{
 			First: 2,
 			After: pagination.Cursor("9999"),
 		},
@@ -209,6 +211,7 @@ func TestServer_GetPopularDecks(t *testing.T) {
 		}, nil)
 
 		res, err := srv.GetPopularDecks(context.Background(), &pb.GetPopularDecksRequest{
+			UserId: userID.String(),
 			Pagination: &pb.Pagination{
 				First: 2,
 				After: "9999",
@@ -236,11 +239,11 @@ func TestServer_GetPopularDecks(t *testing.T) {
 	})
 
 	t.Run("error", func(t *testing.T) {
-		repoMock.On("GetPopularDecks", mock.Anything, pagination.Pagination{}).Return(
+		repoMock.On("GetPopularDecks", mock.Anything, userID, pagination.Pagination{}).Return(
 			deck.PopularDecksConnection{},
 			assert.AnError,
 		)
-		_, err := srv.GetPopularDecks(context.Background(), &pb.GetPopularDecksRequest{Pagination: &pb.Pagination{}})
+		_, err := srv.GetPopularDecks(context.Background(), &pb.GetPopularDecksRequest{UserId: userID.String(), Pagination: &pb.Pagination{}})
 		assert.ErrorIs(t, err, assert.AnError)
 	})
 }

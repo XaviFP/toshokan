@@ -251,9 +251,10 @@ func TestRepository_GetPopularDecks(t *testing.T) {
 			CreatedAt: time.Date(2000, time.January, 1, 0, 0, 0, 0, time.UTC),
 		},
 	}
+	userID := uuid.MustParse("fb9ffe2c-ad66-4766-9b7b-46fd5d9acd72")
 
 	t.Run("forward_pagination", func(t *testing.T) {
-		conn, err := repo.GetPopularDecks(context.Background(), pagination.Pagination{First: 2})
+		conn, err := repo.GetPopularDecks(context.Background(), userID, pagination.Pagination{First: 2})
 		assert.NoError(t, err)
 
 		assert.Equal(t, PopularDecksConnection{
@@ -274,7 +275,7 @@ func TestRepository_GetPopularDecks(t *testing.T) {
 			},
 		}, conn)
 
-		conn, err = repo.GetPopularDecks(context.Background(), pagination.Pagination{First: 2, After: conn.PageInfo.EndCursor})
+		conn, err = repo.GetPopularDecks(context.Background(), userID, pagination.Pagination{First: 2, After: conn.PageInfo.EndCursor})
 		assert.NoError(t, err)
 
 		assert.Equal(t, PopularDecksConnection{
@@ -295,7 +296,7 @@ func TestRepository_GetPopularDecks(t *testing.T) {
 			},
 		}, conn)
 
-		conn, err = repo.GetPopularDecks(context.Background(), pagination.Pagination{First: 2, After: conn.PageInfo.EndCursor})
+		conn, err = repo.GetPopularDecks(context.Background(), userID, pagination.Pagination{First: 2, After: conn.PageInfo.EndCursor})
 		assert.NoError(t, err)
 
 		assert.Equal(t, PopularDecksConnection{
@@ -312,7 +313,7 @@ func TestRepository_GetPopularDecks(t *testing.T) {
 	})
 
 	t.Run("backward_pagination", func(t *testing.T) {
-		conn, err := repo.GetPopularDecks(context.Background(), pagination.Pagination{Last: 2})
+		conn, err := repo.GetPopularDecks(context.Background(), userID, pagination.Pagination{Last: 2})
 		assert.NoError(t, err)
 
 		assert.Equal(t, PopularDecksConnection{
@@ -333,7 +334,7 @@ func TestRepository_GetPopularDecks(t *testing.T) {
 			},
 		}, conn)
 
-		conn, err = repo.GetPopularDecks(context.Background(), pagination.Pagination{Last: 2, Before: conn.PageInfo.StartCursor})
+		conn, err = repo.GetPopularDecks(context.Background(), userID, pagination.Pagination{Last: 2, Before: conn.PageInfo.StartCursor})
 		assert.NoError(t, err)
 
 		assert.Equal(t, PopularDecksConnection{
@@ -354,7 +355,7 @@ func TestRepository_GetPopularDecks(t *testing.T) {
 			},
 		}, conn)
 
-		conn, err = repo.GetPopularDecks(context.Background(), pagination.Pagination{Last: 2, Before: conn.PageInfo.StartCursor})
+		conn, err = repo.GetPopularDecks(context.Background(), userID, pagination.Pagination{Last: 2, Before: conn.PageInfo.StartCursor})
 		assert.NoError(t, err)
 
 		assert.Equal(t, PopularDecksConnection{
@@ -371,7 +372,7 @@ func TestRepository_GetPopularDecks(t *testing.T) {
 	})
 
 	t.Run("ErrInvalidCursor", func(t *testing.T) {
-		_, err := repo.GetPopularDecks(context.Background(), pagination.Pagination{After: pagination.Cursor("This Cursor is not valid")})
+		_, err := repo.GetPopularDecks(context.Background(), userID, pagination.Pagination{After: pagination.Cursor("This Cursor is not valid")})
 		assert.ErrorIs(t, err, ErrInvalidCursor)
 	})
 }

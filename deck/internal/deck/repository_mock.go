@@ -44,8 +44,8 @@ func (m *RepositoryMock) GetCardAnswers(ctx context.Context, id uuid.UUID) ([]An
 	return args[0].([]Answer), args.Error(1)
 }
 
-func (m *RepositoryMock) GetPopularDecks(ctx context.Context, p pagination.Pagination) (PopularDecksConnection, error) {
-	args := m.Called(ctx, p)
+func (m *RepositoryMock) GetPopularDecks(ctx context.Context, userID uuid.UUID, p pagination.Pagination) (PopularDecksConnection, error) {
+	args := m.Called(ctx, userID, p)
 
 	return args.Get(0).(PopularDecksConnection), args.Error(1)
 }

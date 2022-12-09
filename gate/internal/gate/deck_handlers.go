@@ -163,6 +163,6 @@ func GinContextToContextMiddleware() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		ctx := context.WithValue(c.Request.Context(), "GinContextKey", c)
 		c.Request = c.Request.WithContext(ctx)
-		c.Next() // TODO: Good practice?
+		c.Next()
 	}
 }

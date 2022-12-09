@@ -39,7 +39,7 @@ type Repository interface {
 	GetCardAnswers(ctx context.Context, id uuid.UUID) ([]Answer, error)
 	StoreDeck(ctx context.Context, d Deck) error
 
-	GetPopularDecks(ctx context.Context, p pagination.Pagination) (PopularDecksConnection, error)
+	GetPopularDecks(ctx context.Context, userID uuid.UUID, p pagination.Pagination) (PopularDecksConnection, error)
 }
 
 type redisRepository struct {
@@ -113,8 +113,8 @@ func (r *redisRepository) StoreDeck(ctx context.Context, d Deck) error {
 	return nil
 }
 
-func (r *redisRepository) GetPopularDecks(ctx context.Context, p pagination.Pagination) (PopularDecksConnection, error) {
-	return r.pgRepo.GetPopularDecks(ctx, p)
+func (r *redisRepository) GetPopularDecks(ctx context.Context, userID uuid.UUID, p pagination.Pagination) (PopularDecksConnection, error) {
+	return r.pgRepo.GetPopularDecks(ctx, userID, p)
 }
 
 func (r *redisRepository) getDeckFromDB(ctx context.Context, id uuid.UUID) (Deck, error) {
@@ -211,7 +211,7 @@ func (r *pgRepository) GetDecks(ctx context.Context) ([]Deck, error) {
 	return out, nil
 }
 
-func (r *pgRepository) GetPopularDecks(ctx context.Context, p pagination.Pagination) (PopularDecksConnection, error) {
+func (r *pgRepository) GetPopularDecks(ctx context.Context, userID uuid.UUID, p pagination.Pagination) (PopularDecksConnection, error) {
 	var (
 		out   PopularDecksConnection
 		arger db.Argumenter
@@ -219,7 +219,7 @@ func (r *pgRepository) GetPopularDecks(ctx context.Context, p pagination.Paginat
 
 	whereConditions := []string{
 		"deleted_at IS NULL",
-		"is_public = true",
+		fmt.Sprintf("(is_public = true OR author_id = %s)", arger.Add(userID)),
 	}
 
 	if !p.Cursor().IsEmpty() {
@@ -351,7 +351,7 @@ func (r *pgRepository) StoreDeck(ctx context.Context, d Deck) error {
 		return ErrDeckAlreadyExists
 	}
 
-	stmt, err := tx.Prepare(pq.CopyIn("cards", "id",  "deck_id", "title"))
+	stmt, err := tx.Prepare(pq.CopyIn("cards", "id", "deck_id", "title"))
 	if err != nil {
 		return errors.Trace(err)
 	}
