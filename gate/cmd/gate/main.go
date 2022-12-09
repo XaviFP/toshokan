@@ -3,8 +3,10 @@ package main
 import (
 	"fmt"
 	"os"
+	"strconv"
 
 	"github.com/gin-gonic/gin"
+	"github.com/juju/errors"
 	grpc "google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 
@@ -21,6 +23,11 @@ type config struct {
 	grpcPort string
 }
 
+type gateConfig struct {
+	config
+	signupEnabled bool
+}
+
 func (c config) HTTPAddress() string {
 	return fmt.Sprintf("%s:%s", c.httpHost, c.httpPort)
 }
@@ -30,7 +37,7 @@ func (c config) GRPCAddress() string {
 }
 
 type globalConfig struct {
-	gate  config
+	gate  gateConfig
 	users config
 	decks config
 }
@@ -64,7 +71,7 @@ func main() {
 	gate.RegisterMiddlewares(authorized, userClient, deckClient)
 	authorized.POST(queryPath, grapher.NewGraphqlHandler(deckClient, userClient))
 	gate.RegisterDeckRoutes(authorized, userClient, deckClient)
-	gate.RegisterUserRoutes(router, userClient)
+	gate.RegisterUserRoutes(router, c.gate.signupEnabled, userClient)
 
 	if err := router.Run(c.gate.HTTPAddress()); err != nil {
 		panic(err)
@@ -72,9 +79,15 @@ func main() {
 }
 
 func loadConfig() globalConfig {
-	gateConfig := config{}
+	gateConfig := gateConfig{}
 	gateConfig.httpHost = os.Getenv("HTTP_HOST")
 	gateConfig.httpPort = os.Getenv("HTTP_PORT")
+	signupEnabled, err := strconv.ParseBool(os.Getenv("SIGNUP_ENABLED"))
+	if err != nil {
+		panic(errors.Annotate(err, "wrong or missing configuration value for SIGNUP_ENABLED"))
+	}
+
+	gateConfig.signupEnabled = signupEnabled
 
 	usersConfig := config{}
 	usersConfig.grpcHost = os.Getenv("USERS_GRPC_SERVER_HOST")
