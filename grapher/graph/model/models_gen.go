@@ -9,9 +9,10 @@ type Answer struct {
 }
 
 type Card struct {
-	ID      string    `json:"id"`
-	Title   string    `json:"title"`
-	Answers []*Answer `json:"answers"`
+	ID          string    `json:"id"`
+	Title       string    `json:"title"`
+	Answers     []*Answer `json:"answers"`
+	Explanation *string   `json:"explanation"`
 }
 
 type CreateAnswerInput struct {
@@ -20,8 +21,9 @@ type CreateAnswerInput struct {
 }
 
 type CreateCardInput struct {
-	Title   string               `json:"title"`
-	Answers []*CreateAnswerInput `json:"answers"`
+	Title       string               `json:"title"`
+	Answers     []*CreateAnswerInput `json:"answers"`
+	Explanation *string              `json:"explanation"`
 }
 
 type CreateDeckInput struct {

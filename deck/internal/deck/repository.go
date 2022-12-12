@@ -394,7 +394,8 @@ func (r *pgRepository) GetDeckCards(ctx context.Context, id uuid.UUID) ([]Card, 
 	rows, err := r.db.Query(`
 		SELECT
 			id,
-			title
+			title,
+			explanation
 		FROM cards
 		WHERE
 			deck_id = $1
@@ -407,7 +408,7 @@ func (r *pgRepository) GetDeckCards(ctx context.Context, id uuid.UUID) ([]Card, 
 
 	for rows.Next() {
 		var c Card
-		if err := rows.Scan(&c.ID, &c.Title); err != nil {
+		if err := rows.Scan(&c.ID, &c.Title, &c.Explanation); err != nil {
 			return []Card{}, errors.Trace(err)
 		}
 

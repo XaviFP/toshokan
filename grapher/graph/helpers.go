@@ -18,9 +18,15 @@ func cardsFromInput(input []*model.CreateCardInput) []*v1.Card {
 			})
 		}
 
+		var explanation string
+		if card.Explanation != nil {
+			explanation = *card.Explanation
+		}
+
 		cards = append(cards, &v1.Card{
 			Title:           card.Title,
 			PossibleAnswers: answers,
+			Explanation:     explanation,
 		})
 	}
 
@@ -40,9 +46,10 @@ func cardsToModel(in []*v1.Card) []*model.Card {
 		}
 
 		cards = append(cards, &model.Card{
-			ID:      c.Id,
-			Title:   c.Title,
-			Answers: outAnswers,
+			ID:          c.Id,
+			Title:       c.Title,
+			Answers:     outAnswers,
+			Explanation: &c.Explanation,
 		})
 	}
 

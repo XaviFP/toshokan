@@ -92,7 +92,7 @@ type testHarness struct {
 }
 
 func newTestHarness(t *testing.T) testHarness {
-	db, err := db.InitDB(config.DBConfig{User: "toshokan", Password: "t.o.s.h.o.k.a.n.", Name: "test", Host: "localhost", Port: "5432"})
+	db, err := db.InitDB(config.DBConfig{User: "toshokan", Password: "t.o.s.h.o.k.a.n.", Name: "test_user", Host: "localhost", Port: "5432"})
 	if err != nil {
 		t.Fatal(err)
 	}
