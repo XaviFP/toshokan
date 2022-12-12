@@ -91,6 +91,7 @@ message Card {
     string deck_id = 2;
     string title = 3;
     repeated Answer possible_answers = 4;
+    string explanation = 5;
 }
 
 message Answer {

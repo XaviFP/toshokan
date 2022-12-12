@@ -4,7 +4,6 @@ import (
 	"github.com/google/uuid"
 )
 
-// Deck represents a set of cards meant to go together
 type Deck struct {
 	ID          uuid.UUID `json:"id,omitempty"`
 	AuthorID    uuid.UUID `json:"authorId,omitempty"`
@@ -26,14 +25,13 @@ func (d *Deck) GenerateUUIDs() {
 	}
 }
 
-// Card represents a card with its set of answers including the correct(s) one(s).
 type Card struct {
 	ID              uuid.UUID `json:"id,omitempty"`
 	Title           string    `json:"title"`
 	PossibleAnswers []Answer  `json:"possibleAnswers"`
+	Explanation     string    `json:"explanation"`
 }
 
-// Answer represents one of the possible options to reply a Card
 type Answer struct {
 	ID        uuid.UUID `json:"id,omitempty"`
 	Text      string    `json:"text"`

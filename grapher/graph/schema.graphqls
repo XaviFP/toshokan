@@ -16,6 +16,7 @@ type Card {
   id: ID!
   title: String!
   answers: [Answer]
+  explanation: String
 }
 
 type Answer {
@@ -56,6 +57,7 @@ input CreateDeckInput {
 input CreateCardInput {
   title: String!
   answers: [CreateAnswerInput!]!
+  explanation: String
 }
 
 input CreateAnswerInput {

@@ -188,6 +188,7 @@ func toGRPCCards(cards []deck.Card) []*pb.Card {
 			Id:              c.ID.String(),
 			Title:           c.Title,
 			PossibleAnswers: toGRPCAnswers(c.PossibleAnswers),
+			Explanation:     c.Explanation,
 		})
 	}
 
@@ -280,6 +281,7 @@ func fromGRPCCard(c *pb.Card) (deck.Card, error) {
 		ID:              cardID,
 		Title:           c.Title,
 		PossibleAnswers: answers,
+		Explanation:     c.Explanation,
 	}, nil
 }
 

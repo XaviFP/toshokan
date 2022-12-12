@@ -163,8 +163,9 @@ func TestRepository_GetDeckCards(t *testing.T) {
 	t.Run("success", func(t *testing.T) {
 		expected := []Card{
 			{
-				ID:    uuid.MustParse("72bdff92-5bc8-4e1d-9217-d0b23e22ff33"),
-				Title: "Golang",
+				ID:          uuid.MustParse("72bdff92-5bc8-4e1d-9217-d0b23e22ff33"),
+				Title:       "Golang",
+				Explanation: "Go code is compiled directly to machine code, not interpreted at runtime.",
 			},
 			{
 				ID:    uuid.MustParse("c924f7e0-efd8-4c2d-9c43-8eafb7102ebc"),
@@ -382,7 +383,7 @@ type testHarness struct {
 }
 
 func newTestHarness(t *testing.T) testHarness {
-	db, err := db.InitDB(config.DBConfig{User: "toshokan", Password: "t.o.s.h.o.k.a.n.", Name: "test", Host: "localhost", Port: "5432"})
+	db, err := db.InitDB(config.DBConfig{User: "toshokan", Password: "t.o.s.h.o.k.a.n.", Name: "test_decks", Host: "localhost", Port: "5432"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -464,21 +465,24 @@ func populateTestDB(pg *sql.DB) error {
 		);
 
 		INSERT INTO
-			cards (deck_id, id, title)
+			cards (deck_id, id, title, explanation)
 		VALUES (
 			'fb9ffe2c-ad66-4766-9b7b-46fd5d9acd72',
 			'72bdff92-5bc8-4e1d-9217-d0b23e22ff33',
-			'Golang'
+			'Golang',
+			'Go code is compiled directly to machine code, not interpreted at runtime.'
 		),
 		(
 			'fb9ffe2c-ad66-4766-9b7b-46fd5d9acd72',
 			'c924f7e0-efd8-4c2d-9c43-8eafb7102ebc',
-			'Rust'
+			'Rust',
+			''
 		),
 		(
 			'fb9ffe2c-ad66-4766-9b7b-46fd5d9acd72',
 			'd42a90dd-818c-4eed-8e9f-9e8af1a654f4',
-			'Lua'
+			'Lua',
+			''
 		);
 
 		INSERT INTO

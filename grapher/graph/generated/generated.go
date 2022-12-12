@@ -50,9 +50,10 @@ type ComplexityRoot struct {
 	}
 
 	Card struct {
-		Answers func(childComplexity int) int
-		ID      func(childComplexity int) int
-		Title   func(childComplexity int) int
+		Answers     func(childComplexity int) int
+		Explanation func(childComplexity int) int
+		ID          func(childComplexity int) int
+		Title       func(childComplexity int) int
 	}
 
 	CreateDeckResponse struct {
@@ -156,6 +157,13 @@ func (e *executableSchema) Complexity(typeName, field string, childComplexity in
 		}
 
 		return e.complexity.Card.Answers(childComplexity), true
+
+	case "Card.explanation":
+		if e.complexity.Card.Explanation == nil {
+			break
+		}
+
+		return e.complexity.Card.Explanation(childComplexity), true
 
 	case "Card.id":
 		if e.complexity.Card.ID == nil {
@@ -434,6 +442,7 @@ type Card {
   id: ID!
   title: String!
   answers: [Answer]
+  explanation: String
 }
 
 type Answer {
@@ -474,6 +483,7 @@ input CreateDeckInput {
 input CreateCardInput {
   title: String!
   answers: [CreateAnswerInput!]!
+  explanation: String
 }
 
 input CreateAnswerInput {
@@ -492,8 +502,7 @@ type DeleteDeckResponse {
 type Mutation {
   createDeck(input: CreateDeckInput!): CreateDeckResponse
   deleteDeck(id: ID!): DeleteDeckResponse
-}
-`, BuiltIn: false},
+}`, BuiltIn: false},
 }
 var parsedSchema = gqlparser.MustLoadSchema(sources...)
 
@@ -910,6 +919,47 @@ func (ec *executionContext) fieldContext_Card_answers(ctx context.Context, field
 	return fc, nil
 }
 
+func (ec *executionContext) _Card_explanation(ctx context.Context, field graphql.CollectedField, obj *model.Card) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_Card_explanation(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.Explanation, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		return graphql.Null
+	}
+	res := resTmp.(*string)
+	fc.Result = res
+	return ec.marshalOString2ᚖstring(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_Card_explanation(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Card",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
 func (ec *executionContext) _CreateDeckResponse_deck(ctx context.Context, field graphql.CollectedField, obj *model.CreateDeckResponse) (ret graphql.Marshaler) {
 	fc, err := ec.fieldContext_CreateDeckResponse_deck(ctx, field)
 	if err != nil {
@@ -1135,6 +1185,8 @@ func (ec *executionContext) fieldContext_Deck_cards(ctx context.Context, field g
 				return ec.fieldContext_Card_title(ctx, field)
 			case "answers":
 				return ec.fieldContext_Card_answers(ctx, field)
+			case "explanation":
+				return ec.fieldContext_Card_explanation(ctx, field)
 			}
 			return nil, fmt.Errorf("no field named %q was found under type Card", field.Name)
 		},
@@ -3893,7 +3945,7 @@ func (ec *executionContext) unmarshalInputCreateCardInput(ctx context.Context, o
 		asMap[k] = v
 	}
 
-	fieldsInOrder := [...]string{"title", "answers"}
+	fieldsInOrder := [...]string{"title", "answers", "explanation"}
 	for _, k := range fieldsInOrder {
 		v, ok := asMap[k]
 		if !ok {
@@ -3913,6 +3965,14 @@ func (ec *executionContext) unmarshalInputCreateCardInput(ctx context.Context, o
 
 			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("answers"))
 			it.Answers, err = ec.unmarshalNCreateAnswerInput2ᚕᚖgithubᚗcomᚋXaviFPᚋtoshokanᚋgrapherᚋgraphᚋmodelᚐCreateAnswerInputᚄ(ctx, v)
+			if err != nil {
+				return it, err
+			}
+		case "explanation":
+			var err error
+
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("explanation"))
+			it.Explanation, err = ec.unmarshalOString2ᚖstring(ctx, v)
 			if err != nil {
 				return it, err
 			}
@@ -4051,6 +4111,10 @@ func (ec *executionContext) _Card(ctx context.Context, sel ast.SelectionSet, obj
 		case "answers":
 
 			out.Values[i] = ec._Card_answers(ctx, field, obj)
+
+		case "explanation":
+
+			out.Values[i] = ec._Card_explanation(ctx, field, obj)
 
 		default:
 			panic("unknown field " + strconv.Quote(field.Name))
