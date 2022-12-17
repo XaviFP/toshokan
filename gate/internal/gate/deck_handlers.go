@@ -9,6 +9,7 @@ import (
 
 	pbDeck "github.com/XaviFP/toshokan/deck/api/proto/v1"
 	pbUser "github.com/XaviFP/toshokan/user/api/proto/v1"
+	pbDealer "github.com/XaviFP/toshokan/dealer/api/proto/v1"
 )
 
 func GetDeck(ctx *gin.Context, usersClient pbUser.UserAPIClient, decksClient pbDeck.DecksAPIClient) {
@@ -104,9 +105,10 @@ func RegisterDeckRoutes(r *gin.RouterGroup, usersClient pbUser.UserAPIClient, de
 	})
 }
 
-func RegisterMiddlewares(r *gin.RouterGroup, usersClient pbUser.UserAPIClient, decksClient pbDeck.DecksAPIClient) {
+func RegisterMiddlewares(r *gin.RouterGroup, usersClient pbUser.UserAPIClient, decksClient pbDeck.DecksAPIClient, dealerClient pbDealer.DealerClient) {
 	r.Use(func(ctx *gin.Context) {
 		isAuthorized(ctx, usersClient)
+		dealerClient.Deal(context.Background(), &pbDealer.DealRequest{UserId: "", DeckId: "", NumberOfCards: 0})
 	})
 }
 

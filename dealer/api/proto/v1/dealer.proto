@@ -1,0 +1,26 @@
+syntax = "proto3";
+
+package v1;
+option go_package = "github.com/XaviFP/toshokan/dealer/api/proto/v1";
+
+service Dealer {
+    rpc Deal (DealRequest) returns (DealResponse);
+    rpc StoreAnswers (StoreAnswersRequest) returns (StoreAnswersResponse);
+}
+
+message DealRequest {
+    string user_id = 1;
+    string deck_id = 2;
+    uint32 number_of_cards = 3;
+}
+
+message DealResponse {
+    repeated string card_ids = 1;
+}
+
+message StoreAnswersRequest {
+    string user_id = 1;
+    repeated string answers = 2;
+}
+
+message StoreAnswersResponse {}

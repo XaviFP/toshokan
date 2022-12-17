@@ -1,0 +1,51 @@
+[package]
+name = "dealer"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies.tonic]
+version = "0.8.3"
+
+[dependencies.prost]
+version = "0.11.3"
+
+[dependencies.tokio]
+version = "1.23.0"
+features = ["full"]
+
+[dependencies.protobuf]
+version = "3.2.0"
+
+[dependencies.diesel]
+version = "2.0.0"
+features = ["postgres", "r2d2", "uuid", "chrono"]
+
+[dependencies.diesel_migrations]
+version = "1.4"
+
+[dependencies.chrono]
+version = "0.4"
+features = ["serde"]
+
+[dependencies.r2d2]
+version = "0.8"
+
+[dependencies.uuid]
+version = "1.0"
+features = ["serde", "v4"]
+
+[dependencies.tokio-postgres]
+version = "0.7.7"
+features = ["with-uuid-1", "with-chrono-0_4"]
+
+[dependencies.postgres]
+version = "0.19.4"
+
+[build-dependencies]
+tonic-build = {version = "0.8.4"}
+
+[[bin]]
+    name = "dealer"
+    path = "src/main.rs"

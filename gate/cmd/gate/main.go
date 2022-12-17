@@ -14,6 +14,7 @@ import (
 	"github.com/XaviFP/toshokan/gate/internal/gate"
 	"github.com/XaviFP/toshokan/grapher"
 	pbUser "github.com/XaviFP/toshokan/user/api/proto/v1"
+	pbDealer "github.com/XaviFP/toshokan/dealer/api/proto/v1"
 )
 
 type config struct {
@@ -67,6 +68,14 @@ func main() {
 
 	deckClient := pbDeck.NewDecksAPIClient(deckGRPCConn)
 
+	dealerGRPCConn, err := grpc.Dial("dealer:50051", grpc.WithTransportCredentials(insecure.NewCredentials()))
+	if err != nil {
+		panic(err)
+	}
+	defer dealerGRPCConn.Close()
+
+	dealerClient := pbDealer.NewDealerClient(dealerGRPCConn)
+
 	router := gin.Default()
 	router.Use(gate.GinContextToContextMiddleware())
 
@@ -74,7 +83,7 @@ func main() {
 	router.GET("/play", grapher.NewPlaygroundHandler(queryPath))
 
 	authorized := router.Group("/")
-	gate.RegisterMiddlewares(authorized, userClient, deckClient)
+	gate.RegisterMiddlewares(authorized, userClient, deckClient, dealerClient)
 	authorized.POST(queryPath, grapher.NewGraphqlHandler(deckClient, userClient))
 	gate.RegisterDeckRoutes(authorized, userClient, deckClient)
 	gate.RegisterUserRoutes(router, c.gate.signupEnabled, userClient)
