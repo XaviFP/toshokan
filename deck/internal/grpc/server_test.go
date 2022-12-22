@@ -57,64 +57,54 @@ func TestServer_GetDeck(t *testing.T) {
 }
 
 func TestServer_GetDecks(t *testing.T) {
+	repoMock := &deck.RepositoryMock{}
+	srv := &Server{Repository: repoMock}
+
 	t.Run("success", func(t *testing.T) {
-		decks := []deck.Deck{
-			{
-				Title:       "Go Learning",
-				Description: "Polish your Go skills",
-				AuthorID:    uuid.MustParse("f3b59a97-e678-4410-8ed2-f1094a234a01"),
-				Cards: []deck.Card{
-					{
-						Title: "What does CSP stand for?",
-						PossibleAnswers: []deck.Answer{
-							{Text: "Communicating Sequential Processes", IsCorrect: true},
-						}},
-					{
-						Title: "Which is the underlying data type of a slice in Go?",
-						PossibleAnswers: []deck.Answer{
-							{Text: "Map", IsCorrect: false},
-							{Text: "Linked list", IsCorrect: false},
-							{Text: "Array", IsCorrect: true},
-						}},
-				}},
-			{
-				Title:       "Go Learning",
-				Description: "Polish your Go skills",
-				AuthorID:    uuid.MustParse("f3b59a97-e678-4410-8ed2-f1094a234a01"),
-				Cards: []deck.Card{
-					{
-						Title: "What does CSP stand for?",
-						PossibleAnswers: []deck.Answer{
-							{Text: "Communicating Sequential Processes", IsCorrect: true},
-						}},
-					{
-						Title: "Which is the underlying data type of a slice in Go?",
-						PossibleAnswers: []deck.Answer{
-							{Text: "Map", IsCorrect: false},
-							{Text: "Linked list", IsCorrect: false},
-							{Text: "Array", IsCorrect: true},
-						}},
-				}},
+		d := deck.Deck{
+			ID:          uuid.MustParse("5ec790fb-3dcc-4ee4-8c6d-daa9e4e11598"),
+			Title:       "Go Learning",
+			Description: "Polish your Go skills",
+			AuthorID:    uuid.MustParse("f3b59a97-e678-4410-8ed2-f1094a234a01"),
+			Cards: []deck.Card{
+				{
+					Title: "What does CSP stand for?",
+					PossibleAnswers: []deck.Answer{
+						{Text: "Communicating Sequential Processes", IsCorrect: true},
+					},
+				},
+				{
+					Title: "Which is the underlying data type of a slice in Go?",
+					PossibleAnswers: []deck.Answer{
+						{Text: "Map"},
+						{Text: "Linked list"},
+						{Text: "Array", IsCorrect: true},
+					},
+				},
+			},
 		}
 
-		repoMock := &deck.RepositoryMock{}
-		srv := &Server{Repository: repoMock}
-		repoMock.On("GetDecks", mock.Anything).Return(decks, nil)
+		decks := map[uuid.UUID]deck.Deck{
+			d.ID: d,
+		}
 
-		res, err := srv.GetDecks(context.Background(), &pb.GetDecksRequest{UserId: "f3b59a97-e678-4410-8ed2-f1094a234a01"})
+		repoMock.On("GetDecks", mock.Anything, []uuid.UUID{d.ID}).Return(decks, nil)
+
+		res, err := srv.GetDecks(context.Background(), &pb.GetDecksRequest{DeckIds: []string{"5ec790fb-3dcc-4ee4-8c6d-daa9e4e11598"}})
 		assert.NoError(t, err)
-		assert.Equal(t, &pb.GetDecksResponse{Decks: toGRPCDecks(decks)}, res)
+		assert.Equal(t, &pb.GetDecksResponse{Decks: map[string]*pb.Deck{
+			"5ec790fb-3dcc-4ee4-8c6d-daa9e4e11598": toGRPCDeck(d),
+		}}, res)
 	})
 
-	t.Run("failure", func(t *testing.T) {
-		repoMock := &deck.RepositoryMock{}
-		srv := &Server{Repository: repoMock}
-		repoMock.On("GetDecks", mock.Anything).Return([]deck.Deck{}, assert.AnError)
+	t.Run("error", func(t *testing.T) {
+		repoMock.On("GetDecks", mock.Anything, mock.Anything).Return(map[uuid.UUID]deck.Deck{}, assert.AnError)
 
-		res, err := srv.GetDecks(context.Background(), &pb.GetDecksRequest{})
+		_, err := srv.GetDecks(context.Background(), &pb.GetDecksRequest{})
 		assert.Error(t, err)
-		assert.Equal(t, &pb.GetDecksResponse{}, res)
 	})
+
+	repoMock.AssertExpectations(t)
 }
 
 func TestServer_CreateDeck(t *testing.T) {

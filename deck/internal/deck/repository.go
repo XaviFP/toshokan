@@ -33,7 +33,7 @@ var (
 
 type Repository interface {
 	DeleteDeck(ctx context.Context, id uuid.UUID) error
-	GetDecks(ctx context.Context) ([]Deck, error)
+	GetDecks(ctx context.Context, ids []uuid.UUID) (map[uuid.UUID]Deck, error)
 	GetDeck(ctx context.Context, id uuid.UUID) (Deck, error)
 	GetDeckCards(ctx context.Context, id uuid.UUID) ([]Card, error)
 	GetCardAnswers(ctx context.Context, id uuid.UUID) ([]Answer, error)
@@ -89,8 +89,8 @@ func (r *redisRepository) DeleteDeck(ctx context.Context, id uuid.UUID) error {
 	return nil
 }
 
-func (r *redisRepository) GetDecks(ctx context.Context) ([]Deck, error) {
-	return r.pgRepo.GetDecks(ctx)
+func (r *redisRepository) GetDecks(ctx context.Context, ids []uuid.UUID) (map[uuid.UUID]Deck, error) {
+	return r.pgRepo.GetDecks(ctx, ids)
 }
 
 func (r *redisRepository) GetDeckCards(ctx context.Context, id uuid.UUID) ([]Card, error) {
@@ -179,7 +179,12 @@ func (r *pgRepository) DeleteDeck(ctx context.Context, id uuid.UUID) error {
 	return nil
 }
 
-func (r *pgRepository) GetDecks(ctx context.Context) ([]Deck, error) {
+func (r *pgRepository) GetDecks(ctx context.Context, ids []uuid.UUID) (map[uuid.UUID]Deck, error) {
+	out := make(map[uuid.UUID]Deck, len(ids))
+	if len(ids) == 0 {
+		return out, nil
+	}
+
 	rows, err := r.db.Query(`
 		SELECT 
 			id,
@@ -188,24 +193,24 @@ func (r *pgRepository) GetDecks(ctx context.Context) ([]Deck, error) {
 			"description",
 			is_public
 		FROM decks
-		WHERE deleted_at IS NULL
+		WHERE
+			deleted_at IS NULL
+			AND id = ANY($1)
 		ORDER BY created_at`,
+		pq.Array(ids),
 	)
 	if err != nil {
-		return []Deck{}, err
+		return out, errors.Trace(err)
 	}
 
-	var (
-		d   Deck
-		out []Deck
-	)
-
 	for rows.Next() {
+		var d Deck
+
 		if err := rows.Scan(&d.ID, &d.AuthorID, &d.Title, &d.Description, &d.Public); err != nil {
-			return []Deck{}, errors.Trace(err)
+			return out, errors.Trace(err)
 		}
 
-		out = append(out, d)
+		out[d.ID] = d
 	}
 
 	return out, nil

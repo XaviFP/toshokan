@@ -105,13 +105,13 @@ func (r *queryResolver) connectionToModel(ctx context.Context, conn *v1.PopularD
 	var edges []*model.PopularDeckEdge
 
 	for _, e := range conn.Edges {
-		deck, err := r.Deck(ctx, e.DeckId)
+		deck, err := r.DeckLoader.Load(ctx, e.DeckId)
 		if err != nil {
 			return nil, errors.Trace(err)
 		}
 
 		edges = append(edges, &model.PopularDeckEdge{
-			Node:   deck,
+			Node:   deckToModel(deck.(*v1.Deck)),
 			Cursor: &e.Cursor,
 		})
 	}

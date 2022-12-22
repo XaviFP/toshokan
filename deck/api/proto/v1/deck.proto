@@ -23,11 +23,11 @@ message GetDeckResponse {
 }
 
 message GetDecksRequest {
-    string user_id = 1;
+    repeated string deck_ids = 2;
 }
   
 message GetDecksResponse {
-    repeated Deck decks = 1;
+    map<string, Deck> decks = 1;
 }
 
 message CreateDeckRequest {

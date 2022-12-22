@@ -68,19 +68,29 @@ func (s *Server) GetDeck(ctx context.Context, req *pb.GetDeckRequest) (*pb.GetDe
 }
 
 func (s *Server) GetDecks(ctx context.Context, req *pb.GetDecksRequest) (*pb.GetDecksResponse, error) {
-	decks, err := s.Repository.GetDecks(ctx)
+	var ids []uuid.UUID
+
+	for _, idStr := range req.DeckIds {
+		id, err := uuid.Parse(idStr)
+		if err != nil {
+			return nil, errors.Trace(err)
+		}
+
+		ids = append(ids, id)
+	}
+
+	decks, err := s.Repository.GetDecks(ctx, ids)
 	if err != nil {
 		return &pb.GetDecksResponse{}, errors.Trace(err)
 	}
 
-	var out []deck.Deck
-	for _, d := range decks {
-		if d.Public || d.AuthorID.String() == req.UserId {
-			out = append(out, d)
-		}
+	out := make(map[string]*pb.Deck, len(decks))
+
+	for id, deck := range decks {
+		out[id.String()] = toGRPCDeck(deck)
 	}
 
-	return &pb.GetDecksResponse{Decks: toGRPCDecks(out)}, nil
+	return &pb.GetDecksResponse{Decks: out}, nil
 }
 
 func (s *Server) GetPopularDecks(ctx context.Context, req *pb.GetPopularDecksRequest) (*pb.GetPopularDecksResponse, error) {

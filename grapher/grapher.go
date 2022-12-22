@@ -1,6 +1,10 @@
 package grapher
 
 import (
+	"context"
+	"log"
+	"time"
+
 	"github.com/99designs/gqlgen/graphql/handler"
 	"github.com/99designs/gqlgen/graphql/handler/extension"
 	"github.com/99designs/gqlgen/graphql/playground"
@@ -15,6 +19,11 @@ func NewGraphqlHandler(deckClient pbDeck.DecksAPIClient, userClient pbUser.UserA
 	h := handler.NewDefaultServer(generated.NewExecutableSchema(generated.Config{Resolvers: &graph.Resolver{
 		DeckClient: deckClient,
 		UserClient: userClient,
+		DeckLoader: graph.NewDataLoader(
+			NewDeckBatchFn(deckClient),
+			time.Minute*30,
+			time.Millisecond*16,
+		),
 	}}))
 
 	h.Use(extension.Introspection{})
@@ -29,5 +38,23 @@ func NewPlaygroundHandler(targetPath string) gin.HandlerFunc {
 
 	return func(c *gin.Context) {
 		h.ServeHTTP(c.Writer, c.Request)
+	}
+}
+
+func NewDeckBatchFn(client pbDeck.DecksAPIClient) func(ctx context.Context, ids []string) map[string]any {
+	return func(ctx context.Context, ids []string) map[string]any {
+		out := make(map[string]any, len(ids))
+
+		res, err := client.GetDecks(ctx, &pbDeck.GetDecksRequest{DeckIds: ids})
+		if err != nil {
+			log.Default().Printf("could not get decks: %s", err) // TODO: Return errors instead
+			return out
+		}
+
+		for _, d := range res.Decks {
+			out[d.Id] = d
+		}
+
+		return out
 	}
 }

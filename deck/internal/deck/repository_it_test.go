@@ -79,54 +79,33 @@ func TestRepository_GetDecks(t *testing.T) {
 	repo := NewPGRepository(h.db)
 
 	t.Run("success", func(t *testing.T) {
-		expected := []Deck{
-			{
+		expected := map[uuid.UUID]Deck{
+			uuid.MustParse("fb9ffe2c-ad66-4766-9b7b-46fd5d9acd72"): {
 				ID:          uuid.MustParse("fb9ffe2c-ad66-4766-9b7b-46fd5d9acd72"),
 				AuthorID:    uuid.MustParse("4e37a600-c29e-4d0f-af44-66f2cd8cc1c9"),
 				Title:       "Programming languages",
 				Description: "Compiled or interpreted?",
 				Public:      true,
 			},
-			{
+			uuid.MustParse("334ddbf8-1acc-405b-86d8-49f0d1ca636c"): {
 				ID:          uuid.MustParse("334ddbf8-1acc-405b-86d8-49f0d1ca636c"),
 				AuthorID:    uuid.MustParse("4e37a600-c29e-4d0f-af44-66f2cd8cc1c9"),
 				Title:       "Greek Mythology",
 				Description: "Bits of Greek Mythology",
 				Public:      true,
 			},
-			{
-				ID:          uuid.MustParse("60766223-ff9f-4871-a497-f765c05a0c5e"),
-				AuthorID:    uuid.MustParse("4e37a600-c29e-4d0f-af44-66f2cd8cc1c9"),
-				Title:       "Biology 101",
-				Description: "The Biology Beginners Course",
-				Public:      true,
-			},
-			{
-				ID:          uuid.MustParse("6363e2c6-d89e-4610-92e8-1e1d2fea49ec"),
-				AuthorID:    uuid.MustParse("4e37a600-c29e-4d0f-af44-66f2cd8cc1c9"),
-				Title:       "Presocratic Philosophy II",
-				Description: "Advanced Presocratic Philosophy",
-				Public:      true,
-			},
-			{
-				ID:          uuid.MustParse("f79aea77-9aa0-4a84-b4c8-d000a27d2c52"),
-				AuthorID:    uuid.MustParse("4e37a600-c29e-4d0f-af44-66f2cd8cc1c9"),
-				Title:       "Music Theory",
-				Description: "From Zero to Hero",
-				Public:      true,
-			},
 		}
 
-		actual, err := repo.GetDecks(context.Background())
+		actual, err := repo.GetDecks(context.Background(), []uuid.UUID{
+			uuid.MustParse("fb9ffe2c-ad66-4766-9b7b-46fd5d9acd72"),
+			uuid.MustParse("334ddbf8-1acc-405b-86d8-49f0d1ca636c"),
+		})
 		assert.NoError(t, err)
 		assert.Equal(t, expected, actual)
 	})
 
 	t.Run("empty", func(t *testing.T) {
-		_, err := h.db.Exec(`UPDATE decks SET deleted_at = NOW()`)
-		assert.NoError(t, err)
-
-		decks, err := repo.GetDecks(context.Background())
+		decks, err := repo.GetDecks(context.Background(), []uuid.UUID{})
 		assert.NoError(t, err)
 		assert.Empty(t, decks)
 	})
@@ -383,7 +362,7 @@ type testHarness struct {
 }
 
 func newTestHarness(t *testing.T) testHarness {
-	db, err := db.InitDB(config.DBConfig{User: "toshokan", Password: "t.o.s.h.o.k.a.n.", Name: "test_decks", Host: "localhost", Port: "5432"})
+	db, err := db.InitDB(config.DBConfig{User: "toshokan", Password: "t.o.s.h.o.k.a.n.", Name: "test_deck", Host: "localhost", Port: "5432"})
 	if err != nil {
 		t.Fatal(err)
 	}
