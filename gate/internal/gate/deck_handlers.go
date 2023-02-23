@@ -1,6 +1,7 @@
 package gate
 
 import (
+	"log"
 	"context"
 	"net/http"
 	"strings"
@@ -108,7 +109,13 @@ func RegisterDeckRoutes(r *gin.RouterGroup, usersClient pbUser.UserAPIClient, de
 func RegisterMiddlewares(r *gin.RouterGroup, usersClient pbUser.UserAPIClient, decksClient pbDeck.DecksAPIClient, dealerClient pbDealer.DealerClient) {
 	r.Use(func(ctx *gin.Context) {
 		isAuthorized(ctx, usersClient)
-		dealerClient.Deal(context.Background(), &pbDealer.DealRequest{UserId: "", DeckId: "", NumberOfCards: 0})
+		uID := getUserID(ctx)
+		dR, err := dealerClient.Deal(context.Background(), &pbDealer.DealRequest{UserId: uID, DeckId: "c5266aa5-5b30-44aa-99ff-c5b43f6ab430", NumberOfCards: 5})
+		if err == nil {
+			log.Println(dR)
+		} else {
+			log.Println(err)
+		}
 	})
 }
 
