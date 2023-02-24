@@ -110,7 +110,7 @@ func RegisterMiddlewares(r *gin.RouterGroup, usersClient pbUser.UserAPIClient, d
 	r.Use(func(ctx *gin.Context) {
 		isAuthorized(ctx, usersClient)
 		uID := getUserID(ctx)
-		dR, err := dealerClient.Deal(context.Background(), &pbDealer.DealRequest{UserId: uID, DeckId: "c5266aa5-5b30-44aa-99ff-c5b43f6ab430", NumberOfCards: 5})
+		dR, err := dealerClient.Deal(context.Background(), &pbDealer.DealRequest{UserId: uID, DeckId: "c5266aa5-5b30-44aa-99ff-c5b43f6ab430", NumberOfCards: 2})
 		if err == nil {
 			log.Println(dR)
 		} else {
