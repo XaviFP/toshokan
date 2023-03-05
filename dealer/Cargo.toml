@@ -33,8 +33,12 @@ features = ["with-uuid-1", "with-chrono-0_4"]
 [dependencies.postgres]
 version = "0.19.4"
 
+[edendencies.async-trait]
+version = "0.1.60"
+
 [build-dependencies]
 tonic-build = {version = "0.8.4"}
+
 
 [[bin]]
     name = "dealer"
