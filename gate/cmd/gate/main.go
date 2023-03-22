@@ -67,12 +67,6 @@ func main() {
 
 	deckClient := pbDeck.NewDecksAPIClient(deckGRPCConn)
 
-	dealerGRPCConn, err := grpc.Dial("dealer:50051", grpc.WithTransportCredentials(insecure.NewCredentials()))
-	if err != nil {
-		panic(err)
-	}
-	defer dealerGRPCConn.Close()
-
 	router := gin.Default()
 	router.Use(gate.GinContextToContextMiddleware())
 
