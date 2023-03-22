@@ -5,9 +5,9 @@ use postgres::NoTls;
 use postgres::types::ToSql;
 use tonic::Code;
 use tonic::{transport::Server, Request, Response, Status};
+use uuid::{Uuid};
 
 mod pb {
-    //tonic::include_proto!("../api/proto/v1/v1.rs");
     include!("../api/proto/v1/v1.rs");
 }
 
@@ -32,37 +32,44 @@ struct Repository {
 
 impl Repository {
     async fn is_new_deck_for_user(&self, user_id: &String, deck_id: &String) -> bool {
+
         let rows = self
             .client
             .query(
                 "SELECT count(*) FROM user_deck WHERE user_id = $1 AND deck_id = $2",
-                &[user_id, deck_id],
+                &[&Uuid::parse_str(user_id).unwrap(), &Uuid::parse_str(deck_id).unwrap()],
             )
             .await
             .unwrap_or(vec![]);
-        return rows.len() == 0;
+
+        let count: i64 = rows[0].get(0);
+
+        return count == 0;
     }
 
     async fn init_levels(
         &self,
         user_id: &String,
         deck_id: &String,
-        max: &u32,
+        max: &i64,
     ) -> Result<Vec<String>, String> {
+
         let result = self
             .client
             .query(
-                "WITH inserted as (INSERT INTO user_card_level (user_id, card_id)
+                &format!("WITH inserted_cards as (INSERT INTO user_card_level (user_id, card_id)
                     (
-                        SELECT  $1 as user_id, c.id as card_id
+                        SELECT '{}' as user_id, c.id as card_id
                         FROM cards as c
                         WHERE c.deck_id = $2
                     )
-                    RETURNING card_id)
-                    SELECT card_id FROM inserted LIMIT $3",
-                &[user_id, deck_id, max],
+                    RETURNING card_id),
+                    inserted_deck as (INSERT INTO user_deck (user_id, deck_id) VALUES ($1, $2))
+                    SELECT card_id FROM inserted_cards LIMIT $3", user_id),
+                &[&Uuid::parse_str(user_id).unwrap(), &Uuid::parse_str(deck_id).unwrap(), max],
             )
             .await;
+
         if result.as_ref().is_err() {
             match result.as_ref().err() {
                 Some(err) => {
@@ -72,11 +79,13 @@ impl Repository {
             }
         }
         // If new deck for user, return request.number_of_cards first cards
-
         let card_uuids = result.as_ref().unwrap();
         let card_ids: Vec<Card> = card_uuids
             .iter()
-            .map(|uuid| Card { id: uuid.get(0) })
+            .map(|uuid| {
+                let id: Uuid = uuid.get(0);
+                Card { id: id.to_string() }
+            })
             .collect();
         return Ok(card_ids.iter().map(|card| card.id.clone()).collect());
     }
@@ -85,13 +94,13 @@ impl Repository {
         &self,
         user_id: &String,
         deck_id: &String,
-        max: &u32,
+        max: &i64,
     ) -> Result<Vec<LeveledCard>, String> {
         let rows = self
             .client
             .query(
                 "WITH user_cards as (
-                    SELECT c.id as card_id, uc.lvl as lvl 
+                    SELECT c.id as card_id, uc.level as lvl
                     FROM cards as c 
                     JOIN user_card_level as uc 
                     ON uc.card_id = c.id
@@ -104,11 +113,10 @@ impl Repository {
                 UNION (SELECT card_id, lvl FROM user_cards WHERE lvl = 3 LIMIT $3)
                 UNION (SELECT card_id, lvl FROM user_cards WHERE lvl = 4 LIMIT $3)
                 UNION (SELECT card_id, lvl FROM user_cards WHERE lvl = 5 LIMIT $3)
-                ORDER BY lvl",
-                &[user_id, deck_id, max],
+                ORDER BY lvl DESC",
+                &[&Uuid::parse_str(user_id).unwrap(), &Uuid::parse_str(deck_id).unwrap(), max],
             )
             .await;
-
         if rows.as_ref().is_err() {
             match rows.as_ref().err() {
                 Some(err) => {
@@ -117,14 +125,15 @@ impl Repository {
                 _ => {}
             }
         }
-
         Ok(rows
             .unwrap()
             .iter()
             .map(|lvl_card| {
-                let lvl: u32 = lvl_card.get(1);
+                let id: Uuid = lvl_card.get(0);
+                let lvl: i32 = lvl_card.get(1);
+
                 LeveledCard {
-                    id: lvl_card.get(0),
+                    id: id.to_string(),
                     lvl: lvl as usize,
                 }
             })
@@ -150,6 +159,7 @@ impl Repository {
             return Err(result.err().unwrap().to_string());
         }
 
+        // Update actual user_card_levels
         Ok(())
     }
 }
@@ -188,12 +198,13 @@ impl pbDealer for Dealer {
             .is_new_deck_for_user(&request.get_ref().user_id, &request.get_ref().deck_id)
             .await
         {
+            let max = i64::from(request.get_ref().number_of_cards);
             let result = self
                 .repo
                 .init_levels(
                     &request.get_ref().user_id,
                     &request.get_ref().deck_id.clone(),
-                    &request.get_ref().number_of_cards,
+                    &max,
                 )
                 .await;
             if result.as_ref().is_err() {
@@ -208,14 +219,14 @@ impl pbDealer for Dealer {
                 card_ids: result.unwrap().iter().map(|id| id.clone()).collect(),
             }));
         }
-
         // Apply algorithm to database result and return
+        let max = i64::from(request.get_ref().number_of_cards);
         let result = self
             .repo
             .get_max_cards_per_level(
                 &request.get_ref().user_id,
                 &request.get_ref().deck_id,
-                &request.get_ref().number_of_cards,
+                &max,
             )
             .await;
         if result.as_ref().is_err() {
