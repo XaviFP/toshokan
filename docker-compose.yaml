@@ -9,7 +9,7 @@ services:
     environment:
       POSTGRES_USER: 'toshokan'
       POSTGRES_PASSWORD: 't.o.s.h.o.k.a.n.'
-      POSTGRES_MULTIPLE_DATABASES: 'deck,users,test_deck,test_user'
+      POSTGRES_MULTIPLE_DATABASES: 'deck,users,test_deck,test_user,test_dealer'
     ports:
       - "5432:5432"
     expose:
@@ -36,6 +36,13 @@ services:
     env_file: 
       - env/.common
       - env/.deck
+  dealer:
+    build: dealer/
+    depends_on:
+      - db
+    env_file:
+      - env/.common
+      - env/.dealer
   gate:
     build: gate/
     depends_on:

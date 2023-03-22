@@ -8,3 +8,6 @@
 
 # Ignore any bin/ directories
 bin/
+
+# Rust
+target/

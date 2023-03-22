@@ -50,7 +50,6 @@ func main() {
 		if err := srv.Start(); err != nil {
 			serverError <- err
 		}
-
 	}()
 
 	defer srv.Stop()
