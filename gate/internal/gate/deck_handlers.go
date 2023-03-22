@@ -1,7 +1,6 @@
 package gate
 
 import (
-	"log"
 	"context"
 	"net/http"
 	"strings"
@@ -10,7 +9,6 @@ import (
 
 	pbDeck "github.com/XaviFP/toshokan/deck/api/proto/v1"
 	pbUser "github.com/XaviFP/toshokan/user/api/proto/v1"
-	pbDealer "github.com/XaviFP/toshokan/dealer/api/proto/v1"
 )
 
 func GetDeck(ctx *gin.Context, usersClient pbUser.UserAPIClient, decksClient pbDeck.DecksAPIClient) {
@@ -106,16 +104,9 @@ func RegisterDeckRoutes(r *gin.RouterGroup, usersClient pbUser.UserAPIClient, de
 	})
 }
 
-func RegisterMiddlewares(r *gin.RouterGroup, usersClient pbUser.UserAPIClient, decksClient pbDeck.DecksAPIClient, dealerClient pbDealer.DealerClient) {
+func RegisterMiddlewares(r *gin.RouterGroup, usersClient pbUser.UserAPIClient, decksClient pbDeck.DecksAPIClient) {
 	r.Use(func(ctx *gin.Context) {
 		isAuthorized(ctx, usersClient)
-		uID := getUserID(ctx)
-		dR, err := dealerClient.Deal(context.Background(), &pbDealer.DealRequest{UserId: uID, DeckId: "c5266aa5-5b30-44aa-99ff-c5b43f6ab430", NumberOfCards: 2})
-		if err == nil {
-			log.Println(dR)
-		} else {
-			log.Println(err)
-		}
 	})
 }
 
