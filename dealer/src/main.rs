@@ -144,14 +144,22 @@ impl Repository {
         let mut buf = String::from("INSERT INTO card_practice (user_id, answer_id) VALUES ");
         let mut i = 1;
         let mut params = Vec::<&(dyn ToSql + Sync)>::new();
+
+        let uid_res = Uuid::try_parse(user_id);
+        if uid_res.is_err() {
+            return Err(uid_res.err().unwrap().to_string());
+        }
+
+        let uid = uid_res.unwrap();
+
         for answer in answer_ids.iter() {
             let res = buf.write_fmt(format_args!("(${},${})", i, i+1));
             if res.is_err() {
                 return Err(res.err().unwrap().to_string());
             }
-            i += 2;
-            params.push(user_id);
+            params.push(&uid);
             params.push(answer);
+            i += 2;
         }
 
         let result = self.client.execute(&buf, &params).await;
