@@ -168,6 +168,27 @@ impl Repository {
         }
 
         // Update actual user_card_levels
+
+        let result = self
+            .client
+            .query(
+                "WITH correct_answered_cards as (
+                    SELECT card_id FROM answers
+                    WHERE is_correct = true
+                    AND id in ($1)
+                )
+                UPDATE user_card_level
+                SET level = level + 1
+                WHERE card_id in (SELECT card_id FROM correct_answered_cards)
+                AND user_id = $2
+                AND level < 5",
+                &[&answer_ids, &Uuid::parse_str(user_id).unwrap()],
+            )
+            .await;
+        if result.is_err() {
+            return Err(result.err().unwrap().to_string());
+        }
+
         Ok(())
     }
 }
