@@ -1,11 +1,11 @@
 use std::collections::HashMap;
 use std::fmt::Write;
 
-use postgres::NoTls;
 use postgres::types::ToSql;
+use postgres::NoTls;
 use tonic::Code;
 use tonic::{transport::Server, Request, Response, Status};
-use uuid::{Uuid};
+use uuid::Uuid;
 
 mod pb {
     include!("../api/proto/v1/v1.rs");
@@ -32,12 +32,14 @@ struct Repository {
 
 impl Repository {
     async fn is_new_deck_for_user(&self, user_id: &String, deck_id: &String) -> bool {
-
         let rows = self
             .client
             .query(
                 "SELECT count(*) FROM user_deck WHERE user_id = $1 AND deck_id = $2",
-                &[&Uuid::parse_str(user_id).unwrap(), &Uuid::parse_str(deck_id).unwrap()],
+                &[
+                    &Uuid::parse_str(user_id).unwrap(),
+                    &Uuid::parse_str(deck_id).unwrap(),
+                ],
             )
             .await
             .unwrap_or(vec![]);
@@ -53,11 +55,11 @@ impl Repository {
         deck_id: &String,
         max: &i64,
     ) -> Result<Vec<String>, String> {
-
         let result = self
             .client
             .query(
-                &format!("WITH inserted_cards as (INSERT INTO user_card_level (user_id, card_id)
+                &format!(
+                    "WITH inserted_cards as (INSERT INTO user_card_level (user_id, card_id)
                     (
                         SELECT '{}' as user_id, c.id as card_id
                         FROM cards as c
@@ -65,8 +67,14 @@ impl Repository {
                     )
                     RETURNING card_id),
                     inserted_deck as (INSERT INTO user_deck (user_id, deck_id) VALUES ($1, $2))
-                    SELECT card_id FROM inserted_cards LIMIT $3", user_id),
-                &[&Uuid::parse_str(user_id).unwrap(), &Uuid::parse_str(deck_id).unwrap(), max],
+                    SELECT card_id FROM inserted_cards LIMIT $3",
+                    user_id
+                ),
+                &[
+                    &Uuid::parse_str(user_id).unwrap(),
+                    &Uuid::parse_str(deck_id).unwrap(),
+                    max,
+                ],
             )
             .await;
 
@@ -114,7 +122,11 @@ impl Repository {
                 UNION (SELECT card_id, lvl FROM user_cards WHERE lvl = 4 LIMIT $3)
                 UNION (SELECT card_id, lvl FROM user_cards WHERE lvl = 5 LIMIT $3)
                 ORDER BY lvl DESC",
-                &[&Uuid::parse_str(user_id).unwrap(), &Uuid::parse_str(deck_id).unwrap(), max],
+                &[
+                    &Uuid::parse_str(user_id).unwrap(),
+                    &Uuid::parse_str(deck_id).unwrap(),
+                    max,
+                ],
             )
             .await;
         if rows.as_ref().is_err() {
@@ -140,7 +152,14 @@ impl Repository {
             .collect())
     }
 
-    async fn store_answers(&self, user_id: &String, answer_ids: &Vec<String>) -> Result<(), String> {
+    async fn store_answers(
+        &self,
+        user_id: &String,
+        answer_ids: &Vec<String>,
+    ) -> Result<(), String> {
+        if answer_ids.len() == 0 {
+            return Err("No answers provided".to_owned());
+        }
         let mut buf = String::from("INSERT INTO card_practice (user_id, answer_id) VALUES ");
         let mut i = 1;
         let mut params = Vec::<&(dyn ToSql + Sync)>::new();
@@ -152,37 +171,73 @@ impl Repository {
 
         let uid = uid_res.unwrap();
 
-        for answer in answer_ids.iter() {
-            let res = buf.write_fmt(format_args!("(${},${})", i, i+1));
+        for _ in answer_ids.iter() {
+            let res = buf.write_fmt(format_args!("(${},${}),", i, i + 1));
             if res.is_err() {
                 return Err(res.err().unwrap().to_string());
             }
-            params.push(&uid);
-            params.push(answer);
             i += 2;
         }
 
+        // Transform srings to valid UUIDs
+        // Should fail or at least inform of invalid UUIDs received
+        let ans_ids: Vec<Uuid> = answer_ids
+            .iter()
+            .filter_map(|answer| {
+                let ans_res = Uuid::try_parse(answer);
+                if ans_res.is_err() {
+                    return None;
+                }
+                Some(ans_res.unwrap())
+            })
+            .collect();
+
+        ans_ids.iter().fold(&mut params, |params, answer| {
+            params.push(&uid);
+            params.push(answer);
+
+            params
+        });
+
+        buf.pop();
         let result = self.client.execute(&buf, &params).await;
         if result.is_err() {
             return Err(result.err().unwrap().to_string());
         }
 
         // Update actual user_card_levels
+        let mut params = Vec::<&(dyn ToSql + Sync)>::new();
+        let mut answers_string_arg = String::from("");
+        i = 1;
+        for answer in ans_ids.iter() {
+            let res = answers_string_arg.write_fmt(format_args!("${},", i));
+            if res.is_err() {
+                return Err(res.err().unwrap().to_string());
+            }
+            params.push(answer);
+            i += 1;
+        }
+        answers_string_arg.pop();
+        params.push(&uid);
 
         let result = self
             .client
-            .query(
-                "WITH correct_answered_cards as (
+            .execute(
+                &format!(
+                    "WITH correct_answered_cards as (
                     SELECT card_id FROM answers
                     WHERE is_correct = true
-                    AND id in ($1)
+                    AND id in ({})
                 )
                 UPDATE user_card_level
                 SET level = level + 1
                 WHERE card_id in (SELECT card_id FROM correct_answered_cards)
-                AND user_id = $2
+                AND user_id = ${}
                 AND level < 5",
-                &[&answer_ids, &Uuid::parse_str(user_id).unwrap()],
+                    answers_string_arg,
+                    params.len()
+                ),
+                &params,
             )
             .await;
         if result.is_err() {
@@ -208,7 +263,10 @@ impl pbDealer for Dealer {
         &self,
         request: Request<StoreAnswersRequest>,
     ) -> Result<Response<StoreAnswersResponse>, Status> {
-        let result = self.repo.store_answers(&request.get_ref().user_id, &request.get_ref().answers).await;
+        let result = self
+            .repo
+            .store_answers(&request.get_ref().user_id, &request.get_ref().answers)
+            .await;
         if result.as_ref().is_err() {
             match result.as_ref().err() {
                 Some(err) => {
@@ -252,11 +310,7 @@ impl pbDealer for Dealer {
         let max = i64::from(request.get_ref().number_of_cards);
         let result = self
             .repo
-            .get_max_cards_per_level(
-                &request.get_ref().user_id,
-                &request.get_ref().deck_id,
-                &max,
-            )
+            .get_max_cards_per_level(&request.get_ref().user_id, &request.get_ref().deck_id, &max)
             .await;
         if result.as_ref().is_err() {
             match result.as_ref().err() {
@@ -290,20 +344,17 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Load config
     let db_config = load_db_config();
     if db_config.is_err() {
-        panic!("{}",db_config.err().unwrap());
+        panic!("{}", db_config.err().unwrap());
     }
 
     let grpc_config = load_grpc_server_config();
     if grpc_config.is_err() {
-        panic!("{}",grpc_config.err().unwrap());
+        panic!("{}", grpc_config.err().unwrap());
     }
 
     // Stablish DB connection
-    let (client, connection) = tokio_postgres::connect(
-        &db_config.unwrap().to_string(),
-        NoTls,
-    )
-    .await?;
+    let (client, connection) =
+        tokio_postgres::connect(&db_config.unwrap().to_string(), NoTls).await?;
 
     // Spawn connection
     tokio::spawn(async move {
@@ -379,7 +430,6 @@ fn get_user_cards(cards: Vec<LeveledCard>, max: usize) -> Vec<String> {
     // All cards requested are there
     let length = out.len();
     if max == length {
-
         return out;
     }
     // Remove extra cards if any
@@ -456,11 +506,16 @@ fn correct_number_of_cards_per_category() {
 
     let mut count_per_level: HashMap<usize, usize> = HashMap::new();
     for id in out.iter() {
-        let count = count_per_level.entry(level_map.get(id).unwrap().clone()).or_insert(0);
+        let count = count_per_level
+            .entry(level_map.get(id).unwrap().clone())
+            .or_insert(0);
         *count += 1;
     }
     for level in 1..=5 {
-        assert_eq!(get_count_for_level(max, level) <= *count_per_level.get(&level).unwrap(), true)
+        assert_eq!(
+            get_count_for_level(max, level) <= *count_per_level.get(&level).unwrap(),
+            true
+        )
     }
     assert_eq!(out.len().clone(), max);
 }
