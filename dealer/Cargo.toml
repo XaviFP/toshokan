@@ -33,7 +33,7 @@ features = ["with-uuid-1", "with-chrono-0_4"]
 [dependencies.postgres]
 version = "0.19.4"
 
-[edendencies.async-trait]
+[dependencies.async-trait]
 version = "0.1.60"
 
 [build-dependencies]
