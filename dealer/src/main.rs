@@ -30,6 +30,22 @@ struct Repository {
     client: tokio_postgres::Client,
 }
 
+// Helps building SQL query strings by generating a positional argument for every parameter added
+struct Argumenter<T> {
+    values: Vec<T>,
+}
+
+impl<T> Argumenter<T> {
+    fn add(&mut self, v: T) -> String {
+        self.values.push(v);
+        format!("${}", self.values.len())
+    }
+
+    fn values(&self) -> &Vec<T> {
+        &self.values
+    }
+}
+
 impl Repository {
     async fn is_new_deck_for_user(&self, user_id: &String, deck_id: &String) -> bool {
         let rows = self
@@ -161,8 +177,9 @@ impl Repository {
             return Err("No answers provided".to_owned());
         }
         let mut buf = String::from("INSERT INTO card_practice (user_id, answer_id) VALUES ");
-        let mut i = 1;
-        let mut params = Vec::<&(dyn ToSql + Sync)>::new();
+        let mut arger = Argumenter {
+            values: Vec::<&(dyn ToSql + Sync)>::new(),
+        };
 
         let uid_res = Uuid::try_parse(user_id);
         if uid_res.is_err() {
@@ -170,14 +187,6 @@ impl Repository {
         }
 
         let uid = uid_res.unwrap();
-
-        for _ in answer_ids.iter() {
-            let res = buf.write_fmt(format_args!("(${},${}),", i, i + 1));
-            if res.is_err() {
-                return Err(res.err().unwrap().to_string());
-            }
-            i += 2;
-        }
 
         // Transform srings to valid UUIDs
         // Should fail or at least inform of invalid UUIDs received
@@ -192,33 +201,34 @@ impl Repository {
             })
             .collect();
 
-        ans_ids.iter().fold(&mut params, |params, answer| {
-            params.push(&uid);
-            params.push(answer);
-
-            params
-        });
-
+        for answer in ans_ids.iter() {
+            let res = buf.write_fmt(format_args!("({},{}),", arger.add(&uid), arger.add(answer)));
+            if res.is_err() {
+                return Err(res.err().unwrap().to_string());
+            }
+        }
+        // Remove trailing comma
         buf.pop();
-        let result = self.client.execute(&buf, &params).await;
+        let result = self.client.execute(&buf, arger.values()).await;
         if result.is_err() {
             return Err(result.err().unwrap().to_string());
         }
 
         // Update actual user_card_levels
-        let mut params = Vec::<&(dyn ToSql + Sync)>::new();
+        let mut arger = Argumenter {
+            values: Vec::<&(dyn ToSql + Sync)>::new(),
+        };
         let mut answers_string_arg = String::from("");
-        i = 1;
+
         for answer in ans_ids.iter() {
-            let res = answers_string_arg.write_fmt(format_args!("${},", i));
+            let res = answers_string_arg.write_fmt(format_args!("{},", arger.add(answer)));
             if res.is_err() {
                 return Err(res.err().unwrap().to_string());
             }
-            params.push(answer);
-            i += 1;
         }
+
+        // Remove trailing comma
         answers_string_arg.pop();
-        params.push(&uid);
 
         let result = self
             .client
@@ -232,12 +242,12 @@ impl Repository {
                 UPDATE user_card_level
                 SET level = level + 1
                 WHERE card_id in (SELECT card_id FROM correct_answered_cards)
-                AND user_id = ${}
+                AND user_id = {}
                 AND level < 5",
                     answers_string_arg,
-                    params.len()
+                    arger.add(&uid)
                 ),
-                &params,
+                arger.values(),
             )
             .await;
         if result.is_err() {
