@@ -1,6 +1,6 @@
 # Toshokan
 
-Toshokan(Japanese for library) is a flashcard backend system built with Go. It offers an API to interact with collections of flashcards named "decks".
+Toshokan(Japanese for library) is a flashcard backend system built with Go and Rust. It offers an API to interact with collections of flashcards named "decks".
 Although in initial stages, it is under development together with Shisho(Japanese for librarian), a GUI client built with Rust and Iced.
 
 ## Config
