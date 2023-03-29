@@ -240,7 +240,7 @@ impl Repository {
                     AND id in ({})
                 )
                 UPDATE user_card_level
-                SET level = level + 1
+                SET level = level + 1, edited_at = now()
                 WHERE card_id in (SELECT card_id FROM correct_answered_cards)
                 AND user_id = {}
                 AND level < 5",
