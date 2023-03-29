@@ -17,6 +17,9 @@ use pb::{DealRequest, DealResponse, StoreAnswersRequest, StoreAnswersResponse};
 mod config;
 use config::{load_db_config, load_grpc_server_config};
 
+mod ranker;
+use ranker::Ranker;
+
 const LEVEL1_PERCENTATGE: usize = 40; //6
 const LEVEL2_PERCENTATGE: usize = 20; //3
 const LEVEL3_PERCENTATGE: usize = 15; //2
@@ -352,19 +355,38 @@ pub struct Deck {
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Load config
-    let db_config = load_db_config();
-    if db_config.is_err() {
-        panic!("{}", db_config.err().unwrap());
+    let db_conf = load_db_config();
+    if db_conf.is_err() {
+        panic!("{}", db_conf.err().unwrap());
     }
+    let db_config = db_conf.unwrap();
 
     let grpc_config = load_grpc_server_config();
     if grpc_config.is_err() {
         panic!("{}", grpc_config.err().unwrap());
     }
 
+    // Stablish DB connection for ranker job
+    let (ranker_client, ranker_connection) =
+        tokio_postgres::connect(&db_config.to_string(), NoTls).await?;
+
+    // Spawn connection for ranker job
+    tokio::spawn(async move {
+        if let Err(error) = ranker_connection.await {
+            eprintln!("Connection error: {}", error);
+        }
+    });
+
+    let ranker = Ranker::new(ranker_client);
+
+    tokio::spawn(async move {
+        if let Err(error) = ranker.start().await {
+            eprintln!("Ranker error: {}", error);
+        }
+    });
+
     // Stablish DB connection
-    let (client, connection) =
-        tokio_postgres::connect(&db_config.unwrap().to_string(), NoTls).await?;
+    let (client, connection) = tokio_postgres::connect(&db_config.to_string(), NoTls).await?;
 
     // Spawn connection
     tokio::spawn(async move {
