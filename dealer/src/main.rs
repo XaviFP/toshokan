@@ -17,6 +17,9 @@ use pb::{DealRequest, DealResponse, StoreAnswersRequest, StoreAnswersResponse};
 mod config;
 use config::{load_db_config, load_grpc_server_config};
 
+mod argumenter;
+use argumenter::Argumenter;
+
 mod ranker;
 use ranker::Ranker;
 
@@ -31,22 +34,6 @@ struct Dealer {
 }
 struct Repository {
     client: tokio_postgres::Client,
-}
-
-// Helps building SQL query strings by generating a positional argument for every parameter added
-struct Argumenter<T> {
-    values: Vec<T>,
-}
-
-impl<T> Argumenter<T> {
-    fn add(&mut self, v: T) -> String {
-        self.values.push(v);
-        format!("${}", self.values.len())
-    }
-
-    fn values(&self) -> &Vec<T> {
-        &self.values
-    }
 }
 
 impl Repository {

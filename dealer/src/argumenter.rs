@@ -14,10 +14,11 @@ impl<T> Argumenter<T> {
     }
 }
 
-
 #[test]
 fn number_and_order_of_positional_args_is_correct() {
-    let mut arger = Argumenter{values: Vec::<String>::new()};
+    let mut arger = Argumenter {
+        values: Vec::<String>::new(),
+    };
     let dollar_1 = arger.add("first".to_owned());
     let dollar_2 = arger.add("second".to_owned());
     let dollar_3 = arger.add("thirst".to_owned());
@@ -29,12 +30,14 @@ fn number_and_order_of_positional_args_is_correct() {
 
 #[test]
 fn number_and_order_of_args_is_correct() {
-    let mut arger = Argumenter{values: Vec::<String>::new()};
+    let mut arger = Argumenter {
+        values: Vec::<String>::new(),
+    };
     arger.add("first".to_owned());
     arger.add("second".to_owned());
     arger.add("thirst".to_owned());
 
-    let values =  arger.values();
+    let values = arger.values();
     assert_eq!(values.len(), 3);
     assert_eq!(values[2], "thirst");
     assert_eq!(values[1], "second");
