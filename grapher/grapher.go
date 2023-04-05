@@ -2,7 +2,6 @@ package grapher
 
 import (
 	"context"
-	"log"
 	"time"
 
 	"github.com/99designs/gqlgen/graphql/handler"
@@ -13,6 +12,7 @@ import (
 	"github.com/XaviFP/toshokan/grapher/graph/generated"
 	pbUser "github.com/XaviFP/toshokan/user/api/proto/v1"
 	"github.com/gin-gonic/gin"
+	"github.com/juju/errors"
 )
 
 func NewGraphqlHandler(deckClient pbDeck.DecksAPIClient, userClient pbUser.UserAPIClient) gin.HandlerFunc {
@@ -41,20 +41,19 @@ func NewPlaygroundHandler(targetPath string) gin.HandlerFunc {
 	}
 }
 
-func NewDeckBatchFn(client pbDeck.DecksAPIClient) func(ctx context.Context, ids []string) map[string]any {
-	return func(ctx context.Context, ids []string) map[string]any {
-		out := make(map[string]any, len(ids))
+func NewDeckBatchFn(client pbDeck.DecksAPIClient) graph.BatchFn {
+	return func(ctx context.Context, ids []string) (map[string]graph.Result, error) {
+		out := make(map[string]graph.Result, len(ids))
 
 		res, err := client.GetDecks(ctx, &pbDeck.GetDecksRequest{DeckIds: ids})
 		if err != nil {
-			log.Default().Printf("could not get decks: %s", err) // TODO: Return errors instead
-			return out
+			return out, errors.Trace(err)
 		}
 
 		for _, d := range res.Decks {
-			out[d.Id] = d
+			out[d.Id] = graph.Result{Value: d}
 		}
 
-		return out
+		return out, nil
 	}
 }

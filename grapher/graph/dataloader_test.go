@@ -37,15 +37,15 @@ func TestDataloader(t *testing.T) {
 	assert.Equal(t, 2, batchCalls)
 }
 
-func newTestBatchFn(counter *int) func(ctx context.Context, ids []string) map[string]any {
-	return func(ctx context.Context, ids []string) map[string]any {
-		out := make(map[string]any, len(ids))
+func newTestBatchFn(counter *int) BatchFn {
+	return func(ctx context.Context, ids []string) (map[string]Result, error) {
+		out := make(map[string]Result, len(ids))
 
 		*counter++
 		for _, id := range ids {
-			out[id] = id
+			out[id] = Result{Value: id}
 		}
 
-		return out
+		return out, nil
 	}
 }

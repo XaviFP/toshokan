@@ -4,19 +4,25 @@ import (
 	"context"
 	"sync"
 	"time"
+
+	"github.com/juju/errors"
 )
+
+var ErrNoResult = errors.New("No result returned")
 
 type DataLoader interface {
 	Load(ctx context.Context, id string) (any, error)
 }
 
-func NewDataLoader(batchFn func(ctx context.Context, ids []string) map[string]any, cacheTTL, batchEvery time.Duration) DataLoader {
+type BatchFn func(ctx context.Context, ids []string) (map[string]Result, error)
+
+func NewDataLoader(batchFn BatchFn, cacheTTL, batchEvery time.Duration) DataLoader {
 	loader := loader{
 		cacheTTL:   cacheTTL,
 		batchEvery: batchEvery,
 		batchFn:    batchFn,
-		elements:   make(map[string]*ttlElement),
-		buffer:     make(map[string]chan any),
+		cache:      make(map[string]*ttlResult),
+		buffer:     make(map[string]chan Result),
 	}
 
 	loader.Start()
@@ -24,26 +30,31 @@ func NewDataLoader(batchFn func(ctx context.Context, ids []string) map[string]an
 	return &loader
 }
 
-type ttlElement struct {
-	element any
-	ttl     time.Time
-	id      string
+type ttlResult struct {
+	result Result
+	ttl    time.Time
+	id     string
+}
+
+type Result struct {
+	Value any
+	Error error
 }
 
 type loader struct {
 	queue      []string
-	elements   map[string]*ttlElement
-	buffer     map[string]chan any
+	cache      map[string]*ttlResult
+	buffer     map[string]chan Result
 	m          sync.Mutex
 	cacheTTL   time.Duration
 	batchEvery time.Duration
-	batchFn    func(ctx context.Context, ids []string) map[string]any
+	batchFn    BatchFn
 }
 
 func (l *loader) Load(ctx context.Context, id string) (any, error) {
-	d, ok := l.elements[id]
+	c, ok := l.cache[id]
 	if ok {
-		return d.element, nil
+		return c.result.Value, c.result.Error
 	}
 
 	ch := l.add(id)
@@ -52,14 +63,14 @@ func (l *loader) Load(ctx context.Context, id string) (any, error) {
 
 	delete(l.buffer, id)
 
-	return out, nil
+	return out.Value, out.Error
 }
 
-func (l *loader) add(id string) chan any {
+func (l *loader) add(id string) chan Result {
 	l.m.Lock()
 	defer l.m.Unlock()
 	l.queue = append(l.queue, id)
-	ch := make(chan any)
+	ch := make(chan Result)
 	l.buffer[id] = ch
 
 	return ch
@@ -69,14 +80,33 @@ func (l *loader) batch(ctx context.Context) {
 	l.m.Lock()
 	defer l.m.Unlock()
 
-	for id, e := range l.batchFn(ctx, l.queue) {
-		l.elements[id] = &ttlElement{
-			id:      id,
-			element: e,
-			ttl:     time.Now().Add(l.cacheTTL),
+	results, err := l.batchFn(ctx, l.queue)
+	if err != nil {
+		for _, id := range l.queue {
+			if ch, ok := l.buffer[id]; ok {
+				ch <- Result{Error: err}
+			}
 		}
+
+		return
+	}
+
+	// Traverse `l.queue` instead of `results`
+	// Can't trust batchFn to return a result for each of the ids
+	for _, id := range l.queue {
+		res, ok := results[id]
+		if !ok {
+			res = Result{Error: ErrNoResult}
+		} else {
+			l.cache[id] = &ttlResult{
+				id:     id,
+				result: res,
+				ttl:    time.Now().Add(l.cacheTTL),
+			}
+		}
+
 		if ch, ok := l.buffer[id]; ok {
-			ch <- e
+			ch <- res
 		}
 	}
 
@@ -107,9 +137,9 @@ func (l *loader) expire() {
 	defer l.m.Unlock()
 
 	now := time.Now()
-	for _, e := range l.elements {
-		if e.ttl.After(now) {
-			delete(l.elements, e.id)
+	for _, res := range l.cache {
+		if res.ttl.After(now) {
+			delete(l.cache, res.id)
 		}
 	}
 }
