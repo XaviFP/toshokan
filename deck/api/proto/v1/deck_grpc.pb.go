@@ -27,6 +27,7 @@ type DecksAPIClient interface {
 	CreateDeck(ctx context.Context, in *CreateDeckRequest, opts ...grpc.CallOption) (*CreateDeckResponse, error)
 	DeleteDeck(ctx context.Context, in *DeleteDeckRequest, opts ...grpc.CallOption) (*DeleteDeckResponse, error)
 	GetPopularDecks(ctx context.Context, in *GetPopularDecksRequest, opts ...grpc.CallOption) (*GetPopularDecksResponse, error)
+	GetCards(ctx context.Context, in *GetCardsRequest, opts ...grpc.CallOption) (*GetCardsResponse, error)
 }
 
 type decksAPIClient struct {
@@ -82,6 +83,15 @@ func (c *decksAPIClient) GetPopularDecks(ctx context.Context, in *GetPopularDeck
 	return out, nil
 }
 
+func (c *decksAPIClient) GetCards(ctx context.Context, in *GetCardsRequest, opts ...grpc.CallOption) (*GetCardsResponse, error) {
+	out := new(GetCardsResponse)
+	err := c.cc.Invoke(ctx, "/v1.DecksAPI/GetCards", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // DecksAPIServer is the server API for DecksAPI service.
 // All implementations should embed UnimplementedDecksAPIServer
 // for forward compatibility
@@ -91,6 +101,7 @@ type DecksAPIServer interface {
 	CreateDeck(context.Context, *CreateDeckRequest) (*CreateDeckResponse, error)
 	DeleteDeck(context.Context, *DeleteDeckRequest) (*DeleteDeckResponse, error)
 	GetPopularDecks(context.Context, *GetPopularDecksRequest) (*GetPopularDecksResponse, error)
+	GetCards(context.Context, *GetCardsRequest) (*GetCardsResponse, error)
 }
 
 // UnimplementedDecksAPIServer should be embedded to have forward compatible implementations.
@@ -111,6 +122,9 @@ func (UnimplementedDecksAPIServer) DeleteDeck(context.Context, *DeleteDeckReques
 }
 func (UnimplementedDecksAPIServer) GetPopularDecks(context.Context, *GetPopularDecksRequest) (*GetPopularDecksResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method GetPopularDecks not implemented")
+}
+func (UnimplementedDecksAPIServer) GetCards(context.Context, *GetCardsRequest) (*GetCardsResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method GetCards not implemented")
 }
 
 // UnsafeDecksAPIServer may be embedded to opt out of forward compatibility for this service.
@@ -214,6 +228,24 @@ func _DecksAPI_GetPopularDecks_Handler(srv interface{}, ctx context.Context, dec
 	return interceptor(ctx, in, info, handler)
 }
 
+func _DecksAPI_GetCards_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetCardsRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(DecksAPIServer).GetCards(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/v1.DecksAPI/GetCards",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(DecksAPIServer).GetCards(ctx, req.(*GetCardsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // DecksAPI_ServiceDesc is the grpc.ServiceDesc for DecksAPI service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -240,6 +272,10 @@ var DecksAPI_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "GetPopularDecks",
 			Handler:    _DecksAPI_GetPopularDecks_Handler,
+		},
+		{
+			MethodName: "GetCards",
+			Handler:    _DecksAPI_GetCards_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

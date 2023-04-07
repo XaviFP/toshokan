@@ -55,3 +55,12 @@ func cardsToModel(in []*v1.Card) []*model.Card {
 
 	return cards
 }
+
+func deckToModel(in *v1.Deck) *model.Deck {
+	return &model.Deck{
+		ID:          in.Id,
+		Title:       in.Title,
+		Description: in.Description,
+		Cards:       cardsToModel(in.Cards),
+	}
+}

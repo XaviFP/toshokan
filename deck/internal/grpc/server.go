@@ -68,19 +68,29 @@ func (s *Server) GetDeck(ctx context.Context, req *pb.GetDeckRequest) (*pb.GetDe
 }
 
 func (s *Server) GetDecks(ctx context.Context, req *pb.GetDecksRequest) (*pb.GetDecksResponse, error) {
-	decks, err := s.Repository.GetDecks(ctx)
+	var ids []uuid.UUID
+
+	for _, idStr := range req.DeckIds {
+		id, err := uuid.Parse(idStr)
+		if err != nil {
+			return nil, errors.Trace(err)
+		}
+
+		ids = append(ids, id)
+	}
+
+	decks, err := s.Repository.GetDecks(ctx, ids)
 	if err != nil {
 		return &pb.GetDecksResponse{}, errors.Trace(err)
 	}
 
-	var out []deck.Deck
-	for _, d := range decks {
-		if d.Public || d.AuthorID.String() == req.UserId {
-			out = append(out, d)
-		}
+	out := make(map[string]*pb.Deck, len(decks))
+
+	for id, deck := range decks {
+		out[id.String()] = toGRPCDeck(deck)
 	}
 
-	return &pb.GetDecksResponse{Decks: toGRPCDecks(out)}, nil
+	return &pb.GetDecksResponse{Decks: out}, nil
 }
 
 func (s *Server) GetPopularDecks(ctx context.Context, req *pb.GetPopularDecksRequest) (*pb.GetPopularDecksResponse, error) {
@@ -97,6 +107,37 @@ func (s *Server) GetPopularDecks(ctx context.Context, req *pb.GetPopularDecksReq
 	return &pb.GetPopularDecksResponse{
 		Connection: connectionToProto(res),
 	}, nil
+}
+
+func (s *Server) GetCards(ctx context.Context, req *pb.GetCardsRequest) (*pb.GetCardsResponse, error) {
+	var ids []uuid.UUID
+
+	for _, idStr := range req.CardIds {
+		id, err := uuid.Parse(idStr)
+		if err != nil {
+			return nil, errors.Trace(err)
+		}
+
+		ids = append(ids, id)
+	}
+
+	cards, err := s.Repository.GetCards(ctx, ids)
+	if err != nil {
+		return &pb.GetCardsResponse{}, errors.Trace(err)
+	}
+
+	out := make(map[string]*pb.Card, len(cards))
+
+	for id, c := range cards {
+		out[id.String()] = &pb.Card{
+			Id:              c.ID.String(),
+			Title:           c.Title,
+			Explanation:     c.Explanation,
+			PossibleAnswers: toGRPCAnswers(c.PossibleAnswers),
+		}
+	}
+
+	return &pb.GetCardsResponse{Cards: out}, nil
 }
 
 func paginationFromProto(p *pb.Pagination) pagination.Pagination {

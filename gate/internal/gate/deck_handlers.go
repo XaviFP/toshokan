@@ -29,23 +29,6 @@ func GetDeck(ctx *gin.Context, usersClient pbUser.UserAPIClient, decksClient pbD
 	ctx.IndentedJSON(http.StatusOK, res.Deck)
 }
 
-func GetDecks(ctx *gin.Context, usersClient pbUser.UserAPIClient, decksClient pbDeck.DecksAPIClient) {
-	userID := getUserID(ctx)
-	if userID == "" {
-		ctx.IndentedJSON(http.StatusInternalServerError, nil)
-		return
-	}
-	req := &pbDeck.GetDecksRequest{UserId: userID}
-
-	res, err := decksClient.GetDecks(ctx, req)
-	if err != nil {
-		ctx.IndentedJSON(http.StatusInternalServerError, err)
-		return
-	}
-
-	ctx.IndentedJSON(http.StatusOK, res.Decks)
-}
-
 func CreateDeck(ctx *gin.Context, usersClient pbUser.UserAPIClient, decksClient pbDeck.DecksAPIClient) {
 	var d pbDeck.Deck
 	if err := ctx.BindJSON(&d); err != nil {
@@ -89,10 +72,6 @@ func DeleteDeck(ctx *gin.Context, usersClient pbUser.UserAPIClient, decksClient 
 func RegisterDeckRoutes(r *gin.RouterGroup, usersClient pbUser.UserAPIClient, decksClient pbDeck.DecksAPIClient) {
 	r.GET("/decks/:id", func(ctx *gin.Context) {
 		GetDeck(ctx, usersClient, decksClient)
-	})
-
-	r.GET("/decks", func(ctx *gin.Context) {
-		GetDecks(ctx, usersClient, decksClient)
 	})
 
 	r.POST("/decks/create", func(ctx *gin.Context) {

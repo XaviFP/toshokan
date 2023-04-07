@@ -79,54 +79,33 @@ func TestRepository_GetDecks(t *testing.T) {
 	repo := NewPGRepository(h.db)
 
 	t.Run("success", func(t *testing.T) {
-		expected := []Deck{
-			{
+		expected := map[uuid.UUID]Deck{
+			uuid.MustParse("fb9ffe2c-ad66-4766-9b7b-46fd5d9acd72"): {
 				ID:          uuid.MustParse("fb9ffe2c-ad66-4766-9b7b-46fd5d9acd72"),
 				AuthorID:    uuid.MustParse("4e37a600-c29e-4d0f-af44-66f2cd8cc1c9"),
 				Title:       "Programming languages",
 				Description: "Compiled or interpreted?",
 				Public:      true,
 			},
-			{
+			uuid.MustParse("334ddbf8-1acc-405b-86d8-49f0d1ca636c"): {
 				ID:          uuid.MustParse("334ddbf8-1acc-405b-86d8-49f0d1ca636c"),
 				AuthorID:    uuid.MustParse("4e37a600-c29e-4d0f-af44-66f2cd8cc1c9"),
 				Title:       "Greek Mythology",
 				Description: "Bits of Greek Mythology",
 				Public:      true,
 			},
-			{
-				ID:          uuid.MustParse("60766223-ff9f-4871-a497-f765c05a0c5e"),
-				AuthorID:    uuid.MustParse("4e37a600-c29e-4d0f-af44-66f2cd8cc1c9"),
-				Title:       "Biology 101",
-				Description: "The Biology Beginners Course",
-				Public:      true,
-			},
-			{
-				ID:          uuid.MustParse("6363e2c6-d89e-4610-92e8-1e1d2fea49ec"),
-				AuthorID:    uuid.MustParse("4e37a600-c29e-4d0f-af44-66f2cd8cc1c9"),
-				Title:       "Presocratic Philosophy II",
-				Description: "Advanced Presocratic Philosophy",
-				Public:      true,
-			},
-			{
-				ID:          uuid.MustParse("f79aea77-9aa0-4a84-b4c8-d000a27d2c52"),
-				AuthorID:    uuid.MustParse("4e37a600-c29e-4d0f-af44-66f2cd8cc1c9"),
-				Title:       "Music Theory",
-				Description: "From Zero to Hero",
-				Public:      true,
-			},
 		}
 
-		actual, err := repo.GetDecks(context.Background())
+		actual, err := repo.GetDecks(context.Background(), []uuid.UUID{
+			uuid.MustParse("fb9ffe2c-ad66-4766-9b7b-46fd5d9acd72"),
+			uuid.MustParse("334ddbf8-1acc-405b-86d8-49f0d1ca636c"),
+		})
 		assert.NoError(t, err)
 		assert.Equal(t, expected, actual)
 	})
 
 	t.Run("empty", func(t *testing.T) {
-		_, err := h.db.Exec(`UPDATE decks SET deleted_at = NOW()`)
-		assert.NoError(t, err)
-
-		decks, err := repo.GetDecks(context.Background())
+		decks, err := repo.GetDecks(context.Background(), []uuid.UUID{})
 		assert.NoError(t, err)
 		assert.Empty(t, decks)
 	})
@@ -378,12 +357,58 @@ func TestRepository_GetPopularDecks(t *testing.T) {
 	})
 }
 
+func TestPGRepository_GetCards(t *testing.T) {
+	h := newTestHarness(t)
+	repo := NewPGRepository(h.db)
+
+	id := uuid.MustParse("72bdff92-5bc8-4e1d-9217-d0b23e22ff33")
+
+	t.Run("success", func(t *testing.T) {
+		expected := map[uuid.UUID]Card{
+			id: {
+				ID:          id,
+				Title:       "Golang",
+				Explanation: "Go code is compiled directly to machine code, not interpreted at runtime.",
+				PossibleAnswers: []Answer{
+					{
+						ID:        uuid.MustParse("7e6926da-82b2-4ae8-99b4-1b803ebf1877"),
+						Text:      "Compiled",
+						IsCorrect: true,
+					},
+					{
+						ID:        uuid.MustParse("dfcb1c81-f590-486e-9b7e-a44f0c436933"),
+						Text:      "Interpreted",
+						IsCorrect: false,
+					},
+				},
+			},
+		}
+
+		actual, err := repo.GetCards(context.Background(), []uuid.UUID{id})
+		assert.NoError(t, err)
+		assert.Equal(t, expected, actual)
+	})
+
+	t.Run("empty", func(t *testing.T) {
+		cards, err := repo.GetCards(context.Background(), []uuid.UUID{})
+		assert.NoError(t, err)
+		assert.Empty(t, cards)
+	})
+
+	t.Run("not_exists", func(t *testing.T) {
+		id := uuid.MustParse("dfcb1c81-f590-486e-9b7e-a44f0c436933")
+		cards, err := repo.GetCards(context.Background(), []uuid.UUID{id})
+		assert.NoError(t, err)
+		assert.Empty(t, cards)
+	})
+}
+
 type testHarness struct {
 	db *sql.DB
 }
 
 func newTestHarness(t *testing.T) testHarness {
-	db, err := db.InitDB(config.DBConfig{User: "toshokan", Password: "t.o.s.h.o.k.a.n.", Name: "test_decks", Host: "localhost", Port: "5432"})
+	db, err := db.InitDB(config.DBConfig{User: "toshokan", Password: "t.o.s.h.o.k.a.n.", Name: "test_deck", Host: "localhost", Port: "5432"})
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -16,6 +16,8 @@ import (
 type Resolver struct {
 	DeckClient pbDeck.DecksAPIClient
 	UserClient pbUser.UserAPIClient
+	DeckLoader DataLoader
+	CardLoader DataLoader
 }
 
 func (r *Resolver) getUserID(ctx context.Context) string {
