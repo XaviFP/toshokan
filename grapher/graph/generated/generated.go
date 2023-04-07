@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"strconv"
 	"sync"
+	"sync/atomic"
 
 	"github.com/99designs/gqlgen/graphql"
 	"github.com/99designs/gqlgen/graphql/introspection"
@@ -49,6 +50,10 @@ type ComplexityRoot struct {
 		Text      func(childComplexity int) int
 	}
 
+	AnswerCardsResponse struct {
+		AnswerIDs func(childComplexity int) int
+	}
+
 	Card struct {
 		Answers     func(childComplexity int) int
 		Explanation func(childComplexity int) int
@@ -72,8 +77,9 @@ type ComplexityRoot struct {
 	}
 
 	Mutation struct {
-		CreateDeck func(childComplexity int, input model.CreateDeckInput) int
-		DeleteDeck func(childComplexity int, id string) int
+		AnswerCards func(childComplexity int, input model.AnswerCardsInput) int
+		CreateDeck  func(childComplexity int, input model.CreateDeckInput) int
+		DeleteDeck  func(childComplexity int, id string) int
 	}
 
 	PageInfo struct {
@@ -101,6 +107,7 @@ type ComplexityRoot struct {
 	}
 
 	Query struct {
+		Cards        func(childComplexity int, input model.CardsInput) int
 		Deck         func(childComplexity int, id string) int
 		PopularDecks func(childComplexity int, first *int, after *string, last *int, before *string) int
 	}
@@ -109,10 +116,12 @@ type ComplexityRoot struct {
 type MutationResolver interface {
 	CreateDeck(ctx context.Context, input model.CreateDeckInput) (*model.CreateDeckResponse, error)
 	DeleteDeck(ctx context.Context, id string) (*model.DeleteDeckResponse, error)
+	AnswerCards(ctx context.Context, input model.AnswerCardsInput) (*model.AnswerCardsResponse, error)
 }
 type QueryResolver interface {
 	Deck(ctx context.Context, id string) (*model.Deck, error)
 	PopularDecks(ctx context.Context, first *int, after *string, last *int, before *string) (*model.PopularDecksConnection, error)
+	Cards(ctx context.Context, input model.CardsInput) ([]*model.Card, error)
 }
 
 type executableSchema struct {
@@ -150,6 +159,13 @@ func (e *executableSchema) Complexity(typeName, field string, childComplexity in
 		}
 
 		return e.complexity.Answer.Text(childComplexity), true
+
+	case "AnswerCardsResponse.answerIDs":
+		if e.complexity.AnswerCardsResponse.AnswerIDs == nil {
+			break
+		}
+
+		return e.complexity.AnswerCardsResponse.AnswerIDs(childComplexity), true
 
 	case "Card.answers":
 		if e.complexity.Card.Answers == nil {
@@ -220,6 +236,18 @@ func (e *executableSchema) Complexity(typeName, field string, childComplexity in
 		}
 
 		return e.complexity.DeleteDeckResponse.Success(childComplexity), true
+
+	case "Mutation.answerCards":
+		if e.complexity.Mutation.AnswerCards == nil {
+			break
+		}
+
+		args, err := ec.field_Mutation_answerCards_args(context.TODO(), rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.complexity.Mutation.AnswerCards(childComplexity, args["input"].(model.AnswerCardsInput)), true
 
 	case "Mutation.createDeck":
 		if e.complexity.Mutation.CreateDeck == nil {
@@ -329,6 +357,18 @@ func (e *executableSchema) Complexity(typeName, field string, childComplexity in
 
 		return e.complexity.Profile.Username(childComplexity), true
 
+	case "Query.cards":
+		if e.complexity.Query.Cards == nil {
+			break
+		}
+
+		args, err := ec.field_Query_cards_args(context.TODO(), rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.complexity.Query.Cards(childComplexity, args["input"].(model.CardsInput)), true
+
 	case "Query.deck":
 		if e.complexity.Query.Deck == nil {
 			break
@@ -361,6 +401,8 @@ func (e *executableSchema) Exec(ctx context.Context) graphql.ResponseHandler {
 	rc := graphql.GetOperationContext(ctx)
 	ec := executionContext{rc, e}
 	inputUnmarshalMap := graphql.BuildUnmarshalerMap(
+		ec.unmarshalInputAnswerCardsInput,
+		ec.unmarshalInputCardsInput,
 		ec.unmarshalInputCreateAnswerInput,
 		ec.unmarshalInputCreateCardInput,
 		ec.unmarshalInputCreateDeckInput,
@@ -468,9 +510,15 @@ type PageInfo {
   endCursor: String
 }
 
+input CardsInput {
+  deckID: ID!
+  maxCards: Int!
+}
+
 type Query {
   deck(id: ID!): Deck
   popularDecks(first: Int, after: String, last: Int, before: String): PopularDecksConnection
+  cards(input: CardsInput!): [Card!]!
 }
 
 input CreateDeckInput {
@@ -499,16 +547,41 @@ type DeleteDeckResponse {
   success: Boolean
 }
 
+input AnswerCardsInput {
+  answerIDs: [ID!]!
+}
+
+type AnswerCardsResponse {
+  answerIDs: [ID!]!
+}
+
 type Mutation {
   createDeck(input: CreateDeckInput!): CreateDeckResponse
   deleteDeck(id: ID!): DeleteDeckResponse
-}`, BuiltIn: false},
+  answerCards(input: AnswerCardsInput!): AnswerCardsResponse
+}
+`, BuiltIn: false},
 }
 var parsedSchema = gqlparser.MustLoadSchema(sources...)
 
 // endregion ************************** generated!.gotpl **************************
 
 // region    ***************************** args.gotpl *****************************
+
+func (ec *executionContext) field_Mutation_answerCards_args(ctx context.Context, rawArgs map[string]interface{}) (map[string]interface{}, error) {
+	var err error
+	args := map[string]interface{}{}
+	var arg0 model.AnswerCardsInput
+	if tmp, ok := rawArgs["input"]; ok {
+		ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("input"))
+		arg0, err = ec.unmarshalNAnswerCardsInput2githubᚗcomᚋXaviFPᚋtoshokanᚋgrapherᚋgraphᚋmodelᚐAnswerCardsInput(ctx, tmp)
+		if err != nil {
+			return nil, err
+		}
+	}
+	args["input"] = arg0
+	return args, nil
+}
 
 func (ec *executionContext) field_Mutation_createDeck_args(ctx context.Context, rawArgs map[string]interface{}) (map[string]interface{}, error) {
 	var err error
@@ -552,6 +625,21 @@ func (ec *executionContext) field_Query___type_args(ctx context.Context, rawArgs
 		}
 	}
 	args["name"] = arg0
+	return args, nil
+}
+
+func (ec *executionContext) field_Query_cards_args(ctx context.Context, rawArgs map[string]interface{}) (map[string]interface{}, error) {
+	var err error
+	args := map[string]interface{}{}
+	var arg0 model.CardsInput
+	if tmp, ok := rawArgs["input"]; ok {
+		ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("input"))
+		arg0, err = ec.unmarshalNCardsInput2githubᚗcomᚋXaviFPᚋtoshokanᚋgrapherᚋgraphᚋmodelᚐCardsInput(ctx, tmp)
+		if err != nil {
+			return nil, err
+		}
+	}
+	args["input"] = arg0
 	return args, nil
 }
 
@@ -777,6 +865,50 @@ func (ec *executionContext) fieldContext_Answer_isCorrect(ctx context.Context, f
 		IsResolver: false,
 		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
 			return nil, errors.New("field of type Boolean does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _AnswerCardsResponse_answerIDs(ctx context.Context, field graphql.CollectedField, obj *model.AnswerCardsResponse) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_AnswerCardsResponse_answerIDs(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.AnswerIDs, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.([]string)
+	fc.Result = res
+	return ec.marshalNID2ᚕstringᚄ(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_AnswerCardsResponse_answerIDs(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "AnswerCardsResponse",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type ID does not have child fields")
 		},
 	}
 	return fc, nil
@@ -1341,6 +1473,62 @@ func (ec *executionContext) fieldContext_Mutation_deleteDeck(ctx context.Context
 	}()
 	ctx = graphql.WithFieldContext(ctx, fc)
 	if fc.Args, err = ec.field_Mutation_deleteDeck_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Mutation_answerCards(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_Mutation_answerCards(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return ec.resolvers.Mutation().AnswerCards(rctx, fc.Args["input"].(model.AnswerCardsInput))
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		return graphql.Null
+	}
+	res := resTmp.(*model.AnswerCardsResponse)
+	fc.Result = res
+	return ec.marshalOAnswerCardsResponse2ᚖgithubᚗcomᚋXaviFPᚋtoshokanᚋgrapherᚋgraphᚋmodelᚐAnswerCardsResponse(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_Mutation_answerCards(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Mutation",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			switch field.Name {
+			case "answerIDs":
+				return ec.fieldContext_AnswerCardsResponse_answerIDs(ctx, field)
+			}
+			return nil, fmt.Errorf("no field named %q was found under type AnswerCardsResponse", field.Name)
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Mutation_answerCards_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
 		ec.Error(ctx, err)
 		return
 	}
@@ -1994,6 +2182,71 @@ func (ec *executionContext) fieldContext_Query_popularDecks(ctx context.Context,
 	}()
 	ctx = graphql.WithFieldContext(ctx, fc)
 	if fc.Args, err = ec.field_Query_popularDecks_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Query_cards(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_Query_cards(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return ec.resolvers.Query().Cards(rctx, fc.Args["input"].(model.CardsInput))
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.([]*model.Card)
+	fc.Result = res
+	return ec.marshalNCard2ᚕᚖgithubᚗcomᚋXaviFPᚋtoshokanᚋgrapherᚋgraphᚋmodelᚐCardᚄ(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_Query_cards(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Query",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			switch field.Name {
+			case "id":
+				return ec.fieldContext_Card_id(ctx, field)
+			case "title":
+				return ec.fieldContext_Card_title(ctx, field)
+			case "answers":
+				return ec.fieldContext_Card_answers(ctx, field)
+			case "explanation":
+				return ec.fieldContext_Card_explanation(ctx, field)
+			}
+			return nil, fmt.Errorf("no field named %q was found under type Card", field.Name)
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Query_cards_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
 		ec.Error(ctx, err)
 		return
 	}
@@ -3902,6 +4155,70 @@ func (ec *executionContext) fieldContext___Type_specifiedByURL(ctx context.Conte
 
 // region    **************************** input.gotpl *****************************
 
+func (ec *executionContext) unmarshalInputAnswerCardsInput(ctx context.Context, obj interface{}) (model.AnswerCardsInput, error) {
+	var it model.AnswerCardsInput
+	asMap := map[string]interface{}{}
+	for k, v := range obj.(map[string]interface{}) {
+		asMap[k] = v
+	}
+
+	fieldsInOrder := [...]string{"answerIDs"}
+	for _, k := range fieldsInOrder {
+		v, ok := asMap[k]
+		if !ok {
+			continue
+		}
+		switch k {
+		case "answerIDs":
+			var err error
+
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("answerIDs"))
+			it.AnswerIDs, err = ec.unmarshalNID2ᚕstringᚄ(ctx, v)
+			if err != nil {
+				return it, err
+			}
+		}
+	}
+
+	return it, nil
+}
+
+func (ec *executionContext) unmarshalInputCardsInput(ctx context.Context, obj interface{}) (model.CardsInput, error) {
+	var it model.CardsInput
+	asMap := map[string]interface{}{}
+	for k, v := range obj.(map[string]interface{}) {
+		asMap[k] = v
+	}
+
+	fieldsInOrder := [...]string{"deckID", "maxCards"}
+	for _, k := range fieldsInOrder {
+		v, ok := asMap[k]
+		if !ok {
+			continue
+		}
+		switch k {
+		case "deckID":
+			var err error
+
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("deckID"))
+			it.DeckID, err = ec.unmarshalNID2string(ctx, v)
+			if err != nil {
+				return it, err
+			}
+		case "maxCards":
+			var err error
+
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("maxCards"))
+			it.MaxCards, err = ec.unmarshalNInt2int(ctx, v)
+			if err != nil {
+				return it, err
+			}
+		}
+	}
+
+	return it, nil
+}
+
 func (ec *executionContext) unmarshalInputCreateAnswerInput(ctx context.Context, obj interface{}) (model.CreateAnswerInput, error) {
 	var it model.CreateAnswerInput
 	asMap := map[string]interface{}{}
@@ -4069,6 +4386,34 @@ func (ec *executionContext) _Answer(ctx context.Context, sel ast.SelectionSet, o
 		case "isCorrect":
 
 			out.Values[i] = ec._Answer_isCorrect(ctx, field, obj)
+
+			if out.Values[i] == graphql.Null {
+				invalids++
+			}
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch()
+	if invalids > 0 {
+		return graphql.Null
+	}
+	return out
+}
+
+var answerCardsResponseImplementors = []string{"AnswerCardsResponse"}
+
+func (ec *executionContext) _AnswerCardsResponse(ctx context.Context, sel ast.SelectionSet, obj *model.AnswerCardsResponse) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, answerCardsResponseImplementors)
+	out := graphql.NewFieldSet(fields)
+	var invalids uint32
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("AnswerCardsResponse")
+		case "answerIDs":
+
+			out.Values[i] = ec._AnswerCardsResponse_answerIDs(ctx, field, obj)
 
 			if out.Values[i] == graphql.Null {
 				invalids++
@@ -4252,6 +4597,12 @@ func (ec *executionContext) _Mutation(ctx context.Context, sel ast.SelectionSet)
 
 			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
 				return ec._Mutation_deleteDeck(ctx, field)
+			})
+
+		case "answerCards":
+
+			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
+				return ec._Mutation_answerCards(ctx, field)
 			})
 
 		default:
@@ -4461,6 +4812,29 @@ func (ec *executionContext) _Query(ctx context.Context, sel ast.SelectionSet) gr
 					}
 				}()
 				res = ec._Query_popularDecks(ctx, field)
+				return res
+			}
+
+			rrm := func(ctx context.Context) graphql.Marshaler {
+				return ec.OperationContext.RootResolverMiddleware(ctx, innerFunc)
+			}
+
+			out.Concurrently(i, func() graphql.Marshaler {
+				return rrm(innerCtx)
+			})
+		case "cards":
+			field := field
+
+			innerFunc := func(ctx context.Context) (res graphql.Marshaler) {
+				defer func() {
+					if r := recover(); r != nil {
+						ec.Error(ctx, ec.Recover(ctx, r))
+					}
+				}()
+				res = ec._Query_cards(ctx, field)
+				if res == graphql.Null {
+					atomic.AddUint32(&invalids, 1)
+				}
 				return res
 			}
 
@@ -4812,6 +5186,11 @@ func (ec *executionContext) ___Type(ctx context.Context, sel ast.SelectionSet, o
 
 // region    ***************************** type.gotpl *****************************
 
+func (ec *executionContext) unmarshalNAnswerCardsInput2githubᚗcomᚋXaviFPᚋtoshokanᚋgrapherᚋgraphᚋmodelᚐAnswerCardsInput(ctx context.Context, v interface{}) (model.AnswerCardsInput, error) {
+	res, err := ec.unmarshalInputAnswerCardsInput(ctx, v)
+	return res, graphql.ErrorOnPath(ctx, err)
+}
+
 func (ec *executionContext) unmarshalNBoolean2bool(ctx context.Context, v interface{}) (bool, error) {
 	res, err := graphql.UnmarshalBoolean(v)
 	return res, graphql.ErrorOnPath(ctx, err)
@@ -4825,6 +5204,65 @@ func (ec *executionContext) marshalNBoolean2bool(ctx context.Context, sel ast.Se
 		}
 	}
 	return res
+}
+
+func (ec *executionContext) marshalNCard2ᚕᚖgithubᚗcomᚋXaviFPᚋtoshokanᚋgrapherᚋgraphᚋmodelᚐCardᚄ(ctx context.Context, sel ast.SelectionSet, v []*model.Card) graphql.Marshaler {
+	ret := make(graphql.Array, len(v))
+	var wg sync.WaitGroup
+	isLen1 := len(v) == 1
+	if !isLen1 {
+		wg.Add(len(v))
+	}
+	for i := range v {
+		i := i
+		fc := &graphql.FieldContext{
+			Index:  &i,
+			Result: &v[i],
+		}
+		ctx := graphql.WithFieldContext(ctx, fc)
+		f := func(i int) {
+			defer func() {
+				if r := recover(); r != nil {
+					ec.Error(ctx, ec.Recover(ctx, r))
+					ret = nil
+				}
+			}()
+			if !isLen1 {
+				defer wg.Done()
+			}
+			ret[i] = ec.marshalNCard2ᚖgithubᚗcomᚋXaviFPᚋtoshokanᚋgrapherᚋgraphᚋmodelᚐCard(ctx, sel, v[i])
+		}
+		if isLen1 {
+			f(i)
+		} else {
+			go f(i)
+		}
+
+	}
+	wg.Wait()
+
+	for _, e := range ret {
+		if e == graphql.Null {
+			return graphql.Null
+		}
+	}
+
+	return ret
+}
+
+func (ec *executionContext) marshalNCard2ᚖgithubᚗcomᚋXaviFPᚋtoshokanᚋgrapherᚋgraphᚋmodelᚐCard(ctx context.Context, sel ast.SelectionSet, v *model.Card) graphql.Marshaler {
+	if v == nil {
+		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
+			ec.Errorf(ctx, "the requested element is null which the schema does not allow")
+		}
+		return graphql.Null
+	}
+	return ec._Card(ctx, sel, v)
+}
+
+func (ec *executionContext) unmarshalNCardsInput2githubᚗcomᚋXaviFPᚋtoshokanᚋgrapherᚋgraphᚋmodelᚐCardsInput(ctx context.Context, v interface{}) (model.CardsInput, error) {
+	res, err := ec.unmarshalInputCardsInput(ctx, v)
+	return res, graphql.ErrorOnPath(ctx, err)
 }
 
 func (ec *executionContext) unmarshalNCreateAnswerInput2ᚕᚖgithubᚗcomᚋXaviFPᚋtoshokanᚋgrapherᚋgraphᚋmodelᚐCreateAnswerInputᚄ(ctx context.Context, v interface{}) ([]*model.CreateAnswerInput, error) {
@@ -4883,6 +5321,53 @@ func (ec *executionContext) unmarshalNID2string(ctx context.Context, v interface
 
 func (ec *executionContext) marshalNID2string(ctx context.Context, sel ast.SelectionSet, v string) graphql.Marshaler {
 	res := graphql.MarshalID(v)
+	if res == graphql.Null {
+		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
+			ec.Errorf(ctx, "the requested element is null which the schema does not allow")
+		}
+	}
+	return res
+}
+
+func (ec *executionContext) unmarshalNID2ᚕstringᚄ(ctx context.Context, v interface{}) ([]string, error) {
+	var vSlice []interface{}
+	if v != nil {
+		vSlice = graphql.CoerceList(v)
+	}
+	var err error
+	res := make([]string, len(vSlice))
+	for i := range vSlice {
+		ctx := graphql.WithPathContext(ctx, graphql.NewPathWithIndex(i))
+		res[i], err = ec.unmarshalNID2string(ctx, vSlice[i])
+		if err != nil {
+			return nil, err
+		}
+	}
+	return res, nil
+}
+
+func (ec *executionContext) marshalNID2ᚕstringᚄ(ctx context.Context, sel ast.SelectionSet, v []string) graphql.Marshaler {
+	ret := make(graphql.Array, len(v))
+	for i := range v {
+		ret[i] = ec.marshalNID2string(ctx, sel, v[i])
+	}
+
+	for _, e := range ret {
+		if e == graphql.Null {
+			return graphql.Null
+		}
+	}
+
+	return ret
+}
+
+func (ec *executionContext) unmarshalNInt2int(ctx context.Context, v interface{}) (int, error) {
+	res, err := graphql.UnmarshalInt(v)
+	return res, graphql.ErrorOnPath(ctx, err)
+}
+
+func (ec *executionContext) marshalNInt2int(ctx context.Context, sel ast.SelectionSet, v int) graphql.Marshaler {
+	res := graphql.MarshalInt(v)
 	if res == graphql.Null {
 		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
 			ec.Errorf(ctx, "the requested element is null which the schema does not allow")
@@ -5225,6 +5710,13 @@ func (ec *executionContext) marshalOAnswer2ᚖgithubᚗcomᚋXaviFPᚋtoshokan�
 		return graphql.Null
 	}
 	return ec._Answer(ctx, sel, v)
+}
+
+func (ec *executionContext) marshalOAnswerCardsResponse2ᚖgithubᚗcomᚋXaviFPᚋtoshokanᚋgrapherᚋgraphᚋmodelᚐAnswerCardsResponse(ctx context.Context, sel ast.SelectionSet, v *model.AnswerCardsResponse) graphql.Marshaler {
+	if v == nil {
+		return graphql.Null
+	}
+	return ec._AnswerCardsResponse(ctx, sel, v)
 }
 
 func (ec *executionContext) unmarshalOBoolean2bool(ctx context.Context, v interface{}) (bool, error) {

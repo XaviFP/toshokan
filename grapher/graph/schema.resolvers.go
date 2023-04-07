@@ -6,7 +6,8 @@ package graph
 import (
 	"context"
 
-	v1 "github.com/XaviFP/toshokan/deck/api/proto/v1"
+	v1Dealer "github.com/XaviFP/toshokan/dealer/api/proto/v1"
+	v1Deck "github.com/XaviFP/toshokan/deck/api/proto/v1"
 	"github.com/XaviFP/toshokan/grapher/graph/generated"
 	"github.com/XaviFP/toshokan/grapher/graph/model"
 	"github.com/juju/errors"
@@ -14,8 +15,8 @@ import (
 
 // CreateDeck is the resolver for the createDeck field.
 func (r *mutationResolver) CreateDeck(ctx context.Context, input model.CreateDeckInput) (*model.CreateDeckResponse, error) {
-	res, err := r.DeckClient.CreateDeck(ctx, &v1.CreateDeckRequest{
-		Deck: &v1.Deck{
+	res, err := r.DeckClient.CreateDeck(ctx, &v1Deck.CreateDeckRequest{
+		Deck: &v1Deck.Deck{
 			Title:       input.Title,
 			Description: input.Description,
 			Cards:       cardsFromInput(input.Cards),
@@ -39,7 +40,7 @@ func (r *mutationResolver) CreateDeck(ctx context.Context, input model.CreateDec
 
 // DeleteDeck is the resolver for the deleteDeck field.
 func (r *mutationResolver) DeleteDeck(ctx context.Context, id string) (*model.DeleteDeckResponse, error) {
-	_, err := r.DeckClient.DeleteDeck(ctx, &v1.DeleteDeckRequest{Id: id})
+	_, err := r.DeckClient.DeleteDeck(ctx, &v1Deck.DeleteDeckRequest{Id: id})
 	if err != nil {
 		return nil, errors.Trace(err)
 	}
@@ -48,9 +49,21 @@ func (r *mutationResolver) DeleteDeck(ctx context.Context, id string) (*model.De
 	return &model.DeleteDeckResponse{Success: &success}, nil
 }
 
+func (r *mutationResolver) AnswerCards(ctx context.Context, input model.AnswerCardsInput) (*model.AnswerCardsResponse, error) {
+	_, err := r.DealerClient.StoreAnswers(ctx, &v1Dealer.StoreAnswersRequest{
+		UserId:    r.getUserID(ctx),
+		AnswerIds: input.AnswerIDs,
+	})
+	if err != nil {
+		return nil, errors.Trace(err)
+	}
+
+	return &model.AnswerCardsResponse{AnswerIDs: input.AnswerIDs}, nil
+}
+
 // Deck is the resolver for the deck field.
 func (r *queryResolver) Deck(ctx context.Context, id string) (*model.Deck, error) {
-	res, err := r.DeckClient.GetDeck(ctx, &v1.GetDeckRequest{DeckId: id, UserId: r.getUserID(ctx)})
+	res, err := r.DeckClient.GetDeck(ctx, &v1Deck.GetDeckRequest{DeckId: id, UserId: r.getUserID(ctx)})
 	if err != nil {
 		return nil, errors.Trace(err)
 	}
@@ -65,7 +78,7 @@ func (r *queryResolver) Deck(ctx context.Context, id string) (*model.Deck, error
 
 // PopularDecks is the resolver for the popularDecks field.
 func (r *queryResolver) PopularDecks(ctx context.Context, first *int, after *string, last *int, before *string) (*model.PopularDecksConnection, error) {
-	res, err := r.DeckClient.GetPopularDecks(ctx, &v1.GetPopularDecksRequest{
+	res, err := r.DeckClient.GetPopularDecks(ctx, &v1Deck.GetPopularDecksRequest{
 		UserId:     r.getUserID(ctx),
 		Pagination: paginationFromInput(first, after, last, before)})
 	if err != nil {
@@ -80,8 +93,42 @@ func (r *queryResolver) PopularDecks(ctx context.Context, first *int, after *str
 	return out, nil
 }
 
-func paginationFromInput(first *int, after *string, last *int, before *string) *v1.Pagination {
-	var out v1.Pagination
+func (r *queryResolver) Cards(ctx context.Context, input model.CardsInput) ([]*model.Card, error) {
+	var maxCards int
+	if input.MaxCards > 0 {
+		maxCards = input.MaxCards
+	}
+
+	res, err := r.DealerClient.Deal(ctx, &v1Dealer.DealRequest{
+		UserId:        r.getUserID(ctx),
+		DeckId:        input.DeckID,
+		NumberOfCards: uint32(maxCards),
+	})
+	if err != nil {
+		return nil, errors.Trace(err)
+	}
+
+	cards := make([]*model.Card, 0, len(res.CardIds))
+
+	for _, cardID := range res.CardIds {
+		c, err := r.CardLoader.Load(ctx, cardID)
+		if err != nil {
+			if errors.Is(err, ErrNoResult) {
+				continue
+			}
+
+			return nil, errors.Trace(err)
+		}
+
+		cards = append(cards, cardToModel(c.(*v1Deck.Card)))
+	}
+
+	return cards, nil
+
+}
+
+func paginationFromInput(first *int, after *string, last *int, before *string) *v1Deck.Pagination {
+	var out v1Deck.Pagination
 	if first != nil {
 		out.First = int64(*first)
 	}
@@ -101,7 +148,7 @@ func paginationFromInput(first *int, after *string, last *int, before *string) *
 	return &out
 }
 
-func (r *queryResolver) connectionToModel(ctx context.Context, conn *v1.PopularDecksConnection) (*model.PopularDecksConnection, error) {
+func (r *queryResolver) connectionToModel(ctx context.Context, conn *v1Deck.PopularDecksConnection) (*model.PopularDecksConnection, error) {
 	var edges []*model.PopularDeckEdge
 
 	for _, e := range conn.Edges {
@@ -111,7 +158,7 @@ func (r *queryResolver) connectionToModel(ctx context.Context, conn *v1.PopularD
 		}
 
 		edges = append(edges, &model.PopularDeckEdge{
-			Node:   deckToModel(deck.(*v1.Deck)),
+			Node:   deckToModel(deck.(*v1Deck.Deck)),
 			Cursor: &e.Cursor,
 		})
 	}

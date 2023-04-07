@@ -114,7 +114,7 @@ impl Repository {
             .client
             .query(
                 "WITH user_cards as (
-                    SELECT c.id as card_id, uc.level as lvl
+                    SELECT c.id as card_id, uc.lvl as lvl
                     FROM cards as c 
                     JOIN user_card_level as uc 
                     ON uc.card_id = c.id
@@ -230,10 +230,10 @@ impl Repository {
                     AND id in ({})
                 )
                 UPDATE user_card_level
-                SET level = level + 1, edited_at = now()
+                SET lvl = lvl + 1, edited_at = now()
                 WHERE card_id in (SELECT card_id FROM correct_answered_cards)
                 AND user_id = {}
-                AND level < 5",
+                AND lvl < 5",
                     answers_string_arg,
                     arger.add(&uid)
                 ),
@@ -265,7 +265,7 @@ impl pbDealer for Dealer {
     ) -> Result<Response<StoreAnswersResponse>, Status> {
         let result = self
             .repo
-            .store_answers(&request.get_ref().user_id, &request.get_ref().answers)
+            .store_answers(&request.get_ref().user_id, &request.get_ref().answer_ids)
             .await;
         if result.as_ref().is_err() {
             match result.as_ref().err() {

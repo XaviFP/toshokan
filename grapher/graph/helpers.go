@@ -32,6 +32,26 @@ func cardsFromInput(input []*model.CreateCardInput) []*v1.Card {
 
 	return cards
 }
+
+func cardToModel(in *v1.Card) *model.Card {
+	var answers []*model.Answer
+
+	for _, a := range in.PossibleAnswers {
+		answers = append(answers, &model.Answer{
+			ID:        a.Id,
+			Text:      a.Text,
+			IsCorrect: a.IsCorrect,
+		})
+	}
+
+	return &model.Card{
+		ID:          in.Id,
+		Title:       in.Title,
+		Answers:     answers,
+		Explanation: &in.Explanation,
+	}
+}
+
 func cardsToModel(in []*v1.Card) []*model.Card {
 	var cards []*model.Card
 

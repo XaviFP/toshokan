@@ -483,10 +483,13 @@ func (r *pgRepository) GetCards(ctx context.Context, ids []uuid.UUID) (map[uuid.
 
 	for rows.Next() {
 		var c Card
+		var explanation sql.NullString
 
-		if err := rows.Scan(&c.ID, &c.Title, &c.Explanation); err != nil {
+		if err := rows.Scan(&c.ID, &c.Title, &explanation); err != nil {
 			return out, errors.Trace(err)
 		}
+
+		c.Explanation = explanation.String
 
 		// Temporary extra db calls per card for convinience
 		answers, err := r.GetCardAnswers(ctx, c.ID)
