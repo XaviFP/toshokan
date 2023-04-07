@@ -24,6 +24,11 @@ func NewGraphqlHandler(deckClient pbDeck.DecksAPIClient, userClient pbUser.UserA
 			time.Minute*30,
 			time.Millisecond*16,
 		),
+		CardLoader: graph.NewDataLoader(
+			NewCardBatchFn(deckClient),
+			time.Minute*30,
+			time.Millisecond*16,
+		),
 	}}))
 
 	h.Use(extension.Introspection{})
@@ -52,6 +57,23 @@ func NewDeckBatchFn(client pbDeck.DecksAPIClient) graph.BatchFn {
 
 		for _, d := range res.Decks {
 			out[d.Id] = graph.Result{Value: d}
+		}
+
+		return out, nil
+	}
+}
+
+func NewCardBatchFn(client pbDeck.DecksAPIClient) graph.BatchFn {
+	return func(ctx context.Context, ids []string) (map[string]graph.Result, error) {
+		out := make(map[string]graph.Result, len(ids))
+
+		res, err := client.GetCards(ctx, &pbDeck.GetCardsRequest{CardIds: ids})
+		if err != nil {
+			return out, errors.Trace(err)
+		}
+
+		for _, c := range res.Cards {
+			out[c.Id] = graph.Result{Value: c}
 		}
 
 		return out, nil

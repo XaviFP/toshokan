@@ -357,6 +357,52 @@ func TestRepository_GetPopularDecks(t *testing.T) {
 	})
 }
 
+func TestPGRepository_GetCards(t *testing.T) {
+	h := newTestHarness(t)
+	repo := NewPGRepository(h.db)
+
+	id := uuid.MustParse("72bdff92-5bc8-4e1d-9217-d0b23e22ff33")
+
+	t.Run("success", func(t *testing.T) {
+		expected := map[uuid.UUID]Card{
+			id: {
+				ID:          id,
+				Title:       "Golang",
+				Explanation: "Go code is compiled directly to machine code, not interpreted at runtime.",
+				PossibleAnswers: []Answer{
+					{
+						ID:        uuid.MustParse("7e6926da-82b2-4ae8-99b4-1b803ebf1877"),
+						Text:      "Compiled",
+						IsCorrect: true,
+					},
+					{
+						ID:        uuid.MustParse("dfcb1c81-f590-486e-9b7e-a44f0c436933"),
+						Text:      "Interpreted",
+						IsCorrect: false,
+					},
+				},
+			},
+		}
+
+		actual, err := repo.GetCards(context.Background(), []uuid.UUID{id})
+		assert.NoError(t, err)
+		assert.Equal(t, expected, actual)
+	})
+
+	t.Run("empty", func(t *testing.T) {
+		cards, err := repo.GetCards(context.Background(), []uuid.UUID{})
+		assert.NoError(t, err)
+		assert.Empty(t, cards)
+	})
+
+	t.Run("not_exists", func(t *testing.T) {
+		id := uuid.MustParse("dfcb1c81-f590-486e-9b7e-a44f0c436933")
+		cards, err := repo.GetCards(context.Background(), []uuid.UUID{id})
+		assert.NoError(t, err)
+		assert.Empty(t, cards)
+	})
+}
+
 type testHarness struct {
 	db *sql.DB
 }

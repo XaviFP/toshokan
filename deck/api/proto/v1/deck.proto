@@ -10,6 +10,8 @@ service DecksAPI {
   rpc DeleteDeck (DeleteDeckRequest) returns (DeleteDeckResponse) {}
 
   rpc GetPopularDecks (GetPopularDecksRequest) returns (GetPopularDecksResponse) {}
+
+  rpc GetCards (GetCardsRequest) returns (GetCardsResponse) {}
 }
 
 // The request message containing the user's name.
@@ -23,7 +25,7 @@ message GetDeckResponse {
 }
 
 message GetDecksRequest {
-    repeated string deck_ids = 2;
+    repeated string deck_ids = 1;
 }
   
 message GetDecksResponse {
@@ -51,6 +53,14 @@ message GetPopularDecksRequest {
 
 message GetPopularDecksResponse {
     PopularDecksConnection connection = 1;
+}
+
+message GetCardsRequest {
+    repeated string card_ids = 1;
+}
+  
+message GetCardsResponse {
+    map<string, Card> cards = 1;
 }
 
 message PageInfo {

@@ -49,3 +49,9 @@ func (m *RepositoryMock) GetPopularDecks(ctx context.Context, userID uuid.UUID, 
 
 	return args.Get(0).(PopularDecksConnection), args.Error(1)
 }
+
+func (m *RepositoryMock) GetCards(ctx context.Context, ids []uuid.UUID) (map[uuid.UUID]Card, error) {
+	args := m.Called(ctx, ids)
+
+	return args[0].(map[uuid.UUID]Card), args.Error(1)
+}

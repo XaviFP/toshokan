@@ -109,6 +109,37 @@ func (s *Server) GetPopularDecks(ctx context.Context, req *pb.GetPopularDecksReq
 	}, nil
 }
 
+func (s *Server) GetCards(ctx context.Context, req *pb.GetCardsRequest) (*pb.GetCardsResponse, error) {
+	var ids []uuid.UUID
+
+	for _, idStr := range req.CardIds {
+		id, err := uuid.Parse(idStr)
+		if err != nil {
+			return nil, errors.Trace(err)
+		}
+
+		ids = append(ids, id)
+	}
+
+	cards, err := s.Repository.GetCards(ctx, ids)
+	if err != nil {
+		return &pb.GetCardsResponse{}, errors.Trace(err)
+	}
+
+	out := make(map[string]*pb.Card, len(cards))
+
+	for id, c := range cards {
+		out[id.String()] = &pb.Card{
+			Id:              c.ID.String(),
+			Title:           c.Title,
+			Explanation:     c.Explanation,
+			PossibleAnswers: toGRPCAnswers(c.PossibleAnswers),
+		}
+	}
+
+	return &pb.GetCardsResponse{Cards: out}, nil
+}
+
 func paginationFromProto(p *pb.Pagination) pagination.Pagination {
 	return pagination.Pagination{
 		Before: pagination.Cursor(p.Before),

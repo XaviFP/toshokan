@@ -237,3 +237,44 @@ func TestServer_GetPopularDecks(t *testing.T) {
 		assert.ErrorIs(t, err, assert.AnError)
 	})
 }
+
+func TestServer_GetCards(t *testing.T) {
+	repoMock := &deck.RepositoryMock{}
+	srv := &Server{Repository: repoMock}
+
+	t.Run("success", func(t *testing.T) {
+		c := deck.Card{
+			ID:    uuid.MustParse("5ec790fb-3dcc-4ee4-8c6d-daa9e4e11598"),
+			Title: "What does CSP stand for?",
+			PossibleAnswers: []deck.Answer{
+				{Text: "Communicating Sequential Processes", IsCorrect: true},
+			},
+		}
+
+		cards := map[uuid.UUID]deck.Card{
+			c.ID: c,
+		}
+
+		repoMock.On("GetCards", mock.Anything, []uuid.UUID{c.ID}).Return(cards, nil)
+
+		res, err := srv.GetCards(context.Background(), &pb.GetCardsRequest{CardIds: []string{"5ec790fb-3dcc-4ee4-8c6d-daa9e4e11598"}})
+		assert.NoError(t, err)
+		assert.Equal(t, &pb.GetCardsResponse{Cards: map[string]*pb.Card{
+			"5ec790fb-3dcc-4ee4-8c6d-daa9e4e11598": {
+				Id:              c.ID.String(),
+				Title:           c.Title,
+				Explanation:     c.Explanation,
+				PossibleAnswers: toGRPCAnswers(c.PossibleAnswers),
+			},
+		}}, res)
+	})
+
+	t.Run("error", func(t *testing.T) {
+		repoMock.On("GetCards", mock.Anything, mock.Anything).Return(map[uuid.UUID]deck.Card{}, assert.AnError)
+
+		_, err := srv.GetCards(context.Background(), &pb.GetCardsRequest{})
+		assert.Error(t, err)
+	})
+
+	repoMock.AssertExpectations(t)
+}

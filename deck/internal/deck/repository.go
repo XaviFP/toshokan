@@ -40,6 +40,8 @@ type Repository interface {
 	StoreDeck(ctx context.Context, d Deck) error
 
 	GetPopularDecks(ctx context.Context, userID uuid.UUID, p pagination.Pagination) (PopularDecksConnection, error)
+
+	GetCards(ctx context.Context, ids []uuid.UUID) (map[uuid.UUID]Card, error)
 }
 
 type redisRepository struct {
@@ -115,6 +117,10 @@ func (r *redisRepository) StoreDeck(ctx context.Context, d Deck) error {
 
 func (r *redisRepository) GetPopularDecks(ctx context.Context, userID uuid.UUID, p pagination.Pagination) (PopularDecksConnection, error) {
 	return r.pgRepo.GetPopularDecks(ctx, userID, p)
+}
+
+func (r *redisRepository) GetCards(ctx context.Context, ids []uuid.UUID) (map[uuid.UUID]Card, error) {
+	return r.pgRepo.GetCards(ctx, ids)
 }
 
 func (r *redisRepository) getDeckFromDB(ctx context.Context, id uuid.UUID) (Deck, error) {
@@ -448,6 +454,48 @@ func (r *pgRepository) GetCardAnswers(ctx context.Context, id uuid.UUID) ([]Answ
 		}
 
 		out = append(out, a)
+	}
+
+	return out, nil
+}
+
+func (r *pgRepository) GetCards(ctx context.Context, ids []uuid.UUID) (map[uuid.UUID]Card, error) {
+	out := make(map[uuid.UUID]Card, len(ids))
+	if len(ids) == 0 {
+		return out, nil
+	}
+
+	rows, err := r.db.Query(`
+		SELECT 
+			id,
+			title,
+			explanation
+		FROM cards
+		WHERE
+			deleted_at IS NULL
+			AND id = ANY($1)
+		ORDER BY created_at`,
+		pq.Array(ids),
+	)
+	if err != nil {
+		return out, errors.Trace(err)
+	}
+
+	for rows.Next() {
+		var c Card
+
+		if err := rows.Scan(&c.ID, &c.Title, &c.Explanation); err != nil {
+			return out, errors.Trace(err)
+		}
+
+		// Temporary extra db calls per card for convinience
+		answers, err := r.GetCardAnswers(ctx, c.ID)
+		if err != nil {
+			return out, errors.Trace(err)
+		}
+		c.PossibleAnswers = answers
+
+		out[c.ID] = c
 	}
 
 	return out, nil
