@@ -20,7 +20,7 @@ message DealResponse {
 
 message StoreAnswersRequest {
     string user_id = 1;
-    repeated string answers = 2;
+    repeated string answer_ids = 2;
 }
 
 message StoreAnswersResponse {}

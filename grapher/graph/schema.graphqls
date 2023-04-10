@@ -42,9 +42,15 @@ type PageInfo {
   endCursor: String
 }
 
+input CardsInput {
+  deckID: ID!
+  maxCards: Int!
+}
+
 type Query {
   deck(id: ID!): Deck
   popularDecks(first: Int, after: String, last: Int, before: String): PopularDecksConnection
+  cards(input: CardsInput!): [Card!]!
 }
 
 input CreateDeckInput {
@@ -73,7 +79,16 @@ type DeleteDeckResponse {
   success: Boolean
 }
 
+input AnswerCardsInput {
+  answerIDs: [ID!]!
+}
+
+type AnswerCardsResponse {
+  answerIDs: [ID!]!
+}
+
 type Mutation {
   createDeck(input: CreateDeckInput!): CreateDeckResponse
   deleteDeck(id: ID!): DeleteDeckResponse
+  answerCards(input: AnswerCardsInput!): AnswerCardsResponse
 }

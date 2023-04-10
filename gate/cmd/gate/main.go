@@ -10,6 +10,7 @@ import (
 	grpc "google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 
+	pbDealer "github.com/XaviFP/toshokan/dealer/api/proto/v1"
 	pbDeck "github.com/XaviFP/toshokan/deck/api/proto/v1"
 	"github.com/XaviFP/toshokan/gate/internal/gate"
 	"github.com/XaviFP/toshokan/grapher"
@@ -43,21 +44,22 @@ func (c config) GRPCAddress() string {
 }
 
 type globalConfig struct {
-	gate  gateConfig
-	users config
-	decks config
+	gate   gateConfig
+	users  config
+	decks  config
+	dealer config
 }
 
 func main() {
 	c := loadConfig()
 
-	userGRPConn, err := grpc.Dial(c.users.GRPCAddress(), grpc.WithTransportCredentials(insecure.NewCredentials()))
+	userGRPCConn, err := grpc.Dial(c.users.GRPCAddress(), grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
 		panic(err)
 	}
-	defer userGRPConn.Close()
+	defer userGRPCConn.Close()
 
-	userClient := pbUser.NewUserAPIClient(userGRPConn)
+	userClient := pbUser.NewUserAPIClient(userGRPCConn)
 
 	deckGRPCConn, err := grpc.Dial(c.decks.GRPCAddress(), grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
@@ -67,6 +69,14 @@ func main() {
 
 	deckClient := pbDeck.NewDecksAPIClient(deckGRPCConn)
 
+	dealerGRPCConn, err := grpc.Dial(c.dealer.GRPCAddress(), grpc.WithTransportCredentials(insecure.NewCredentials()))
+	if err != nil {
+		panic(err)
+	}
+	defer dealerGRPCConn.Close()
+
+	dealerClient := pbDealer.NewDealerClient(dealerGRPCConn)
+
 	router := gin.Default()
 	router.Use(gate.GinContextToContextMiddleware())
 
@@ -75,7 +85,7 @@ func main() {
 
 	authorized := router.Group("/")
 	gate.RegisterMiddlewares(authorized, userClient, deckClient)
-	authorized.POST(queryPath, grapher.NewGraphqlHandler(deckClient, userClient))
+	authorized.POST(queryPath, grapher.NewGraphqlHandler(deckClient, userClient, dealerClient))
 	gate.RegisterDeckRoutes(authorized, userClient, deckClient)
 	gate.RegisterUserRoutes(router, c.gate.signupEnabled, userClient)
 
@@ -112,9 +122,14 @@ func loadConfig() globalConfig {
 	decksConfig.grpcHost = os.Getenv("DECKS_GRPC_SERVER_HOST")
 	decksConfig.grpcPort = os.Getenv("DECKS_GRPC_SERVER_PORT")
 
+	dealerConfig := config{}
+	dealerConfig.grpcHost = os.Getenv("DEALER_GRPC_SERVER_HOST")
+	dealerConfig.grpcPort = os.Getenv("DEALER_GRPC_SERVER_PORT")
+
 	return globalConfig{
-		gate:  gateConfig,
-		users: usersConfig,
-		decks: decksConfig,
+		gate:   gateConfig,
+		users:  usersConfig,
+		decks:  decksConfig,
+		dealer: dealerConfig,
 	}
 }

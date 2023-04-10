@@ -1,23 +1,23 @@
 package graph
 
-// This file will not be regenerated automatically.
-//
-// It serves as dependency injection for your app, add any dependencies you require here.
+//go:generate go run github.com/99designs/gqlgen generate
 
 import (
 	"context"
 	"fmt"
 
+	pbDealer "github.com/XaviFP/toshokan/dealer/api/proto/v1"
 	pbDeck "github.com/XaviFP/toshokan/deck/api/proto/v1"
 	pbUser "github.com/XaviFP/toshokan/user/api/proto/v1"
 	"github.com/gin-gonic/gin"
 )
 
 type Resolver struct {
-	DeckClient pbDeck.DecksAPIClient
-	UserClient pbUser.UserAPIClient
-	DeckLoader DataLoader
-	CardLoader DataLoader
+	DeckClient   pbDeck.DecksAPIClient
+	UserClient   pbUser.UserAPIClient
+	DealerClient pbDealer.DealerClient
+	DeckLoader   DataLoader
+	CardLoader   DataLoader
 }
 
 func (r *Resolver) getUserID(ctx context.Context) string {
