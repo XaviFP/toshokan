@@ -17,11 +17,15 @@ func (d *Deck) GenerateUUIDs() {
 	d.ID = uuid.New()
 
 	for i := 0; i < len(d.Cards); i++ {
-		d.Cards[i].ID = uuid.New()
+		d.Cards[i].GenerateUUIDs()
+	}
+}
 
-		for j := 0; j < len(d.Cards[i].PossibleAnswers); j++ {
-			d.Cards[i].PossibleAnswers[j].ID = uuid.New()
-		}
+func (c *Card) GenerateUUIDs() {
+	c.ID = uuid.New()
+
+	for i := 0; i < len(c.PossibleAnswers); i++ {
+		c.PossibleAnswers[i].ID = uuid.New()
 	}
 }
 

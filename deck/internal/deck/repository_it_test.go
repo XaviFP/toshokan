@@ -45,6 +45,80 @@ func TestRepository_StoreDeck(t *testing.T) {
 
 }
 
+func TestRepository_StoreCard(t *testing.T) {
+	h := newTestHarness(t)
+
+	repo := NewPGRepository(h.db)
+
+	t.Run("success", func(t *testing.T) {
+		dID := uuid.MustParse("fb9ffe2c-ad66-4766-9b7b-46fd5d9acd72")
+
+		cards, err := repo.GetDeckCards(context.Background(), dID)
+		assert.NoError(t, err)
+
+		nCards := len(cards)
+
+		card := Card{
+			ID: uuid.MustParse("bc8a13b3-c257-497f-9e80-02e9a50a2fbe"), 
+			Title: "Which is faster?",
+			PossibleAnswers: []Answer{
+				{
+					ID: uuid.MustParse("a0f3a2e4-7263-855d-ebcf-fffa0a96f450"),
+					Text: "Compiled",
+					IsCorrect: true,
+				},
+				{
+						ID: uuid.MustParse("a0f3a2e4-7263-855d-ebcf-fffa0a96f451"),
+						Text: "Interpreted",
+						IsCorrect: false,
+				},
+			},
+			Explanation: "Compiled languages are faster",
+
+		}
+		err = repo.StoreCard(context.Background(), card, dID)
+		assert.NoError(t, err)
+
+		actualCards, err := repo.GetDeckCards(context.Background(), dID)
+		assert.NoError(t, err)
+
+		assert.Equal(t, nCards+1, len(actualCards))
+
+		err = repo.StoreCard(context.Background(), card, dID)
+		assert.ErrorIs(t, err, ErrCardAlreadyExists)
+
+	})
+
+	t.Run("failure", func(t *testing.T) {
+		dID := uuid.MustParse("ebcfffa0-a96f-450b-a0f3-a2e47263855d")
+
+		card := Card{
+			ID: uuid.MustParse("19cc0f18-70d6-49d2-85d4-ef36b9f4579c"), 
+			Title: "Which is faster?",
+			PossibleAnswers: []Answer{
+				{
+					ID: uuid.MustParse("a0f3a2e4-7263-855d-ebcf-fffa0a96f450"),
+					Text: "Compiled",
+					IsCorrect: true,
+				},
+				{
+						ID: uuid.MustParse("a0f3a2e4-7263-855d-ebcf-fffa0a96f451"),
+						Text: "Interpreted",
+						IsCorrect: false,
+				},
+			},
+			Explanation: "Compiled languages are faster",
+
+		}
+
+		err := repo.StoreCard(context.Background(), card, dID)
+		//d, err := repo.GetDeck(context.Background(), id)
+		assert.ErrorIs(t, err, ErrDeckNotFound)
+		cards, _ := repo.GetCards(context.Background(), []uuid.UUID{card.ID})
+		assert.Empty(t, cards)
+	})
+}
+
 func TestRepository_GetDeck(t *testing.T) {
 	h := newTestHarness(t)
 
