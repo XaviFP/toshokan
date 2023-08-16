@@ -61,6 +61,27 @@ func (r *mutationResolver) AnswerCards(ctx context.Context, input model.AnswerCa
 	return &model.AnswerCardsResponse{AnswerIDs: input.AnswerIDs}, nil
 }
 
+// CreateDeckCard implements generated.MutationResolver.
+func (r *mutationResolver) CreateDeckCard(ctx context.Context, input model.CreateDeckCardInput) (*model.CreateDeckCardResponse, error) {
+	var answers []*v1Deck.Answer
+	for _, a := range input.Card.Answers {
+		answers = append(answers, &v1Deck.Answer{Text: a.Text, IsCorrect: a.IsCorrect})
+	}
+	_, err := r.DeckClient.CreateCard(ctx, &v1Deck.CreateCardRequest{
+		Card: &v1Deck.Card{
+			Title:           input.Card.Title,
+			Explanation:     *input.Card.Explanation,
+			PossibleAnswers: answers,
+			DeckId:          input.DeckID,
+		},
+	})
+	if err != nil {
+		return nil, errors.Trace(err)
+	}
+
+	return &model.CreateDeckCardResponse{Success: true}, nil
+}
+
 // Deck is the resolver for the deck field.
 func (r *queryResolver) Deck(ctx context.Context, id string) (*model.Deck, error) {
 	res, err := r.DeckClient.GetDeck(ctx, &v1Deck.GetDeckRequest{DeckId: id, UserId: r.getUserID(ctx)})
@@ -181,4 +202,5 @@ func (r *Resolver) Mutation() generated.MutationResolver { return &mutationResol
 func (r *Resolver) Query() generated.QueryResolver { return &queryResolver{r} }
 
 type mutationResolver struct{ *Resolver }
+
 type queryResolver struct{ *Resolver }

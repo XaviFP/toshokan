@@ -385,7 +385,7 @@ func (r *pgRepository) StoreDeck(ctx context.Context, d Deck) error {
 	}
 
 	for _, card := range d.Cards {
-		if _, err := stmt.Exec(card.ID, d.ID, card.Title); err != nil {
+		if _, err := stmt.Exec(card.ID, d.ID, card.Title, card.Explanation); err != nil {
 			return errors.Trace(err)
 		}
 	}
@@ -444,7 +444,6 @@ func (r *pgRepository) StoreCard(ctx context.Context, c Card, dID uuid.UUID) err
 
 		return errors.Trace(err)
 	}
-
 
 	stmt, err := tx.Prepare(pq.CopyIn("answers", "id", "card_id", "text", "is_correct"))
 	if err != nil {

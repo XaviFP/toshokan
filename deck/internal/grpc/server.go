@@ -119,7 +119,7 @@ func (s *Server) CreateCard(ctx context.Context, req *pb.CreateCardRequest) (*pb
 	if err != nil {
 		return nil, errors.Trace(err)
 	}
-	
+
 	isValid, _ := deck.ValidateCard(card)
 	if !isValid {
 		return &pb.CreateCardResponse{}, deck.ErrCardInvalid

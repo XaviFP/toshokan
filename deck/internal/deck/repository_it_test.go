@@ -59,22 +59,21 @@ func TestRepository_StoreCard(t *testing.T) {
 		nCards := len(cards)
 
 		card := Card{
-			ID: uuid.MustParse("bc8a13b3-c257-497f-9e80-02e9a50a2fbe"), 
+			ID:    uuid.MustParse("bc8a13b3-c257-497f-9e80-02e9a50a2fbe"),
 			Title: "Which is faster?",
 			PossibleAnswers: []Answer{
 				{
-					ID: uuid.MustParse("a0f3a2e4-7263-855d-ebcf-fffa0a96f450"),
-					Text: "Compiled",
+					ID:        uuid.MustParse("a0f3a2e4-7263-855d-ebcf-fffa0a96f450"),
+					Text:      "Compiled",
 					IsCorrect: true,
 				},
 				{
-						ID: uuid.MustParse("a0f3a2e4-7263-855d-ebcf-fffa0a96f451"),
-						Text: "Interpreted",
-						IsCorrect: false,
+					ID:        uuid.MustParse("a0f3a2e4-7263-855d-ebcf-fffa0a96f451"),
+					Text:      "Interpreted",
+					IsCorrect: false,
 				},
 			},
 			Explanation: "Compiled languages are faster",
-
 		}
 		err = repo.StoreCard(context.Background(), card, dID)
 		assert.NoError(t, err)
@@ -93,22 +92,21 @@ func TestRepository_StoreCard(t *testing.T) {
 		dID := uuid.MustParse("ebcfffa0-a96f-450b-a0f3-a2e47263855d")
 
 		card := Card{
-			ID: uuid.MustParse("19cc0f18-70d6-49d2-85d4-ef36b9f4579c"), 
+			ID:    uuid.MustParse("19cc0f18-70d6-49d2-85d4-ef36b9f4579c"),
 			Title: "Which is faster?",
 			PossibleAnswers: []Answer{
 				{
-					ID: uuid.MustParse("a0f3a2e4-7263-855d-ebcf-fffa0a96f450"),
-					Text: "Compiled",
+					ID:        uuid.MustParse("a0f3a2e4-7263-855d-ebcf-fffa0a96f450"),
+					Text:      "Compiled",
 					IsCorrect: true,
 				},
 				{
-						ID: uuid.MustParse("a0f3a2e4-7263-855d-ebcf-fffa0a96f451"),
-						Text: "Interpreted",
-						IsCorrect: false,
+					ID:        uuid.MustParse("a0f3a2e4-7263-855d-ebcf-fffa0a96f451"),
+					Text:      "Interpreted",
+					IsCorrect: false,
 				},
 			},
 			Explanation: "Compiled languages are faster",
-
 		}
 
 		err := repo.StoreCard(context.Background(), card, dID)

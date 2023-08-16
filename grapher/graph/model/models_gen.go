@@ -39,6 +39,15 @@ type CreateCardInput struct {
 	Explanation *string              `json:"explanation,omitempty"`
 }
 
+type CreateDeckCardInput struct {
+	Card   *CreateCardInput `json:"card"`
+	DeckID string           `json:"deckID"`
+}
+
+type CreateDeckCardResponse struct {
+	Success bool `json:"success"`
+}
+
 type CreateDeckInput struct {
 	Title       string             `json:"title"`
 	Description string             `json:"description"`
