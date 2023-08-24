@@ -19,10 +19,10 @@ func TestTokenRepository_Generate(t *testing.T) {
 
 	keys := paseto.NewV4AsymmetricSecretKey()
 	repo := tokenRepository{
-		clock:         clock,
+		clock:       clock,
 		tokenExpiry: tokenExpiry,
-		publicKey:     keys.Public(),
-		privateKey:    keys,
+		publicKey:   keys.Public(),
+		privateKey:  keys,
 	}
 
 	tokenStr, err := repo.Generate(context.Background(), userID)
@@ -55,10 +55,10 @@ func TestTokenRepository_GetUserID(t *testing.T) {
 
 	keys := paseto.NewV4AsymmetricSecretKey()
 	repo := tokenRepository{
-		clock:         clock.Realtime(),
+		clock:       clock.Realtime(),
 		tokenExpiry: tokenExpiry,
-		publicKey:     keys.Public(),
-		privateKey:    keys,
+		publicKey:   keys.Public(),
+		privateKey:  keys,
 	}
 
 	tokenStr, err := repo.Generate(context.Background(), expected)

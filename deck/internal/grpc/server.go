@@ -109,6 +109,41 @@ func (s *Server) GetPopularDecks(ctx context.Context, req *pb.GetPopularDecksReq
 	}, nil
 }
 
+func (s *Server) CreateCard(ctx context.Context, req *pb.CreateCardRequest) (*pb.CreateCardResponse, error) {
+	deckID, err := uuid.Parse(req.Card.DeckId)
+	if err != nil {
+		return nil, errors.Trace(err)
+	}
+
+	card, err := fromGRPCCard(req.Card)
+	if err != nil {
+		return nil, errors.Trace(err)
+	}
+
+	isValid, _ := deck.ValidateCard(card)
+	if !isValid {
+		return &pb.CreateCardResponse{}, deck.ErrCardInvalid
+	}
+
+	// Check if deck exists
+	_, err = s.Repository.GetDeck(ctx, deckID)
+	if err != nil {
+		if errors.Cause(err) == deck.ErrDeckNotFound {
+			return &pb.CreateCardResponse{}, status.Error(codes.NotFound, errors.Trace(err).Error())
+		}
+		return &pb.CreateCardResponse{}, errors.Trace(err)
+	}
+
+	card.GenerateUUIDs()
+
+	err = s.Repository.StoreCard(ctx, card, deckID)
+	if err != nil {
+		return nil, errors.Trace(err)
+	}
+
+	return &pb.CreateCardResponse{Card: toGRPCCard(card)}, nil
+}
+
 func (s *Server) GetCards(ctx context.Context, req *pb.GetCardsRequest) (*pb.GetCardsResponse, error) {
 	var ids []uuid.UUID
 
@@ -225,15 +260,19 @@ func toGRPCCards(cards []deck.Card) []*pb.Card {
 	var out = make([]*pb.Card, 0, len(cards))
 
 	for _, c := range cards {
-		out = append(out, &pb.Card{
-			Id:              c.ID.String(),
-			Title:           c.Title,
-			PossibleAnswers: toGRPCAnswers(c.PossibleAnswers),
-			Explanation:     c.Explanation,
-		})
+		out = append(out, toGRPCCard(c))
 	}
 
 	return out
+}
+
+func toGRPCCard(c deck.Card) *pb.Card {
+	return &pb.Card{
+		Id:              c.ID.String(),
+		Title:           c.Title,
+		PossibleAnswers: toGRPCAnswers(c.PossibleAnswers),
+		Explanation:     c.Explanation,
+	}
 }
 
 func toGRPCAnswers(answers []deck.Answer) []*pb.Answer {

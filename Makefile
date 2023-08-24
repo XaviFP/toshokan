@@ -11,7 +11,7 @@ coverage: test
 	go tool cover -html=coverage.out
 
 dev: services
-	docker-compose up --build
+	docker compose up --build
 
 proto:
 	$(MAKE) proto -C deck

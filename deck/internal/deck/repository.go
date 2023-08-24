@@ -20,6 +20,8 @@ import (
 
 var (
 	ErrCards             = errors.New("deck: one or more cards are not valid")
+	ErrCardInvalid       = errors.New("deck: invalid card")
+	ErrCardAlreadyExists = errors.New("deck: card already exists")
 	ErrDeckNotFound      = errors.New("deck: deck not found")
 	ErrNoTitle           = errors.New("deck: title is missing")
 	ErrNoDescription     = errors.New("deck: description is missing")
@@ -38,7 +40,7 @@ type Repository interface {
 	GetDeckCards(ctx context.Context, id uuid.UUID) ([]Card, error)
 	GetCardAnswers(ctx context.Context, id uuid.UUID) ([]Answer, error)
 	StoreDeck(ctx context.Context, d Deck) error
-
+	StoreCard(ctx context.Context, card Card, deckID uuid.UUID) error
 	GetPopularDecks(ctx context.Context, userID uuid.UUID, p pagination.Pagination) (PopularDecksConnection, error)
 
 	GetCards(ctx context.Context, ids []uuid.UUID) (map[uuid.UUID]Card, error)
@@ -47,6 +49,21 @@ type Repository interface {
 type redisRepository struct {
 	cache  radix.Client
 	pgRepo Repository
+}
+
+func (r *redisRepository) StoreCard(ctx context.Context, c Card, dID uuid.UUID) error {
+	if err := r.pgRepo.StoreCard(ctx, c, dID); err != nil {
+		return errors.Trace(err)
+	}
+
+	r.delete(ctx, dID.String())
+
+	// Update cache TODO
+	if _, err := r.GetDeck(ctx, dID); err == nil {
+		return errors.Trace(err)
+	}
+
+	return nil
 }
 
 func NewRedisRepository(cache radix.Client, pgRepo Repository) Repository {
@@ -362,13 +379,13 @@ func (r *pgRepository) StoreDeck(ctx context.Context, d Deck) error {
 		return ErrDeckAlreadyExists
 	}
 
-	stmt, err := tx.Prepare(pq.CopyIn("cards", "id", "deck_id", "title"))
+	stmt, err := tx.Prepare(pq.CopyIn("cards", "id", "deck_id", "title", "explanation"))
 	if err != nil {
 		return errors.Trace(err)
 	}
 
 	for _, card := range d.Cards {
-		if _, err := stmt.Exec(card.ID, d.ID, card.Title); err != nil {
+		if _, err := stmt.Exec(card.ID, d.ID, card.Title, card.Explanation); err != nil {
 			return errors.Trace(err)
 		}
 	}
@@ -386,6 +403,56 @@ func (r *pgRepository) StoreDeck(ctx context.Context, d Deck) error {
 			if _, err := stmt.Exec(answer.ID, card.ID, answer.Text, answer.IsCorrect); err != nil {
 				return errors.Trace(err)
 			}
+		}
+	}
+
+	if _, err = stmt.Exec(); err != nil {
+		return errors.Trace(err)
+	}
+
+	if err = tx.Commit(); err != nil {
+		return errors.Trace(err)
+	}
+
+	return nil
+}
+
+func (r *pgRepository) StoreCard(ctx context.Context, c Card, dID uuid.UUID) error {
+	tx, err := r.db.BeginTx(ctx, nil)
+	if err != nil {
+		return errors.Trace(err)
+	}
+
+	defer tx.Rollback()
+
+	_, err = tx.Exec(`INSERT INTO cards (
+			id,
+			deck_id,
+			title,
+			explanation,
+			created_at
+		) VALUES ($1, $2, $3, $4, NOW());`,
+		c.ID, dID, c.Title, c.Explanation,
+	)
+	if err != nil {
+		if db.IsConstraintError(err, "cards_pkey") {
+			return ErrCardAlreadyExists
+		}
+		if db.IsConstraintError(err, "cards_deck_id_fkey") {
+			return ErrDeckNotFound
+		}
+
+		return errors.Trace(err)
+	}
+
+	stmt, err := tx.Prepare(pq.CopyIn("answers", "id", "card_id", "text", "is_correct"))
+	if err != nil {
+		return errors.Trace(err)
+	}
+
+	for _, answer := range c.PossibleAnswers {
+		if _, err := stmt.Exec(answer.ID, c.ID, answer.Text, answer.IsCorrect); err != nil {
+			return errors.Trace(err)
 		}
 	}
 

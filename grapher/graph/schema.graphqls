@@ -60,19 +60,28 @@ input CreateDeckInput {
   cards: [CreateCardInput!]!
 }
 
+type CreateDeckResponse {
+  deck: Deck
+}
+
 input CreateCardInput {
   title: String!
   answers: [CreateAnswerInput!]!
   explanation: String
 }
 
+input CreateDeckCardInput {
+  card: CreateCardInput!
+  deckID: ID!
+}
+
+type CreateDeckCardResponse {
+  success: Boolean!
+}
+
 input CreateAnswerInput {
   text: String!
   isCorrect: Boolean!
-}
-
-type CreateDeckResponse {
-  deck: Deck
 }
 
 type DeleteDeckResponse {
@@ -87,8 +96,10 @@ type AnswerCardsResponse {
   answerIDs: [ID!]!
 }
 
+
 type Mutation {
   createDeck(input: CreateDeckInput!): CreateDeckResponse
+  createDeckCard(input: CreateDeckCardInput!): CreateDeckCardResponse
   deleteDeck(id: ID!): DeleteDeckResponse
   answerCards(input: AnswerCardsInput!): AnswerCardsResponse
 }

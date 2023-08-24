@@ -10,7 +10,7 @@ service DecksAPI {
   rpc DeleteDeck (DeleteDeckRequest) returns (DeleteDeckResponse) {}
 
   rpc GetPopularDecks (GetPopularDecksRequest) returns (GetPopularDecksResponse) {}
-
+  rpc CreateCard (CreateCardRequest) returns (CreateCardResponse) {}
   rpc GetCards (GetCardsRequest) returns (GetCardsResponse) {}
 }
 
@@ -53,6 +53,14 @@ message GetPopularDecksRequest {
 
 message GetPopularDecksResponse {
     PopularDecksConnection connection = 1;
+}
+
+message CreateCardRequest {
+    Card card = 1;
+}
+
+message CreateCardResponse {
+    Card card = 1;
 }
 
 message GetCardsRequest {

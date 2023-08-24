@@ -61,6 +61,10 @@ type ComplexityRoot struct {
 		Title       func(childComplexity int) int
 	}
 
+	CreateDeckCardResponse struct {
+		Success func(childComplexity int) int
+	}
+
 	CreateDeckResponse struct {
 		Deck func(childComplexity int) int
 	}
@@ -77,9 +81,10 @@ type ComplexityRoot struct {
 	}
 
 	Mutation struct {
-		AnswerCards func(childComplexity int, input model.AnswerCardsInput) int
-		CreateDeck  func(childComplexity int, input model.CreateDeckInput) int
-		DeleteDeck  func(childComplexity int, id string) int
+		AnswerCards    func(childComplexity int, input model.AnswerCardsInput) int
+		CreateDeck     func(childComplexity int, input model.CreateDeckInput) int
+		CreateDeckCard func(childComplexity int, input model.CreateDeckCardInput) int
+		DeleteDeck     func(childComplexity int, id string) int
 	}
 
 	PageInfo struct {
@@ -115,6 +120,7 @@ type ComplexityRoot struct {
 
 type MutationResolver interface {
 	CreateDeck(ctx context.Context, input model.CreateDeckInput) (*model.CreateDeckResponse, error)
+	CreateDeckCard(ctx context.Context, input model.CreateDeckCardInput) (*model.CreateDeckCardResponse, error)
 	DeleteDeck(ctx context.Context, id string) (*model.DeleteDeckResponse, error)
 	AnswerCards(ctx context.Context, input model.AnswerCardsInput) (*model.AnswerCardsResponse, error)
 }
@@ -195,6 +201,13 @@ func (e *executableSchema) Complexity(typeName, field string, childComplexity in
 
 		return e.complexity.Card.Title(childComplexity), true
 
+	case "CreateDeckCardResponse.success":
+		if e.complexity.CreateDeckCardResponse.Success == nil {
+			break
+		}
+
+		return e.complexity.CreateDeckCardResponse.Success(childComplexity), true
+
 	case "CreateDeckResponse.deck":
 		if e.complexity.CreateDeckResponse.Deck == nil {
 			break
@@ -260,6 +273,18 @@ func (e *executableSchema) Complexity(typeName, field string, childComplexity in
 		}
 
 		return e.complexity.Mutation.CreateDeck(childComplexity, args["input"].(model.CreateDeckInput)), true
+
+	case "Mutation.createDeckCard":
+		if e.complexity.Mutation.CreateDeckCard == nil {
+			break
+		}
+
+		args, err := ec.field_Mutation_createDeckCard_args(context.TODO(), rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.complexity.Mutation.CreateDeckCard(childComplexity, args["input"].(model.CreateDeckCardInput)), true
 
 	case "Mutation.deleteDeck":
 		if e.complexity.Mutation.DeleteDeck == nil {
@@ -405,6 +430,7 @@ func (e *executableSchema) Exec(ctx context.Context) graphql.ResponseHandler {
 		ec.unmarshalInputCardsInput,
 		ec.unmarshalInputCreateAnswerInput,
 		ec.unmarshalInputCreateCardInput,
+		ec.unmarshalInputCreateDeckCardInput,
 		ec.unmarshalInputCreateDeckInput,
 	)
 	first := true
@@ -528,19 +554,28 @@ input CreateDeckInput {
   cards: [CreateCardInput!]!
 }
 
+type CreateDeckResponse {
+  deck: Deck
+}
+
 input CreateCardInput {
   title: String!
   answers: [CreateAnswerInput!]!
   explanation: String
 }
 
+input CreateDeckCardInput {
+  card: CreateCardInput!
+  deckID: ID!
+}
+
+type CreateDeckCardResponse {
+  success: Boolean!
+}
+
 input CreateAnswerInput {
   text: String!
   isCorrect: Boolean!
-}
-
-type CreateDeckResponse {
-  deck: Deck
 }
 
 type DeleteDeckResponse {
@@ -555,8 +590,10 @@ type AnswerCardsResponse {
   answerIDs: [ID!]!
 }
 
+
 type Mutation {
   createDeck(input: CreateDeckInput!): CreateDeckResponse
+  createDeckCard(input: CreateDeckCardInput!): CreateDeckCardResponse
   deleteDeck(id: ID!): DeleteDeckResponse
   answerCards(input: AnswerCardsInput!): AnswerCardsResponse
 }
@@ -575,6 +612,21 @@ func (ec *executionContext) field_Mutation_answerCards_args(ctx context.Context,
 	if tmp, ok := rawArgs["input"]; ok {
 		ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("input"))
 		arg0, err = ec.unmarshalNAnswerCardsInput2githubᚗcomᚋXaviFPᚋtoshokanᚋgrapherᚋgraphᚋmodelᚐAnswerCardsInput(ctx, tmp)
+		if err != nil {
+			return nil, err
+		}
+	}
+	args["input"] = arg0
+	return args, nil
+}
+
+func (ec *executionContext) field_Mutation_createDeckCard_args(ctx context.Context, rawArgs map[string]interface{}) (map[string]interface{}, error) {
+	var err error
+	args := map[string]interface{}{}
+	var arg0 model.CreateDeckCardInput
+	if tmp, ok := rawArgs["input"]; ok {
+		ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("input"))
+		arg0, err = ec.unmarshalNCreateDeckCardInput2githubᚗcomᚋXaviFPᚋtoshokanᚋgrapherᚋgraphᚋmodelᚐCreateDeckCardInput(ctx, tmp)
 		if err != nil {
 			return nil, err
 		}
@@ -1092,6 +1144,50 @@ func (ec *executionContext) fieldContext_Card_explanation(ctx context.Context, f
 	return fc, nil
 }
 
+func (ec *executionContext) _CreateDeckCardResponse_success(ctx context.Context, field graphql.CollectedField, obj *model.CreateDeckCardResponse) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_CreateDeckCardResponse_success(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.Success, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.(bool)
+	fc.Result = res
+	return ec.marshalNBoolean2bool(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_CreateDeckCardResponse_success(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "CreateDeckCardResponse",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Boolean does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
 func (ec *executionContext) _CreateDeckResponse_deck(ctx context.Context, field graphql.CollectedField, obj *model.CreateDeckResponse) (ret graphql.Marshaler) {
 	fc, err := ec.fieldContext_CreateDeckResponse_deck(ctx, field)
 	if err != nil {
@@ -1417,6 +1513,62 @@ func (ec *executionContext) fieldContext_Mutation_createDeck(ctx context.Context
 	}()
 	ctx = graphql.WithFieldContext(ctx, fc)
 	if fc.Args, err = ec.field_Mutation_createDeck_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Mutation_createDeckCard(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_Mutation_createDeckCard(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return ec.resolvers.Mutation().CreateDeckCard(rctx, fc.Args["input"].(model.CreateDeckCardInput))
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		return graphql.Null
+	}
+	res := resTmp.(*model.CreateDeckCardResponse)
+	fc.Result = res
+	return ec.marshalOCreateDeckCardResponse2ᚖgithubᚗcomᚋXaviFPᚋtoshokanᚋgrapherᚋgraphᚋmodelᚐCreateDeckCardResponse(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_Mutation_createDeckCard(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Mutation",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			switch field.Name {
+			case "success":
+				return ec.fieldContext_CreateDeckCardResponse_success(ctx, field)
+			}
+			return nil, fmt.Errorf("no field named %q was found under type CreateDeckCardResponse", field.Name)
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Mutation_createDeckCard_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
 		ec.Error(ctx, err)
 		return
 	}
@@ -4299,6 +4451,42 @@ func (ec *executionContext) unmarshalInputCreateCardInput(ctx context.Context, o
 	return it, nil
 }
 
+func (ec *executionContext) unmarshalInputCreateDeckCardInput(ctx context.Context, obj interface{}) (model.CreateDeckCardInput, error) {
+	var it model.CreateDeckCardInput
+	asMap := map[string]interface{}{}
+	for k, v := range obj.(map[string]interface{}) {
+		asMap[k] = v
+	}
+
+	fieldsInOrder := [...]string{"card", "deckID"}
+	for _, k := range fieldsInOrder {
+		v, ok := asMap[k]
+		if !ok {
+			continue
+		}
+		switch k {
+		case "card":
+			var err error
+
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("card"))
+			it.Card, err = ec.unmarshalNCreateCardInput2ᚖgithubᚗcomᚋXaviFPᚋtoshokanᚋgrapherᚋgraphᚋmodelᚐCreateCardInput(ctx, v)
+			if err != nil {
+				return it, err
+			}
+		case "deckID":
+			var err error
+
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("deckID"))
+			it.DeckID, err = ec.unmarshalNID2string(ctx, v)
+			if err != nil {
+				return it, err
+			}
+		}
+	}
+
+	return it, nil
+}
+
 func (ec *executionContext) unmarshalInputCreateDeckInput(ctx context.Context, obj interface{}) (model.CreateDeckInput, error) {
 	var it model.CreateDeckInput
 	asMap := map[string]interface{}{}
@@ -4472,6 +4660,34 @@ func (ec *executionContext) _Card(ctx context.Context, sel ast.SelectionSet, obj
 	return out
 }
 
+var createDeckCardResponseImplementors = []string{"CreateDeckCardResponse"}
+
+func (ec *executionContext) _CreateDeckCardResponse(ctx context.Context, sel ast.SelectionSet, obj *model.CreateDeckCardResponse) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, createDeckCardResponseImplementors)
+	out := graphql.NewFieldSet(fields)
+	var invalids uint32
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("CreateDeckCardResponse")
+		case "success":
+
+			out.Values[i] = ec._CreateDeckCardResponse_success(ctx, field, obj)
+
+			if out.Values[i] == graphql.Null {
+				invalids++
+			}
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch()
+	if invalids > 0 {
+		return graphql.Null
+	}
+	return out
+}
+
 var createDeckResponseImplementors = []string{"CreateDeckResponse"}
 
 func (ec *executionContext) _CreateDeckResponse(ctx context.Context, sel ast.SelectionSet, obj *model.CreateDeckResponse) graphql.Marshaler {
@@ -4591,6 +4807,12 @@ func (ec *executionContext) _Mutation(ctx context.Context, sel ast.SelectionSet)
 
 			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
 				return ec._Mutation_createDeck(ctx, field)
+			})
+
+		case "createDeckCard":
+
+			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
+				return ec._Mutation_createDeckCard(ctx, field)
 			})
 
 		case "deleteDeck":
@@ -5309,6 +5531,11 @@ func (ec *executionContext) unmarshalNCreateCardInput2ᚖgithubᚗcomᚋXaviFP�
 	return &res, graphql.ErrorOnPath(ctx, err)
 }
 
+func (ec *executionContext) unmarshalNCreateDeckCardInput2githubᚗcomᚋXaviFPᚋtoshokanᚋgrapherᚋgraphᚋmodelᚐCreateDeckCardInput(ctx context.Context, v interface{}) (model.CreateDeckCardInput, error) {
+	res, err := ec.unmarshalInputCreateDeckCardInput(ctx, v)
+	return res, graphql.ErrorOnPath(ctx, err)
+}
+
 func (ec *executionContext) unmarshalNCreateDeckInput2githubᚗcomᚋXaviFPᚋtoshokanᚋgrapherᚋgraphᚋmodelᚐCreateDeckInput(ctx context.Context, v interface{}) (model.CreateDeckInput, error) {
 	res, err := ec.unmarshalInputCreateDeckInput(ctx, v)
 	return res, graphql.ErrorOnPath(ctx, err)
@@ -5791,6 +6018,13 @@ func (ec *executionContext) marshalOCard2ᚖgithubᚗcomᚋXaviFPᚋtoshokanᚋg
 		return graphql.Null
 	}
 	return ec._Card(ctx, sel, v)
+}
+
+func (ec *executionContext) marshalOCreateDeckCardResponse2ᚖgithubᚗcomᚋXaviFPᚋtoshokanᚋgrapherᚋgraphᚋmodelᚐCreateDeckCardResponse(ctx context.Context, sel ast.SelectionSet, v *model.CreateDeckCardResponse) graphql.Marshaler {
+	if v == nil {
+		return graphql.Null
+	}
+	return ec._CreateDeckCardResponse(ctx, sel, v)
 }
 
 func (ec *executionContext) marshalOCreateDeckResponse2ᚖgithubᚗcomᚋXaviFPᚋtoshokanᚋgrapherᚋgraphᚋmodelᚐCreateDeckResponse(ctx context.Context, sel ast.SelectionSet, v *model.CreateDeckResponse) graphql.Marshaler {

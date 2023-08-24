@@ -16,6 +16,10 @@ func (m *RepositoryMock) StoreDeck(ctx context.Context, d Deck) error {
 	return m.Called(ctx, d).Error(0)
 }
 
+func (m *RepositoryMock) StoreCard(ctx context.Context, c Card, dID uuid.UUID) error {
+	return m.Called(ctx, c, dID).Error(0)
+}
+
 func (m *RepositoryMock) GetDeck(ctx context.Context, id uuid.UUID) (Deck, error) {
 	args := m.Called(ctx, id)
 
