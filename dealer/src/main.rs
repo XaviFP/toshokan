@@ -113,15 +113,15 @@ impl Repository {
         let rows = self
             .client
             .query(
-                "WITH user_cards as (
+                "WITH uc as (
                     SELECT c.id as card_id, uc.lvl as lvl
                     FROM cards as c 
-                    JOIN user_card_level as uc 
+                    LEFT JOIN user_card_level as uc
                     ON uc.card_id = c.id
                     WHERE uc.user_id = $1
                     AND c.deck_id = $2
-                    
-                )
+                ),
+                user_cards as (UPDATE uc SET lvl = 1 WHERE lvl IS NULL),
                 (SELECT card_id, lvl FROM user_cards WHERE lvl = 1 LIMIT $3)
                 UNION (SELECT card_id, lvl FROM user_cards WHERE lvl = 2 LIMIT $3)
                 UNION (SELECT card_id, lvl FROM user_cards WHERE lvl = 3 LIMIT $3)
@@ -229,13 +229,17 @@ impl Repository {
                     WHERE is_correct = true
                     AND id in ({})
                 )
-                UPDATE user_card_level
-                SET lvl = lvl + 1, edited_at = now()
-                WHERE card_id in (SELECT card_id FROM correct_answered_cards)
-                AND user_id = {}
-                AND lvl < 5",
+                INSERT INTO user_card_level (user_id, card_id)
+                (
+                    SELECT '{}' as user_id, c.id as card_id
+                    FROM correct_answered_cards as c
+                )
+                ON CONFLICT DO UPDATE
+                SET lvl = lvl + 1
+                WHERE lvl < 5,
+                edited_at = now()",
                     answers_string_arg,
-                    arger.add(&uid)
+                    arger.add(&uid),
                 ),
                 arger.values(),
             )
