@@ -37,72 +37,6 @@ struct Repository {
 }
 
 impl Repository {
-    async fn is_new_deck_for_user(&self, user_id: &String, deck_id: &String) -> bool {
-        let rows = self
-            .client
-            .query(
-                "SELECT count(*) FROM user_deck WHERE user_id = $1 AND deck_id = $2",
-                &[
-                    &Uuid::parse_str(user_id).unwrap(),
-                    &Uuid::parse_str(deck_id).unwrap(),
-                ],
-            )
-            .await
-            .unwrap_or(vec![]);
-
-        let count: i64 = rows[0].get(0);
-
-        return count == 0;
-    }
-
-    async fn init_levels(
-        &self,
-        user_id: &String,
-        deck_id: &String,
-        max: &i64,
-    ) -> Result<Vec<String>, String> {
-        let result = self
-            .client
-            .query(
-                &format!(
-                    "WITH inserted_cards as (INSERT INTO user_card_level (user_id, card_id)
-                    (
-                        SELECT '{}' as user_id, c.id as card_id
-                        FROM cards as c
-                        WHERE c.deck_id = $2
-                    )
-                    RETURNING card_id),
-                    inserted_deck as (INSERT INTO user_deck (user_id, deck_id) VALUES ($1, $2))
-                    SELECT card_id FROM inserted_cards LIMIT $3",
-                    user_id
-                ),
-                &[
-                    &Uuid::parse_str(user_id).unwrap(),
-                    &Uuid::parse_str(deck_id).unwrap(),
-                    max,
-                ],
-            )
-            .await;
-
-        if result.as_ref().is_err() {
-            match result.as_ref().err() {
-                Some(err) => {
-                    return Err(err.to_string());
-                }
-                _ => {}
-            }
-        }
-        // If new deck for user, return request.number_of_cards first cards
-        let card_uuids = result.as_ref().unwrap();
-        let card_ids: Vec<Card> = card_uuids
-            .iter()
-            .map(|uuid| {
-                let id: Uuid = uuid.get(0);
-                Card { id: id.to_string() }
-            })
-            .collect();
-        return Ok(card_ids.iter().map(|card| card.id.clone()).collect());
-    }
 
     async fn get_max_cards_per_level(
         &self,
@@ -113,15 +47,15 @@ impl Repository {
         let rows = self
             .client
             .query(
-                "WITH uc as (
-                    SELECT c.id as card_id, uc.lvl as lvl
-                    FROM cards as c 
-                    LEFT JOIN user_card_level as uc
-                    ON uc.card_id = c.id
-                    WHERE uc.user_id = $1
-                    AND c.deck_id = $2
-                ),
-                user_cards as (UPDATE uc SET lvl = 1 WHERE lvl IS NULL),
+                "WITH user_cards as (
+                    SELECT cards.id as card_id, COALESCE(user_card_level.lvl, 1) as lvl
+                    FROM cards
+                    LEFT JOIN user_card_level
+                    ON user_card_level.card_id = cards.id
+                    WHERE (user_card_level.user_id = $1
+                    OR user_card_level.card_id IS NULL)
+                    AND cards.deck_id = $2
+                )
                 (SELECT card_id, lvl FROM user_cards WHERE lvl = 1 LIMIT $3)
                 UNION (SELECT card_id, lvl FROM user_cards WHERE lvl = 2 LIMIT $3)
                 UNION (SELECT card_id, lvl FROM user_cards WHERE lvl = 3 LIMIT $3)
@@ -229,14 +163,14 @@ impl Repository {
                     WHERE is_correct = true
                     AND id in ({})
                 )
-                INSERT INTO user_card_level (user_id, card_id)
+                INSERT INTO user_card_level (user_id, card_id, edited_at)
                 (
-                    SELECT '{}' as user_id, c.id as card_id
+                    SELECT {} as user_id, c.card_id as card_id, now() as edited_at
                     FROM correct_answered_cards as c
                 )
-                ON CONFLICT DO UPDATE
-                SET lvl = lvl + 1
-                WHERE lvl < 5,
+                ON CONFLICT ON CONSTRAINT user_card_level_card_id_user_id_key DO UPDATE
+                SET
+                lvl = LEAST((SELECT lvl FROM user_card_level WHERE user_id = EXCLUDED.user_id AND card_id = EXCLUDED.card_id) + 1, 5),
                 edited_at = now()",
                     answers_string_arg,
                     arger.add(&uid),
@@ -250,10 +184,6 @@ impl Repository {
 
         Ok(())
     }
-}
-
-struct Card {
-    id: String,
 }
 
 struct LeveledCard {
@@ -283,34 +213,6 @@ impl pbDealer for Dealer {
     }
 
     async fn deal(&self, request: Request<DealRequest>) -> Result<Response<DealResponse>, Status> {
-        // If new deck for user, create user_card_level s for all cards
-        if self
-            .repo
-            .is_new_deck_for_user(&request.get_ref().user_id, &request.get_ref().deck_id)
-            .await
-        {
-            let max = i64::from(request.get_ref().number_of_cards);
-            let result = self
-                .repo
-                .init_levels(
-                    &request.get_ref().user_id,
-                    &request.get_ref().deck_id.clone(),
-                    &max,
-                )
-                .await;
-            if result.as_ref().is_err() {
-                match result.as_ref().err() {
-                    Some(err) => {
-                        return Err(Status::new(Code::Internal, format!("{}", err)));
-                    }
-                    _ => {}
-                }
-            }
-            return Ok(Response::new(DealResponse {
-                card_ids: result.unwrap().iter().map(|id| id.clone()).collect(),
-            }));
-        }
-        // Apply algorithm to database result and return
         let max = i64::from(request.get_ref().number_of_cards);
         let result = self
             .repo
