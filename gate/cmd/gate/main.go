@@ -2,8 +2,10 @@ package main
 
 import (
 	"fmt"
+	"net/http"
 	"os"
 	"strconv"
+	"strings"
 
 	"github.com/gin-gonic/gin"
 	"github.com/juju/errors"
@@ -29,6 +31,7 @@ type gateConfig struct {
 	signupEnabled   bool
 	certificatePath string
 	privateKeyPath  string
+	allowedOrigins  []string
 }
 
 func (c gateConfig) canListenTLS() bool {
@@ -48,6 +51,30 @@ type globalConfig struct {
 	users  config
 	decks  config
 	dealer config
+}
+
+func corsMiddleware(allowed []string) gin.HandlerFunc {
+	allowedSet := make(map[string]struct{}, len(allowed))
+	for _, a := range allowed {
+		allowedSet[strings.TrimSpace(a)] = struct{}{}
+	}
+
+	return func(c *gin.Context) {
+		origin := c.Request.Header.Get("Origin")
+		if _, ok := allowedSet[origin]; ok {
+			c.Writer.Header().Set("Access-Control-Allow-Origin", origin)
+			c.Writer.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
+			c.Writer.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
+			c.Writer.Header().Set("Access-Control-Allow-Credentials", "true")
+		}
+
+		if c.Request.Method == http.MethodOptions {
+			c.AbortWithStatus(http.StatusOK)
+			return
+		}
+
+		c.Next()
+	}
 }
 
 func main() {
@@ -79,6 +106,7 @@ func main() {
 
 	router := gin.Default()
 	router.Use(gate.GinContextToContextMiddleware())
+	router.Use(corsMiddleware(c.gate.allowedOrigins))
 
 	queryPath := "/query"
 	router.GET("/play", grapher.NewPlaygroundHandler(queryPath))
@@ -113,6 +141,11 @@ func loadConfig() globalConfig {
 
 	gateConfig.certificatePath = os.Getenv("CERTIFICATE_PATH")
 	gateConfig.privateKeyPath = os.Getenv("PRIVATE_KEY_PATH")
+
+	allowedOrigins := os.Getenv("ALLOWED_ORIGINS")
+	if allowedOrigins != "" {
+		gateConfig.allowedOrigins = strings.Split(allowedOrigins, ",")
+	}
 
 	usersConfig := config{}
 	usersConfig.grpcHost = os.Getenv("USERS_GRPC_SERVER_HOST")
