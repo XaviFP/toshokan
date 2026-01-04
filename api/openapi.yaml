@@ -1,0 +1,1283 @@
+openapi: 3.0.3
+info:
+  title: Toshokan Learning Platform API
+  description: |
+    API for the Toshokan learning platform, providing course management, deck/card management, and user authentication.
+    
+    ## Getting Started
+    
+    1. **Register or Login**: Use `/signup` or `/login` endpoints to obtain an authentication token
+       - No authentication required for these endpoints
+       - Response includes a `token` field
+    
+    2. **Authenticate Requests**: For all other endpoints, include the token in the Authorization header:
+       ```
+       Authorization: Bearer {token}
+       ```
+    
+    3. **Example Authentication Flow**:
+       ```bash
+       # 1. Login and get token
+       curl -X POST http://localhost:8080/login \
+         -H "Content-Type: application/json" \
+         -d '{"username": "user", "password": "pass"}'
+       
+       # Response: {"token": "eyJhbG..."}
+       
+       # 2. Use token for authenticated requests
+       curl http://localhost:8080/courses/123e4567-e89b-12d3-a456-426614174000 \
+         -H "Authorization: Bearer eyJhbG..."
+       ```
+    
+    ## Base Concepts
+    - **Courses**: Collections of lessons for learning topics
+    - **Lessons**: Individual units within a course, containing deck references
+    - **Decks**: Collections of flashcards for spaced repetition learning
+    - **Cards**: Individual questions with multiple choice answers
+    - **Progress**: User's completion status across courses, lessons, and decks
+  version: 1.0.0
+  contact:
+    name: Toshokan API Support
+
+servers:
+  - url: https://api.example.com
+    description: Production server (placeholder)
+  - url: http://localhost:8080
+    description: Local development server
+
+tags:
+  - name: Authentication
+    description: User authentication and registration (no auth required)
+  - name: Courses
+    description: Course management and enrollment (requires authentication)
+  - name: Lessons
+    description: Lesson content and deck associations (requires authentication)
+  - name: Decks
+    description: Flashcard deck management (requires authentication)
+  - name: Progress
+    description: User progress tracking (requires authentication)
+
+paths:
+  /signup:
+    post:
+      tags:
+        - Authentication
+      summary: Register a new user
+      description: Create a new user account and receive an authentication token
+      operationId: signUp
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SignUpRequest'
+      responses:
+        '200':
+          description: Successfully registered
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TokenResponse'
+        '400':
+          description: Invalid request body
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /login:
+    post:
+      tags:
+        - Authentication
+      summary: Login
+      description: Authenticate with username and password to receive a token
+      operationId: logIn
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LogInRequest'
+      responses:
+        '200':
+          description: Successfully authenticated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TokenResponse'
+        '400':
+          description: Invalid request body
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: Authentication failed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /courses:
+    post:
+      tags:
+        - Courses
+      summary: Create a new course
+      description: Create a new course with title and description
+      operationId: createCourse
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateCourseRequest'
+      responses:
+        '201':
+          description: Course created successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Course'
+          links:
+            GetCourseById:
+              description: Retrieve the newly created course.
+              operationId: getCourse
+              parameters:
+                courseId: "$response.body#/id"
+        '400':
+          description: Invalid request body
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /courses/{courseId}:
+    get:
+      tags:
+        - Courses
+      summary: Get course details
+      description: Retrieve details of a specific course by ID
+      operationId: getCourse
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: courseId
+          in: path
+          required: true
+          description: Course UUID
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Course details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Course'
+        '400':
+          description: Missing or invalid course ID
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Course not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /courses/{courseId}/enroll:
+    post:
+      tags:
+        - Courses
+      summary: Enroll in a course
+      description: Enroll the authenticated user in a course
+      operationId: enrollCourse
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: courseId
+          in: path
+          required: true
+          description: Course UUID
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Successfully enrolled
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+        '400':
+          description: Missing course ID or user ID
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /courses/{courseId}/lessons:
+    get:
+      tags:
+        - Lessons
+      summary: Get lessons for a course
+      description: Retrieve paginated list of lessons for a specific course
+      operationId: getLessons
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: courseId
+          in: path
+          required: true
+          description: Course UUID
+          schema:
+            type: string
+            format: uuid
+        - name: after
+          in: query
+          required: false
+          description: Cursor for pagination (fetch lessons after this cursor)
+          schema:
+            type: string
+        - name: before
+          in: query
+          required: false
+          description: Cursor for backward pagination (fetch lessons before this cursor)
+          schema:
+            type: string
+        - name: first
+          in: query
+          required: false
+          description: Number of lessons to fetch (default 20)
+          schema:
+            type: integer
+            format: int64
+            default: 20
+        - name: last
+          in: query
+          required: false
+          description: Number of lessons to fetch when paginating backward (default 20)
+          schema:
+            type: integer
+            format: int64
+            default: 20
+      responses:
+        '200':
+          description: Paginated list of lessons
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LessonsConnectionResponse'
+        '400':
+          description: Missing course ID
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '404':
+          description: Course not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+    post:
+      tags:
+        - Lessons
+      summary: Create a new lesson
+      description: Create a new lesson within a course. The lesson body must reference at least one deck using the markdown form `![deck](uuid)`.
+      operationId: createLesson
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: courseId
+          in: path
+          required: true
+          description: Course UUID
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateLessonRequest'
+      responses:
+        '201':
+          description: Lesson created successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Lesson'
+        '400':
+          description: Invalid request body (missing required fields or deck references) or missing course ID
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '404':
+          description: Course or Deck not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /courses/{courseId}/lessons/focused:
+    get:
+      tags:
+        - Lessons
+      summary: Get focused lessons with progress
+      description: Retrieve lessons around the user's current lesson with completion status
+      operationId: getFocusedLessons
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: courseId
+          in: path
+          required: true
+          description: Course UUID
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Focused lessons with progress information
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LessonsWithProgressConnectionResponse'
+        '400':
+          description: Missing course ID or user ID
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Course not found or no focused lessons
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /courses/{courseId}/lessons/{lessonId}/state:
+    get:
+      tags:
+        - Progress
+      summary: Get lesson state
+      description: Retrieve the completion state of a lesson and its decks
+      operationId: getLessonState
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: courseId
+          in: path
+          required: true
+          description: Course UUID
+          schema:
+            type: string
+            format: uuid
+        - name: lessonId
+          in: path
+          required: true
+          description: Lesson UUID
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Lesson state with deck completion statuses
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LessonStateResponse'
+        '400':
+          description: Missing required parameters
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '404':
+          description: Course or lesson not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /courses/{courseId}/lessons/{lessonId}/decks/{deckId}/answer:
+    post:
+      tags:
+        - Progress
+      summary: Submit answers for cards
+      description: Submit user's answers for cards in a deck and update progress
+      operationId: answerCards
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: courseId
+          in: path
+          required: true
+          description: Course UUID
+          schema:
+            type: string
+            format: uuid
+        - name: lessonId
+          in: path
+          required: true
+          description: Lesson UUID
+          schema:
+            type: string
+            format: uuid
+        - name: deckId
+          in: path
+          required: true
+          description: Deck UUID
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: array
+              items:
+                $ref: '#/components/schemas/CardAnswer'
+      responses:
+        '200':
+          description: Answers processed successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AnswerCardsResponse'
+        '400':
+          description: Missing parameters or invalid request body
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /decks/{id}:
+    get:
+      tags:
+        - Decks
+      summary: Get deck details
+      description: Retrieve details of a specific deck including all cards
+      operationId: getDeck
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: Deck UUID
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Deck details with cards
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Deck'
+        '400':
+          description: Missing deck ID
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '404':
+          description: Deck not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+    delete:
+      tags:
+        - Decks
+      summary: Delete a deck
+      description: Delete an existing deck
+      operationId: deleteDeck
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: Deck UUID
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Deck deleted successfully
+        '400':
+          description: Missing deck ID
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /decks:
+    post:
+      tags:
+        - Decks
+      summary: Create a new deck
+      description: Create a new flashcard deck
+      operationId: createDeck
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DeckInput'
+      responses:
+        '200':
+          description: Deck created successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Deck'
+        '400':
+          description: Invalid request body
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: |
+        JWT token obtained from `/login` or `/signup` endpoints.
+        Include in Authorization header as: `Bearer {{token}}`
+
+  responses:
+    UnauthorizedError:
+      description: Authentication required or token invalid
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+
+  schemas:
+    Error:
+      type: object
+      properties:
+        error:
+          type: string
+          description: Error message
+      required:
+        - error
+
+    TokenResponse:
+      type: object
+      properties:
+        token:
+          type: string
+          description: JWT authentication token
+      required:
+        - token
+
+    SignUpRequest:
+      type: object
+      properties:
+        username:
+          type: string
+          minLength: 3
+          description: Unique username
+        password:
+          type: string
+          minLength: 8
+          format: password
+          description: User password
+        nick:
+          type:
+            - string
+            - null
+          description: Display name
+        bio:
+          type:
+            - string
+            - null
+          description: User biography
+      required:
+        - username
+        - password
+
+    LogInRequest:
+      type: object
+      properties:
+        username:
+          type: string
+          description: Username
+        password:
+          type: string
+          format: password
+          description: Password
+      required:
+        - username
+        - password
+
+    Course:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Course UUID
+        title:
+          type: string
+          description: Course title
+        description:
+          type: string
+          description: Course description
+        created_at:
+          type: string
+          format: date-time
+          description: Creation timestamp
+        edited_at:
+          type: string
+          format: date-time
+          description: Last edit timestamp
+        deleted_at:
+          type: string
+          format: date-time
+          description: Deletion timestamp
+      required:
+        - id
+        - title
+        - description
+        - created_at
+
+    CreateCourseRequest:
+      type: object
+      properties:
+        title:
+          type: string
+          minLength: 1
+          description: Course title
+        description:
+          type: string
+          minLength: 1
+          description: Course description
+      required:
+        - title
+        - description
+
+    Lesson:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Lesson UUID
+        course_id:
+          type: string
+          format: uuid
+          description: Parent course UUID
+        order:
+          type: integer
+          format: int64
+          description: Lesson order within course
+        title:
+          type: string
+          description: Lesson title
+        description:
+          type: string
+          description: Lesson description
+        body:
+          type: string
+          description: Lesson content body (may contain deck references)
+        created_at:
+          type: string
+          format: date-time
+          description: Creation timestamp
+        edited_at:
+          type: string
+          format: date-time
+          description: Last edit timestamp
+        deleted_at:
+          type: string
+          format: date-time
+          description: Deletion timestamp
+      required:
+        - id
+        - course_id
+        - order
+        - title
+        - description
+        - body
+        - created_at
+
+    CreateLessonRequest:
+      type: object
+      properties:
+        order:
+          type: integer
+          format: int64
+          description: Lesson order within course
+        title:
+          type: string
+          minLength: 1
+          description: Lesson title
+        description:
+          type: string
+          minLength: 1
+          description: Lesson description
+        body:
+          type: string
+          description: Lesson content body; must embed at least one deck reference in the markdown form `![deck](uuid)`
+          minLength: 1
+          pattern: '!\[deck\]\([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}\)'
+      required:
+        - order
+        - title
+        - description
+        - body
+
+    LessonWithProgress:
+      type: object
+      properties:
+        lesson:
+          $ref: '#/components/schemas/Lesson'
+        is_completed:
+          type: boolean
+          description: Whether user has completed this lesson
+        is_current:
+          type: boolean
+          description: Whether this is the user's current lesson
+      required:
+        - lesson
+        - is_completed
+        - is_current
+
+    LessonEdge:
+      type: object
+      properties:
+        lesson:
+          $ref: '#/components/schemas/Lesson'
+        cursor:
+          type: string
+          description: Pagination cursor for this edge
+      required:
+        - lesson
+        - cursor
+
+    LessonWithProgressEdge:
+      type: object
+      properties:
+        lesson:
+          $ref: '#/components/schemas/LessonWithProgress'
+        cursor:
+          type: string
+          description: Pagination cursor for this edge
+      required:
+        - lesson
+        - cursor
+
+    PageInfo:
+      type: object
+      properties:
+        has_previous_page:
+          type: boolean
+          description: Whether there are more results before the current page
+        has_next_page:
+          type: boolean
+          description: Whether there are more results after the current page
+        start_cursor:
+          type: string
+          description: Cursor of the first item in the current page
+        end_cursor:
+          type: string
+          description: Cursor of the last item in the current page
+      required:
+        - has_previous_page
+        - has_next_page
+        - start_cursor
+        - end_cursor
+
+    LessonsConnectionResponse:
+      type: object
+      properties:
+        edges:
+          type: array
+          items:
+            $ref: '#/components/schemas/LessonEdge'
+        page_info:
+          $ref: '#/components/schemas/PageInfo'
+      required:
+        - edges
+        - page_info
+
+    LessonsWithProgressConnectionResponse:
+      type: object
+      properties:
+        edges:
+          type: array
+          items:
+            $ref: '#/components/schemas/LessonWithProgressEdge'
+        page_info:
+          $ref: '#/components/schemas/PageInfo'
+      required:
+        - edges
+        - page_info
+
+    Deck:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Deck UUID
+        author_id:
+          type: string
+          format: uuid
+          description: Author user UUID
+        title:
+          type: string
+          description: Deck title
+        description:
+          type: string
+          description: Deck description
+        cards:
+          type: array
+          items:
+            $ref: '#/components/schemas/Card'
+          description: Cards in this deck
+      required:
+        - id
+        - author_id
+        - title
+        - description
+        - cards
+
+    DeckInput:
+      type: object
+      properties:
+        title:
+          type: string
+          minLength: 1
+          description: Deck title
+        description:
+          type: string
+          minLength: 1
+          description: Deck description
+        is_public:
+          type: boolean
+          description: Whether deck is publicly visible
+          default: false
+        cards:
+          type: array
+          minItems: 1
+          items:
+            $ref: '#/components/schemas/CardInput'
+          description: Cards to include in the deck
+      required:
+        - title
+        - description
+        - cards
+
+    Card:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Card UUID
+        title:
+          type: string
+          description: Question or prompt text
+        possible_answers:
+          type: array
+          items:
+            $ref: '#/components/schemas/Answer'
+          description: Multiple choice answers
+        explanation:
+          type: string
+          description: Explanation text for the correct answer
+      required:
+        - id
+        - title
+        - possible_answers
+
+    CardInput:
+      type: object
+      properties:
+        title:
+          type: string
+          minLength: 1
+          description: Question or prompt text
+
+        possible_answers:
+          type: array
+          minItems: 1
+          description: Multiple choice answers
+          items:
+            $ref: '#/components/schemas/AnswerInput'
+
+          contains:
+            type: object
+            properties:
+              is_correct:
+                const: true
+            required:
+              - is_correct
+          minContains: 1
+
+        explanation:
+          type: string
+          description: Explanation text for the correct answer
+
+      required:
+        - title
+        - possible_answers
+
+    Answer:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Answer UUID
+        text:
+          type: string
+          description: Answer text
+        is_correct:
+          type: boolean
+          description: Whether this is the correct answer
+      required:
+        - id
+        - text
+
+    AnswerInput:
+      type: object
+      properties:
+        text:
+          type: string
+          minLength: 1
+          description: Answer text
+        is_correct:
+          type:
+            - boolean
+            - null
+          description: Whether this is the correct answer
+      required:
+        - text
+
+    CardAnswer:
+      type: object
+      properties:
+        card_id:
+          type: string
+          format: uuid
+          description: Card UUID being answered
+        answer_id:
+          type: string
+          format: uuid
+          description: Selected answer UUID
+      required:
+        - card_id
+        - answer_id
+
+    AnswerCardsResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          description: Whether the operation succeeded
+        deck_completed:
+          type: boolean
+          description: Whether the deck was completed with these answers
+        lesson_completed:
+          type: boolean
+          description: Whether the lesson was completed
+        user_progress:
+          allOf:
+            - $ref: '#/components/schemas/UserCourseProgress'
+          nullable: true
+      required:
+        - success
+
+    UserCourseProgress:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Progress record UUID
+        user_id:
+          type: string
+          format: uuid
+          description: User UUID
+        course_id:
+          type: string
+          format: uuid
+          description: Course UUID
+        current_lesson_id:
+          type: string
+          format: uuid
+          description: Current lesson UUID
+        created_at:
+          type: string
+          format: date-time
+          description: Creation timestamp
+        updated_at:
+          type: string
+          format: date-time
+          description: Last update timestamp
+      required:
+        - id
+        - user_id
+        - course_id
+        - current_lesson_id
+        - created_at
+        - updated_at
+
+    DeckState:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Deck UUID
+        completed:
+          type: boolean
+          description: Whether the deck is completed
+      required:
+        - id
+        - completed
+
+    CardProgress:
+      type: object
+      properties:
+        correct_answers:
+          type: integer
+          format: int64
+          description: Number of correct answers for this card
+        incorrect_answers:
+          type: integer
+          format: int64
+          description: Number of incorrect answers for this card
+        is_completed:
+          type: boolean
+          description: Whether the card is completed (answered correctly at least once)
+        completed_at:
+          type: string
+          format: date-time
+          nullable: true
+          description: Timestamp when the card was completed
+      required:
+        - correct_answers
+        - incorrect_answers
+        - is_completed
+
+    DeckProgress:
+      type: object
+      properties:
+        cards:
+          type: object
+          additionalProperties:
+            $ref: '#/components/schemas/CardProgress'
+          description: Map of card UUID to card progress (card_id → CardProgress)
+        is_completed:
+          type: boolean
+          description: Whether all cards in the deck are completed
+        completed_at:
+          type: string
+          format: date-time
+          nullable: true
+          description: Timestamp when the deck was completed
+      required:
+        - cards
+        - is_completed
+
+    LessonProgress:
+      type: object
+      properties:
+        decks:
+          type: object
+          additionalProperties:
+            $ref: '#/components/schemas/DeckProgress'
+          description: Map of deck UUID to deck progress (deck_id → DeckProgress)
+        is_completed:
+          type: boolean
+          description: Whether all decks in the lesson are completed
+        completed_at:
+          type: string
+          format: date-time
+          nullable: true
+          description: Timestamp when the lesson was completed
+      required:
+        - decks
+        - is_completed
+
+    LessonState:
+      type: object
+      properties:
+        lesson_state:
+          type: object
+          additionalProperties:
+            $ref: '#/components/schemas/LessonProgress'
+          description: Map of lesson UUID to lesson progress (lesson_id → LessonProgress)
+      required:
+        - lesson_state
+
+    LessonStateResponse:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Lesson UUID
+        completed:
+          type: boolean
+          description: Whether the lesson is completed
+        decks:
+          type: array
+          items:
+            type: object
+            properties:
+              id:
+                type: string
+                format: uuid
+                description: Deck UUID
+              completed:
+                type: boolean
+                description: Whether the deck is completed
+              cards:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    id:
+                      type: string
+                      format: uuid
+                      description: Card UUID
+                    completed:
+                      type: boolean
+                      description: Whether the card is completed
+                  required:
+                    - id
+                    - completed
+                description: Array of card completion statuses
+            required:
+              - id
+              - completed
+              - cards
+          description: Array of deck completion statuses
+      required:
+        - id
+        - completed
+        - decks

@@ -11,3 +11,11 @@ bin/
 
 # Rust
 target/
+
+# API test artifacts
+.pytest_cache/
+api/__*
+api/*.log
+api/.hypothesis
+api/.pytest_cache/
+api/*.har

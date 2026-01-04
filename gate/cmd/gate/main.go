@@ -12,6 +12,7 @@ import (
 	grpc "google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 
+	pbCourse "github.com/XaviFP/toshokan/course/api/proto/v1"
 	pbDealer "github.com/XaviFP/toshokan/dealer/api/proto/v1"
 	pbDeck "github.com/XaviFP/toshokan/deck/api/proto/v1"
 	"github.com/XaviFP/toshokan/gate/internal/gate"
@@ -51,6 +52,7 @@ type globalConfig struct {
 	users  config
 	decks  config
 	dealer config
+	course config
 }
 
 func corsMiddleware(allowed []string) gin.HandlerFunc {
@@ -104,7 +106,18 @@ func main() {
 
 	dealerClient := pbDealer.NewDealerClient(dealerGRPCConn)
 
+	coursesGRPCConn, err := grpc.Dial(c.course.GRPCAddress(), grpc.WithTransportCredentials(insecure.NewCredentials()))
+	if err != nil {
+		panic(err)
+	}
+	defer coursesGRPCConn.Close()
+
+	coursesClient := pbCourse.NewCourseAPIClient(coursesGRPCConn)
+
 	router := gin.Default()
+	// Return 405 for routes that exist but do not support the requested HTTP method
+	router.HandleMethodNotAllowed = true
+
 	router.Use(gate.GinContextToContextMiddleware())
 	router.Use(corsMiddleware(c.gate.allowedOrigins))
 
@@ -116,6 +129,7 @@ func main() {
 	authorized.POST(queryPath, grapher.NewGraphqlHandler(deckClient, userClient, dealerClient))
 	gate.RegisterDeckRoutes(authorized, userClient, deckClient)
 	gate.RegisterUserRoutes(router, c.gate.signupEnabled, userClient)
+	gate.RegisterCoursesRoutes(authorized, coursesClient)
 
 	if c.gate.canListenTLS() {
 		if err := router.RunTLS("", c.gate.certificatePath, c.gate.privateKeyPath); err != nil {
@@ -159,10 +173,15 @@ func loadConfig() globalConfig {
 	dealerConfig.grpcHost = os.Getenv("DEALER_GRPC_SERVER_HOST")
 	dealerConfig.grpcPort = os.Getenv("DEALER_GRPC_SERVER_PORT")
 
+	coursesConfig := config{}
+	coursesConfig.grpcHost = os.Getenv("COURSE_GRPC_SERVER_HOST")
+	coursesConfig.grpcPort = os.Getenv("COURSE_GRPC_SERVER_PORT")
+
 	return globalConfig{
 		gate:   gateConfig,
 		users:  usersConfig,
 		decks:  decksConfig,
 		dealer: dealerConfig,
+		course: coursesConfig,
 	}
 }

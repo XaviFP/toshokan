@@ -34,14 +34,27 @@ $ docker-compose up
 
 ## Testing & Coverage
 
-To run the tests
+
+### Unit and postgresql + redis integration tests
 ```
 $ make test
 ```
 
-To see test coverage
+### Check test coverage
 ```
 $ make coverage
+```
+
+### API tests
+
+Run schemathesis
+```
+$ make test-api-schema
+```
+
+Run a course-based flow, creating and completing a course, lessons, etc.
+```
+$ make test-api-basic-flow
 ```
 
 
