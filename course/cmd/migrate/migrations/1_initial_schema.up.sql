@@ -19,8 +19,7 @@ CREATE TABLE IF NOT EXISTS lessons (
     body TEXT NOT NULL,
     created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
     edited_at TIMESTAMP WITH TIME ZONE,
-    deleted_at TIMESTAMP WITH TIME ZONE,
-    UNIQUE(course_id, "order")
+    deleted_at TIMESTAMP WITH TIME ZONE
 );
 
 CREATE TABLE IF NOT EXISTS lesson_decks (
