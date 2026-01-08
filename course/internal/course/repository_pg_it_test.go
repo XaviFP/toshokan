@@ -149,7 +149,7 @@ func TestRepository_GetLessonsByCourseID(t *testing.T) {
 	courseID := uuid.MustParse("fb9ffe2c-ad66-4766-9b7b-46fd5d9acd72")
 
 	t.Run("success", func(t *testing.T) {
-		pag := pagination.NewOlderFirstPagination(pagination.WithFirst(10))
+		pag := pagination.NewOldestFirstPagination(pagination.WithFirst(10))
 
 		conn, err := repo.GetLessonsByCourseID(context.Background(), courseID, pag)
 		assert.NoError(t, err)
@@ -159,7 +159,7 @@ func TestRepository_GetLessonsByCourseID(t *testing.T) {
 
 	t.Run("empty_course", func(t *testing.T) {
 		emptyID := uuid.MustParse("00000000-0000-0000-0000-000000000001")
-		pag := pagination.NewOlderFirstPagination(pagination.WithFirst(10))
+		pag := pagination.NewOldestFirstPagination(pagination.WithFirst(10))
 
 		conn, err := repo.GetLessonsByCourseID(context.Background(), emptyID, pag)
 		assert.NoError(t, err)
@@ -169,7 +169,7 @@ func TestRepository_GetLessonsByCourseID(t *testing.T) {
 	t.Run("pagination_forward_and_backward", func(t *testing.T) {
 		ctx := context.Background()
 
-		forward := pagination.NewOlderFirstPagination(pagination.WithFirst(2))
+		forward := pagination.NewOldestFirstPagination(pagination.WithFirst(2))
 
 		page1, err := repo.GetLessonsByCourseID(ctx, courseID, forward)
 		assert.NoError(t, err)
@@ -194,7 +194,7 @@ func TestRepository_GetLessonsByCourseID(t *testing.T) {
 		require.Len(t, page3.Edges, 1)
 		assert.Equal(t, "Concurrency Patterns", page3.Edges[0].Lesson.Title)
 
-		backward := pagination.NewOlderFirstPagination(pagination.WithLast(2))
+		backward := pagination.NewOldestFirstPagination(pagination.WithLast(2))
 		b1, err := repo.GetLessonsByCourseID(ctx, courseID, backward)
 		assert.NoError(t, err)
 		require.Len(t, b1.Edges, 2)

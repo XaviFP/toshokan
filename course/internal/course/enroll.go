@@ -35,7 +35,7 @@ func (e *enroller) Enroll(ctx context.Context, userID, courseID uuid.UUID) (User
 
 	// Get all lessons for the course
 	// TODO: Refactor into Iterator to handle large number of lessons
-	lessons, err := e.repo.GetLessonsByCourseID(ctx, courseID, pagination.NewOlderFirstPagination(pagination.WithFirst(1000)))
+	lessons, err := e.repo.GetLessonsByCourseID(ctx, courseID, pagination.NewOldestFirstPagination(pagination.WithFirst(1000)))
 	if err != nil {
 		return UserCourseProgress{}, errors.Trace(err)
 	}

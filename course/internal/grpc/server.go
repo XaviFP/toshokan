@@ -174,7 +174,7 @@ func (s *Server) GetLessons(ctx context.Context, req *pb.GetLessonsRequest) (*pb
 		return nil, errors.Trace(err)
 	}
 
-	p := pagination.NewOlderFirstPagination(
+	p := pagination.NewOldestFirstPagination(
 		pagination.WithFirst(int(req.Pagination.First)),
 		pagination.WithLast(int(req.Pagination.Last)),
 		pagination.WithAfter(pagination.Cursor(req.Pagination.After)),
@@ -220,7 +220,7 @@ func (s *Server) GetFocusedLessons(ctx context.Context, req *pb.GetFocusedLesson
 		return nil, errors.Trace(err)
 	}
 
-	p := pagination.NewOlderFirstPagination(
+	p := pagination.NewOldestFirstPagination(
 		pagination.WithFirst(int(req.Pagination.First)),
 		pagination.WithLast(int(req.Pagination.Last)),
 		pagination.WithAfter(pagination.Cursor(req.Pagination.After)),
