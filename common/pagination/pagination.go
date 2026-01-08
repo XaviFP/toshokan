@@ -49,7 +49,7 @@ type PageInfo struct {
 	EndCursor       Cursor
 }
 
-func NewOlderstFistPagination(opts ...PaginationOpts) Pagination {
+func NewOlderFirstPagination(opts ...PaginationOpts) Pagination {
 	p := Pagination{}
 
 	for _, opt := range opts {

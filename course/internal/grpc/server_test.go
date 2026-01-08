@@ -228,7 +228,7 @@ func TestServer_GetLessons(t *testing.T) {
 			PublicLessons: &conn,
 		}
 
-		expectedPagination := pagination.NewOlderstFistPagination(
+		expectedPagination := pagination.NewOlderFirstPagination(
 			pagination.WithFirst(10),
 		)
 		expectedOpts := course.BrowseOptions{}
@@ -251,7 +251,7 @@ func TestServer_GetLessons(t *testing.T) {
 	t.Run("error", func(t *testing.T) {
 		courseID := uuid.MustParse("1f30a72f-5d7a-48da-a5c2-42efece6972a")
 
-		expectedPagination := pagination.NewOlderstFistPagination(
+		expectedPagination := pagination.NewOlderFirstPagination(
 			pagination.WithFirst(10),
 		)
 		expectedOpts := course.BrowseOptions{}

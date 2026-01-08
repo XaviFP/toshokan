@@ -441,7 +441,6 @@ func (r *pgRepository) GetUserCourseProgress(ctx context.Context, userID uuid.UU
 		return UserCourseProgress{}, errors.Trace(err)
 	}
 
-	// Unmarshal the state
 	progress.State = &ProgressState{}
 	if err := json.Unmarshal(stateJSON, progress.State); err != nil {
 		return UserCourseProgress{}, errors.Trace(err)
@@ -452,7 +451,6 @@ func (r *pgRepository) GetUserCourseProgress(ctx context.Context, userID uuid.UU
 
 // EnrollUserInCourse enrolls a user in a course
 func (r *pgRepository) EnrollUserInCourse(ctx context.Context, userID uuid.UUID, courseID uuid.UUID, progressState ProgressState) error {
-	// Check if already enrolled
 	var exists bool
 	err := r.db.QueryRowContext(ctx,
 		`SELECT EXISTS(SELECT 1 FROM user_course_progress WHERE user_id = $1 AND course_id = $2)`,
@@ -466,7 +464,6 @@ func (r *pgRepository) EnrollUserInCourse(ctx context.Context, userID uuid.UUID,
 		return errors.Trace(ErrUserAlreadyEnrolled)
 	}
 
-	// Marshal the initial state
 	initialState, err := json.Marshal(progressState)
 	if err != nil {
 		return errors.Trace(err)
@@ -483,7 +480,6 @@ func (r *pgRepository) EnrollUserInCourse(ctx context.Context, userID uuid.UUID,
 
 // UpdateUserProgress updates a user's progress in a course
 func (r *pgRepository) UpdateUserProgress(ctx context.Context, progress UserCourseProgress) error {
-	// Marshal the state
 	stateJSON, err := json.Marshal(progress.State)
 	if err != nil {
 		return errors.Trace(err)
