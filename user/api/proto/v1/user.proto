@@ -1,6 +1,6 @@
 syntax = "proto3";
 
-package v1;
+package user.v1;
 option go_package = "github.com/XaviFP/toshokan/api/user/proto/v1";
 
 service UserAPI {

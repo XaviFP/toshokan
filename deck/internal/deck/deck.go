@@ -10,7 +10,7 @@ type Deck struct {
 	Title       string    `json:"title"`
 	Description string    `json:"description"`
 	Cards       []Card    `json:"cards"`
-	Public      bool      `jason:"isPublic"`
+	Public      bool      `json:"isPublic"`
 }
 
 func (d *Deck) GenerateUUIDs() {

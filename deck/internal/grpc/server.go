@@ -60,8 +60,10 @@ func (s *Server) GetDeck(ctx context.Context, req *pb.GetDeckRequest) (*pb.GetDe
 		return &pb.GetDeckResponse{}, errors.Trace(err)
 	}
 
+	// TODO: Provide an "internal" GetDeck that doesn't require authorization/ownership check
+	// For services that need to access decks regardless of public/private status
 	if (d.AuthorID.String() != req.UserId) && !d.Public {
-		return nil, errors.New("not authorized")
+		return nil, errors.New("private deck access denied")
 	}
 
 	return &pb.GetDeckResponse{Deck: toGRPCDeck(d)}, nil
@@ -252,6 +254,7 @@ func toGRPCDeck(d deck.Deck) *pb.Deck {
 		AuthorId:    d.AuthorID.String(),
 		Title:       d.Title,
 		Description: d.Description,
+		IsPublic:    d.Public,
 		Cards:       toGRPCCards(d.Cards),
 	}
 }
@@ -322,6 +325,7 @@ func fromGRPCDeck(d *pb.Deck) (deck.Deck, error) {
 		Title:       d.Title,
 		Description: d.Description,
 		Cards:       cards,
+		Public:      d.IsPublic,
 	}, nil
 }
 

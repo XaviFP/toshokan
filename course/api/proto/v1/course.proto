@@ -1,0 +1,213 @@
+syntax = "proto3";
+
+package course.v1;
+option go_package = "github.com/XaviFP/toshokan/course/api/proto/v1";
+
+import "google/protobuf/timestamp.proto";
+
+service CourseAPI {
+  rpc GetCourse (GetCourseRequest) returns (GetCourseResponse) {}
+  rpc GetLesson (GetLessonRequest) returns (GetLessonResponse) {}
+  rpc GetLessons (GetLessonsRequest) returns (GetLessonsResponse) {}
+  rpc GetFocusedLessons (GetFocusedLessonsRequest) returns (GetFocusedLessonsResponse) {}
+  rpc EnrollUser (EnrollUserRequest) returns (EnrollUserResponse) {}
+  rpc GetUserProgress (GetUserProgressRequest) returns (GetUserProgressResponse) {}
+  rpc GetLessonState (GetLessonStateRequest) returns (GetLessonStateResponse) {}
+  rpc AnswerCards (AnswerCardsRequest) returns (AnswerCardsResponse) {}
+  rpc CreateCourse (CreateCourseRequest) returns (CreateCourseResponse) {}
+  rpc CreateLesson (CreateLessonRequest) returns (CreateLessonResponse) {}
+}
+
+message Course {
+  string id = 1;
+  int64 order = 2;
+  string title = 3;
+  string description = 4;
+  google.protobuf.Timestamp created_at = 5;
+  google.protobuf.Timestamp edited_at = 6;
+  google.protobuf.Timestamp deleted_at = 7;
+}
+
+message Lesson {
+  string id = 1;
+  string course_id = 2;
+  int64 order = 3;
+  string title = 4;
+  string description = 5;
+  string body = 6;
+  google.protobuf.Timestamp created_at = 7;
+  google.protobuf.Timestamp edited_at = 8;
+  google.protobuf.Timestamp deleted_at = 9;
+}
+
+
+message UserCourseProgress {
+  string id = 1;
+  string user_id = 2;
+  string course_id = 3;
+  string current_lesson_id = 4;
+  string state = 5; // JSON string
+  google.protobuf.Timestamp created_at = 6;
+  google.protobuf.Timestamp updated_at = 7;
+}
+
+message PageInfo {
+  bool has_previous_page = 1;
+  bool has_next_page = 2;
+  string start_cursor = 3;
+  string end_cursor = 4;
+}
+
+message Pagination {
+  int64 last = 1;
+  int64 first = 2;
+  string after = 3;
+  string before = 4;
+}
+
+message LessonWithProgress {
+  Lesson lesson = 1;
+  bool is_completed = 2;
+  bool is_current = 3;
+}
+
+message LessonsConnection {
+  message Edge {
+    Lesson lesson = 1;
+    string cursor = 2;
+  }
+
+  repeated Edge edges = 1;
+  PageInfo page_info = 2;
+}
+
+message LessonsWithProgressConnection {
+  message Edge {
+    LessonWithProgress lesson = 1;
+    string cursor = 2;
+  }
+
+  repeated Edge edges = 1;
+  PageInfo page_info = 2;
+}
+
+message GetCourseRequest {
+  string course_id = 1;
+}
+
+message GetCourseResponse {
+  Course course = 1;
+}
+
+message GetLessonRequest {
+  string lesson_id = 1;
+}
+
+message GetLessonResponse {
+  Lesson lesson = 1;
+}
+
+message GetLessonsRequest {
+  string course_id = 1;
+  Pagination pagination = 2;
+  // No user_id - this is public endpoint, returns Lesson without progress
+}
+
+message GetLessonsResponse {
+  LessonsConnection lessons = 1;  // Public - bare lessons
+}
+
+message GetFocusedLessonsRequest {
+  string course_id = 1;
+  string user_id = 2;  // User context provided - returns LessonWithProgress
+  Pagination pagination = 3;
+}
+
+message GetFocusedLessonsResponse {
+  LessonsWithProgressConnection lessons = 1;  // Authenticated - with progress
+}
+
+message EnrollUserRequest {
+  string user_id = 1;
+  string course_id = 2;
+}
+
+message EnrollUserResponse {
+  bool success = 1;
+}
+
+message GetUserProgressRequest {
+  string user_id = 1;
+  string course_id = 2;
+}
+
+message GetUserProgressResponse {
+  UserCourseProgress progress = 1;
+}
+
+message CardAnswer {
+  string card_id = 1;
+  string answer_id = 2;
+}
+
+message AnswerCardsRequest {
+  string user_id = 1;
+  string course_id = 2;
+  string lesson_id = 3;
+  string deck_id = 4;
+  repeated CardAnswer card_answers = 5;
+}
+
+message AnswerCardsResponse {
+  bool success = 1;
+}
+
+message CreateCourseRequest {
+  string title = 1;
+  string description = 2;
+}
+
+message CreateCourseResponse {
+  Course course = 1;
+}
+
+message CreateLessonRequest {
+  string course_id = 1;
+  int64 order = 2;
+  string title = 3;
+  string description = 4;
+  string body = 5;
+}
+
+message CreateLessonResponse {
+  Lesson lesson = 1;
+}
+
+message CardState {
+  int32 correct_answers = 1;
+  int32 incorrect_answers = 2;
+  bool is_completed = 3;
+  google.protobuf.Timestamp completed_at = 4;
+}
+
+message DeckState {
+  map<string, CardState> cards = 1;
+  bool is_completed = 2;
+  google.protobuf.Timestamp completed_at = 3;
+}
+
+message LessonState {
+  map<string, DeckState> decks = 1;
+  bool is_completed = 2;
+  google.protobuf.Timestamp completed_at = 3;
+}
+
+message GetLessonStateRequest {
+  string course_id = 1;
+  string lesson_id = 2;
+  string user_id = 3;
+}
+
+message GetLessonStateResponse {
+  map<string, LessonState> lesson_state = 1;
+}

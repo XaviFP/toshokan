@@ -1,6 +1,6 @@
 syntax = "proto3";
 
-package v1;
+package deck.v1;
 option go_package = "github.com/XaviFP/toshokan/api/deck/proto/v1";
 
 service DecksAPI {
@@ -100,7 +100,8 @@ message Deck {
     string author_id = 2;
     string title = 3;
     string description = 4;
-    repeated Card cards = 5;
+    bool is_public = 5;
+    repeated Card cards = 6;
 
 }
 
