@@ -34,6 +34,7 @@ type Card struct {
 	Title           string    `json:"title"`
 	PossibleAnswers []Answer  `json:"possibleAnswers"`
 	Explanation     string    `json:"explanation"`
+	Kind            string    `json:"kind"`
 }
 
 type Answer struct {

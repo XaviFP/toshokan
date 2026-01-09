@@ -379,13 +379,13 @@ func (r *pgRepository) StoreDeck(ctx context.Context, d Deck) error {
 		return ErrDeckAlreadyExists
 	}
 
-	stmt, err := tx.Prepare(pq.CopyIn("cards", "id", "deck_id", "title", "explanation"))
+	stmt, err := tx.Prepare(pq.CopyIn("cards", "id", "deck_id", "title", "explanation", "kind"))
 	if err != nil {
 		return errors.Trace(err)
 	}
 
 	for _, card := range d.Cards {
-		if _, err := stmt.Exec(card.ID, d.ID, card.Title, card.Explanation); err != nil {
+		if _, err := stmt.Exec(card.ID, d.ID, card.Title, card.Explanation, card.Kind); err != nil {
 			return errors.Trace(err)
 		}
 	}
@@ -430,9 +430,10 @@ func (r *pgRepository) StoreCard(ctx context.Context, c Card, dID uuid.UUID) err
 			deck_id,
 			title,
 			explanation,
+			kind,
 			created_at
-		) VALUES ($1, $2, $3, $4, NOW());`,
-		c.ID, dID, c.Title, c.Explanation,
+		) VALUES ($1, $2, $3, $4, $5, NOW());`,
+		c.ID, dID, c.Title, c.Explanation, c.Kind,
 	)
 	if err != nil {
 		if db.IsConstraintError(err, "cards_pkey") {
@@ -473,7 +474,8 @@ func (r *pgRepository) GetDeckCards(ctx context.Context, id uuid.UUID) ([]Card, 
 		SELECT
 			id,
 			title,
-			explanation
+			explanation,
+			kind
 		FROM cards
 		WHERE
 			deck_id = $1
@@ -486,7 +488,7 @@ func (r *pgRepository) GetDeckCards(ctx context.Context, id uuid.UUID) ([]Card, 
 
 	for rows.Next() {
 		var c Card
-		if err := rows.Scan(&c.ID, &c.Title, &c.Explanation); err != nil {
+		if err := rows.Scan(&c.ID, &c.Title, &c.Explanation, &c.Kind); err != nil {
 			return []Card{}, errors.Trace(err)
 		}
 
@@ -536,7 +538,8 @@ func (r *pgRepository) GetCards(ctx context.Context, ids []uuid.UUID) (map[uuid.
 		SELECT 
 			id,
 			title,
-			explanation
+			explanation,
+			kind
 		FROM cards
 		WHERE
 			deleted_at IS NULL
@@ -552,12 +555,11 @@ func (r *pgRepository) GetCards(ctx context.Context, ids []uuid.UUID) (map[uuid.
 		var c Card
 		var explanation sql.NullString
 
-		if err := rows.Scan(&c.ID, &c.Title, &explanation); err != nil {
+		if err := rows.Scan(&c.ID, &c.Title, &explanation, &c.Kind); err != nil {
 			return out, errors.Trace(err)
 		}
 
 		c.Explanation = explanation.String
-
 		// Temporary extra db calls per card for convinience
 		answers, err := r.GetCardAnswers(ctx, c.ID)
 		if err != nil {

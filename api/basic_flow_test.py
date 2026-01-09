@@ -210,6 +210,7 @@ def make_deck_payload(title: str, card_count: int = 4) -> Dict[str, Any]:
             "title": f"card-{ci}",
             "possible_answers": answers,
             "explanation": f"explanation-{ci}",
+            "kind": "single",
         })
     return {"title": title, "description": f"{title} description", "is_public": True, "cards": cards}
 

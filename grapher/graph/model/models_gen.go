@@ -21,6 +21,7 @@ type Card struct {
 	Title       string    `json:"title"`
 	Answers     []*Answer `json:"answers,omitempty"`
 	Explanation *string   `json:"explanation,omitempty"`
+	Kind        string    `json:"kind,omitempty"`
 }
 
 type CardsInput struct {

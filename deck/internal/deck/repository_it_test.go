@@ -74,6 +74,7 @@ func TestRepository_StoreCard(t *testing.T) {
 				},
 			},
 			Explanation: "Compiled languages are faster",
+			Kind:        "single",
 		}
 		err = repo.StoreCard(context.Background(), card, dID)
 		assert.NoError(t, err)
@@ -107,6 +108,7 @@ func TestRepository_StoreCard(t *testing.T) {
 				},
 			},
 			Explanation: "Compiled languages are faster",
+			Kind:        "single",
 		}
 
 		err := repo.StoreCard(context.Background(), card, dID)
@@ -217,14 +219,17 @@ func TestRepository_GetDeckCards(t *testing.T) {
 				ID:          uuid.MustParse("72bdff92-5bc8-4e1d-9217-d0b23e22ff33"),
 				Title:       "Golang",
 				Explanation: "Go code is compiled directly to machine code, not interpreted at runtime.",
+				Kind:        "single",
 			},
 			{
 				ID:    uuid.MustParse("c924f7e0-efd8-4c2d-9c43-8eafb7102ebc"),
 				Title: "Rust",
+				Kind:  "single",
 			},
 			{
 				ID:    uuid.MustParse("d42a90dd-818c-4eed-8e9f-9e8af1a654f4"),
 				Title: "Lua",
+				Kind:  "single",
 			},
 		}
 
@@ -453,6 +458,7 @@ func TestPGRepository_GetCards(t *testing.T) {
 						IsCorrect: false,
 					},
 				},
+				Kind: "single",
 			},
 		}
 
@@ -562,24 +568,27 @@ func populateTestDB(pg *sql.DB) error {
 		);
 
 		INSERT INTO
-			cards (deck_id, id, title, explanation)
+			cards (deck_id, id, title, explanation, kind)
 		VALUES (
 			'fb9ffe2c-ad66-4766-9b7b-46fd5d9acd72',
 			'72bdff92-5bc8-4e1d-9217-d0b23e22ff33',
 			'Golang',
-			'Go code is compiled directly to machine code, not interpreted at runtime.'
+			'Go code is compiled directly to machine code, not interpreted at runtime.',
+			'single'
 		),
 		(
 			'fb9ffe2c-ad66-4766-9b7b-46fd5d9acd72',
 			'c924f7e0-efd8-4c2d-9c43-8eafb7102ebc',
 			'Rust',
-			''
+			'',
+			'single'
 		),
 		(
 			'fb9ffe2c-ad66-4766-9b7b-46fd5d9acd72',
 			'd42a90dd-818c-4eed-8e9f-9e8af1a654f4',
 			'Lua',
-			''
+			'',
+			'single'
 		);
 
 		INSERT INTO

@@ -1,0 +1,2 @@
+ALTER TABLE cards
+    ADD COLUMN kind TEXT NOT NULL DEFAULT 'single';
