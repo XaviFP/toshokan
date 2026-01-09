@@ -1011,8 +1011,8 @@ components:
           type: string
           description: Card kind/type
           enum:
-            - single
-            - gaps
+            - single_choice
+            - fill_in_the_blanks
       required:
         - id
         - title
