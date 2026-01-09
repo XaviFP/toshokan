@@ -1007,10 +1007,17 @@ components:
         explanation:
           type: string
           description: Explanation text for the correct answer
+        kind:
+          type: string
+          description: Card kind/type
+          enum:
+            - single_choice
+            - fill_in_the_blanks
       required:
         - id
         - title
         - possible_answers
+        - kind
 
     CardInput:
       type: object

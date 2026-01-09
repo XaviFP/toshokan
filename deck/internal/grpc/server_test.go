@@ -32,6 +32,7 @@ func TestServer_GetDeck(t *testing.T) {
 					PossibleAnswers: []deck.Answer{
 						{Text: "Communicating Sequential Processes", IsCorrect: true},
 					},
+					Kind: "single_choice",
 				},
 			}}
 		repoMock.On("GetDeck", mock.Anything, deckID).Return(deck, nil)
@@ -72,6 +73,7 @@ func TestServer_GetDecks(t *testing.T) {
 					PossibleAnswers: []deck.Answer{
 						{Text: "Communicating Sequential Processes", IsCorrect: true},
 					},
+					Kind: "single_choice",
 				},
 				{
 					Title: "Which is the underlying data type of a slice in Go?",
@@ -80,6 +82,7 @@ func TestServer_GetDecks(t *testing.T) {
 						{Text: "Linked list"},
 						{Text: "Array", IsCorrect: true},
 					},
+					Kind: "single_choice",
 				},
 			},
 		}
@@ -115,7 +118,9 @@ func TestServer_CreateDeck(t *testing.T) {
 			Title: "What does CSP stand for?",
 			PossibleAnswers: []deck.Answer{
 				{Text: "Communicating Sequential Processes", IsCorrect: true},
-			}},
+			},
+			Kind: "single_choice",
+		},
 	}}
 
 	t.Run("success", func(t *testing.T) {
@@ -249,6 +254,7 @@ func TestServer_GetCards(t *testing.T) {
 			PossibleAnswers: []deck.Answer{
 				{Text: "Communicating Sequential Processes", IsCorrect: true},
 			},
+			Kind: "single_choice",
 		}
 
 		cards := map[uuid.UUID]deck.Card{
@@ -265,6 +271,7 @@ func TestServer_GetCards(t *testing.T) {
 				Title:           c.Title,
 				Explanation:     c.Explanation,
 				PossibleAnswers: toGRPCAnswers(c.PossibleAnswers),
+				Kind:            "single_choice",
 			},
 		}}, res)
 	})

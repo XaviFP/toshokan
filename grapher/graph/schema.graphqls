@@ -17,6 +17,7 @@ type Card {
   title: String!
   answers: [Answer]
   explanation: String
+  kind: String!
 }
 
 type Answer {

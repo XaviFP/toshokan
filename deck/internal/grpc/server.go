@@ -166,12 +166,7 @@ func (s *Server) GetCards(ctx context.Context, req *pb.GetCardsRequest) (*pb.Get
 	out := make(map[string]*pb.Card, len(cards))
 
 	for id, c := range cards {
-		out[id.String()] = &pb.Card{
-			Id:              c.ID.String(),
-			Title:           c.Title,
-			Explanation:     c.Explanation,
-			PossibleAnswers: toGRPCAnswers(c.PossibleAnswers),
-		}
+		out[id.String()] = toGRPCCard(c)
 	}
 
 	return &pb.GetCardsResponse{Cards: out}, nil
@@ -275,6 +270,7 @@ func toGRPCCard(c deck.Card) *pb.Card {
 		Title:           c.Title,
 		PossibleAnswers: toGRPCAnswers(c.PossibleAnswers),
 		Explanation:     c.Explanation,
+		Kind:            c.Kind,
 	}
 }
 
@@ -366,6 +362,7 @@ func fromGRPCCard(c *pb.Card) (deck.Card, error) {
 		Title:           c.Title,
 		PossibleAnswers: answers,
 		Explanation:     c.Explanation,
+		Kind:            c.Kind,
 	}, nil
 }
 

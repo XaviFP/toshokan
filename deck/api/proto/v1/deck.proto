@@ -111,6 +111,7 @@ message Card {
     string title = 3;
     repeated Answer possible_answers = 4;
     string explanation = 5;
+    string kind = 6;
 }
 
 message Answer {

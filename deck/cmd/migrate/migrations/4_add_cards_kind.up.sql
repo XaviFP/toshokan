@@ -1,0 +1,2 @@
+ALTER TABLE cards
+    ADD COLUMN IF NOT EXISTS kind TEXT NOT NULL DEFAULT 'single_choice';

@@ -70,6 +70,7 @@ func cardsToModel(in []*v1.Card) []*model.Card {
 			Title:       c.Title,
 			Answers:     outAnswers,
 			Explanation: &c.Explanation,
+			Kind:        c.Kind,
 		})
 	}
 
