@@ -189,6 +189,7 @@ type cardResponse struct {
 	Title           string           `json:"title"`
 	PossibleAnswers []answerResponse `json:"possible_answers"`
 	Explanation     string           `json:"explanation"`
+	Kind            string           `json:"kind"`
 }
 
 type answerResponse struct {
@@ -230,6 +231,7 @@ func toCardResponse(c *pbDeck.Card) cardResponse {
 		DeckID:      c.GetDeckId(),
 		Title:       c.GetTitle(),
 		Explanation: c.GetExplanation(),
+		Kind:        c.GetKind(),
 	}
 
 	if len(c.PossibleAnswers) > 0 {
