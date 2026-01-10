@@ -1,6 +1,6 @@
-HTTP_HOST=gate
-HTTP_PORT=8080
-SIGNUP_ENABLED=true
-CERTIFICATE_PATH=""
-PRIVATE_KEY_PATH=""
-ALLOWED_ORIGINS="http://localhost:8000,http://localhost:8080"
+HTTP_HOST = gate
+HTTP_PORT = 8080
+SIGNUP_ENABLED = true
+CERTIFICATE_PATH = ""
+PRIVATE_KEY_PATH = ""
+ALLOWED_ORIGINS = "http://localhost:8000,http://localhost:8080"
