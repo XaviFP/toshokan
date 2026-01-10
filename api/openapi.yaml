@@ -1,4 +1,4 @@
-openapi: 3.0.3
+openapi: 3.1.0
 info:
   title: Toshokan Learning Platform API
   description: |
@@ -703,14 +703,12 @@ components:
           format: password
           description: User password
         nick:
-          type:
-            - string
-            - null
+          type: string
+          nullable: true
           description: Display name
         bio:
-          type:
-            - string
-            - null
+          type: string
+          nullable: true
           description: User biography
       required:
         - username
@@ -848,43 +846,42 @@ components:
         - body
 
     LessonWithProgress:
-      type: object
-      properties:
-        lesson:
-          $ref: '#/components/schemas/Lesson'
-        is_completed:
-          type: boolean
-          description: Whether user has completed this lesson
-        is_current:
-          type: boolean
-          description: Whether this is the user's current lesson
-      required:
-        - lesson
-        - is_completed
-        - is_current
+      allOf:
+        - $ref: '#/components/schemas/Lesson'
+        - type: object
+          properties:
+            is_completed:
+              type: boolean
+              description: Whether user has completed this lesson
+            is_current:
+              type: boolean
+              description: Whether this is the user's current lesson
+          required:
+            - is_completed
+            - is_current
 
     LessonEdge:
       type: object
       properties:
-        lesson:
+        node:
           $ref: '#/components/schemas/Lesson'
         cursor:
           type: string
           description: Pagination cursor for this edge
       required:
-        - lesson
+        - node
         - cursor
 
     LessonWithProgressEdge:
       type: object
       properties:
-        lesson:
+        node:
           $ref: '#/components/schemas/LessonWithProgress'
         cursor:
           type: string
           description: Pagination cursor for this edge
       required:
-        - lesson
+        - node
         - cursor
 
     PageInfo:
@@ -1076,9 +1073,8 @@ components:
           minLength: 1
           description: Answer text
         is_correct:
-          type:
-            - boolean
-            - null
+          type: boolean
+          nullable: true
           description: Whether this is the correct answer
       required:
         - text

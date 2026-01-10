@@ -549,7 +549,7 @@ def run_focused_lessons_before_answering(base_url: str, token: str, course_id: s
 
     # Find the first lesson (order 1) and verify is_current is True
     first_lesson = next(
-        (e["lesson"] for e in focused_edges if e["lesson"]["order"] == 1), None)
+        (e["node"] for e in focused_edges if e["node"]["order"] == 1), None)
     assert first_lesson is not None, "First lesson (order 1) not found in focused lessons"
     assert first_lesson.get(
         "is_current") is True, f"First lesson is_current should be True, got {first_lesson.get('is_current')}"
@@ -598,7 +598,7 @@ def run_focused_lessons_after_answering(base_url: str, token: str, course_id: st
 
     # Verify last lesson is current and all lessons are complete
     if focused_all_edges:
-        last_lesson = focused_all_edges[-1]["lesson"]
+        last_lesson = focused_all_edges[-1]["node"]
         assert last_lesson.get(
             "is_current") is True, f"Last lesson is_current should be True after completion, got {last_lesson.get('is_current')}"
         log_step(
@@ -606,7 +606,7 @@ def run_focused_lessons_after_answering(base_url: str, token: str, course_id: st
 
         # Check all lessons are complete
         for edge in focused_all_edges:
-            lesson_data = edge["lesson"]
+            lesson_data = edge["node"]
             assert lesson_data.get(
                 "is_completed") is True, f"Lesson {lesson_data['id']} should be completed"
         log_step(

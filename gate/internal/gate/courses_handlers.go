@@ -335,7 +335,7 @@ type LessonJSON struct {
 
 // LessonEdgeJSON represents a lesson edge for JSON response
 type LessonEdgeJSON struct {
-	Lesson LessonJSON `json:"lesson"`
+	Node   LessonJSON `json:"node"`
 	Cursor string     `json:"cursor"`
 }
 
@@ -349,7 +349,7 @@ type LessonWithProgressJSON struct {
 
 // LessonWithProgressEdgeJSON represents a lesson with progress edge for JSON response
 type LessonWithProgressEdgeJSON struct {
-	Lesson LessonWithProgressJSON `json:"lesson"`
+	Node   LessonWithProgressJSON `json:"node"`
 	Cursor string                 `json:"cursor"`
 }
 
@@ -365,7 +365,7 @@ func convertLessonEdges(edges []*pb.LessonsConnection_Edge) []LessonEdgeJSON {
 	result := make([]LessonEdgeJSON, len(edges))
 	for i, edge := range edges {
 		result[i] = LessonEdgeJSON{
-			Lesson: toLessonJSON(edge.Lesson),
+			Node:   toLessonJSON(edge.Node),
 			Cursor: edge.Cursor,
 		}
 	}
@@ -376,12 +376,12 @@ func convertLessonEdges(edges []*pb.LessonsConnection_Edge) []LessonEdgeJSON {
 func convertLessonWithProgressEdges(edges []*pb.LessonsWithProgressConnection_Edge) []LessonWithProgressEdgeJSON {
 	result := make([]LessonWithProgressEdgeJSON, len(edges))
 	for i, edge := range edges {
-		baseLesson := toLessonJSON(edge.Lesson.Lesson)
+		baseLesson := toLessonJSON(edge.Node.Lesson)
 		result[i] = LessonWithProgressEdgeJSON{
-			Lesson: LessonWithProgressJSON{
+			Node: LessonWithProgressJSON{
 				LessonJSON:  baseLesson,
-				IsCompleted: edge.Lesson.IsCompleted,
-				IsCurrent:   edge.Lesson.IsCurrent,
+				IsCompleted: edge.Node.IsCompleted,
+				IsCurrent:   edge.Node.IsCurrent,
 			},
 			Cursor: edge.Cursor,
 		}
