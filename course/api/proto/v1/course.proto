@@ -73,7 +73,7 @@ message LessonWithProgress {
 
 message LessonsConnection {
   message Edge {
-    Lesson lesson = 1;
+    Lesson node = 1;
     string cursor = 2;
   }
 
@@ -83,7 +83,7 @@ message LessonsConnection {
 
 message LessonsWithProgressConnection {
   message Edge {
-    LessonWithProgress lesson = 1;
+    LessonWithProgress node = 1;
     string cursor = 2;
   }
 

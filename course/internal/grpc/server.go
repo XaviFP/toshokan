@@ -200,7 +200,7 @@ func (s *Server) GetLessons(ctx context.Context, req *pb.GetLessonsRequest) (*pb
 
 	for _, edge := range result.PublicLessons.Edges {
 		resp.Lessons.Edges = append(resp.Lessons.Edges, &pb.LessonsConnection_Edge{
-			Lesson: lessonToProto(&edge.Lesson),
+			Node:   lessonToProto(&edge.Lesson),
 			Cursor: string(edge.Cursor),
 		})
 	}
@@ -248,7 +248,7 @@ func (s *Server) GetFocusedLessons(ctx context.Context, req *pb.GetFocusedLesson
 
 	for _, edge := range result.ProgressLessons.Edges {
 		resp.Lessons.Edges = append(resp.Lessons.Edges, &pb.LessonsWithProgressConnection_Edge{
-			Lesson: &pb.LessonWithProgress{
+			Node: &pb.LessonWithProgress{
 				Lesson:      lessonToProto(&edge.Lesson.Lesson),
 				IsCompleted: edge.Lesson.IsCompleted,
 				IsCurrent:   edge.Lesson.IsCurrent,
