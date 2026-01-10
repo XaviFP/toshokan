@@ -20,12 +20,14 @@ services:
       timeout: 5s
       retries: 5
       start_period: 10s
+    restart: always
   cache:
     image: redis
     ports:
       - "6379:6379"
     expose:
       - "6379"
+    restart: always
   user:
     build: user/
     depends_on:
@@ -36,6 +38,7 @@ services:
     env_file: 
       - env/.common
       - env/.user
+    restart: always
   deck:
     build: deck/
     depends_on:
@@ -46,6 +49,7 @@ services:
     env_file: 
       - env/.common
       - env/.deck
+    restart: always
   dealer:
     build: dealer/
     depends_on:
@@ -54,6 +58,7 @@ services:
     env_file:
       - env/.common
       - env/.dealer
+    restart: always
   course:
     build: course/
     depends_on:
@@ -64,6 +69,7 @@ services:
     env_file:
       - env/.common
       - env/.course
+    restart: always
   gate:
     build: gate/
     depends_on:
@@ -79,3 +85,4 @@ services:
     env_file: 
       - env/.common
       - env/.gate
+    restart: always

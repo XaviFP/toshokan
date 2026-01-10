@@ -245,7 +245,7 @@ func TestServer_GetLessons(t *testing.T) {
 		res, err := srv.GetLessons(context.Background(), &req)
 		assert.NoError(t, err)
 		assert.Len(t, res.Lessons.Edges, 1)
-		assert.Equal(t, lessons[0].Title, res.Lessons.Edges[0].Lesson.Title)
+		assert.Equal(t, lessons[0].Title, res.Lessons.Edges[0].Node.Title)
 	})
 
 	t.Run("error", func(t *testing.T) {
