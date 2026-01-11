@@ -21,14 +21,15 @@ import (
 // Server implements the courses gRPC server
 type Server struct {
 	pb.UnimplementedCourseAPIServer
-	GRPCAddr       string
-	GRPCTransport  string
-	Repository     course.Repository
-	Enroller       course.Enroller
-	DeckClient     pbDeck.DecksAPIClient
-	LessonsBrowser course.LessonsBrowser
-	Answerer       course.Answerer
-	Clock          clock.Clock
+	GRPCAddr        string
+	GRPCTransport   string
+	Repository      course.Repository
+	Enroller        course.Enroller
+	DeckClient      pbDeck.DecksAPIClient
+	LessonsBrowser  course.LessonsBrowser
+	CoursesBrowser  course.CoursesBrowser
+	Answerer        course.Answerer
+	Clock           clock.Clock
 
 	grpcServer *grpc.Server
 }
@@ -260,6 +261,61 @@ func (s *Server) GetFocusedLessons(ctx context.Context, req *pb.GetFocusedLesson
 	return resp, nil
 }
 
+// GetEnrolledCourses retrieves courses a user is enrolled in with progress
+func (s *Server) GetEnrolledCourses(ctx context.Context, req *pb.GetEnrolledCoursesRequest) (*pb.GetEnrolledCoursesResponse, error) {
+	userID, err := uuid.Parse(req.UserId)
+	if err != nil {
+		return nil, errors.Trace(err)
+	}
+
+	p := pagination.NewOldestFirstPagination(
+		pagination.WithFirst(int(req.Pagination.First)),
+		pagination.WithLast(int(req.Pagination.Last)),
+		pagination.WithAfter(pagination.Cursor(req.Pagination.After)),
+		pagination.WithBefore(pagination.Cursor(req.Pagination.Before)),
+	)
+
+	conn, err := s.CoursesBrowser.BrowseEnrolled(ctx, userID, p)
+	if err != nil {
+		return nil, errors.Trace(err)
+	}
+
+	resp := &pb.GetEnrolledCoursesResponse{
+		Courses: &pb.CoursesWithProgressConnection{
+			PageInfo: &pb.PageInfo{
+				HasPreviousPage: conn.PageInfo.HasPreviousPage,
+				HasNextPage:     conn.PageInfo.HasNextPage,
+				StartCursor:     conn.PageInfo.StartCursor.String(),
+				EndCursor:       conn.PageInfo.EndCursor.String(),
+			},
+		},
+	}
+
+	for _, edge := range conn.Edges {
+		resp.Courses.Edges = append(resp.Courses.Edges, &pb.CoursesWithProgressConnection_Edge{
+			Node: &pb.CourseWithProgress{
+				Course:          courseToProto(&edge.Course.Course),
+				CurrentLessonId: edge.Course.CurrentLessonID,
+			},
+			Cursor: string(edge.Cursor),
+		})
+	}
+
+	return resp, nil
+}
+
+func courseToProto(c *course.Course) *pb.Course {
+	return &pb.Course{
+		Id:          c.ID.String(),
+		Order:       c.Order,
+		Title:       c.Title,
+		Description: c.Description,
+		CreatedAt:   toProtoTimestamp(c.CreatedAt),
+		EditedAt:    toProtoTimestampPtr(c.EditedAt),
+		DeletedAt:   toProtoTimestampPtr(c.DeletedAt),
+	}
+}
+
 func lessonToProto(l *course.Lesson) *pb.Lesson {
 	return &pb.Lesson{
 		Id:          l.ID.String(),
@@ -337,6 +393,7 @@ func (s *Server) CreateCourse(ctx context.Context, req *pb.CreateCourseRequest) 
 
 	course := course.Course{
 		ID:          uuid.New(),
+		Order:       req.Order,
 		Title:       req.Title,
 		Description: req.Description,
 		CreatedAt:   time.Now(),
@@ -350,6 +407,7 @@ func (s *Server) CreateCourse(ctx context.Context, req *pb.CreateCourseRequest) 
 	return &pb.CreateCourseResponse{
 		Course: &pb.Course{
 			Id:          course.ID.String(),
+			Order:       course.Order,
 			Title:       course.Title,
 			Description: course.Description,
 			CreatedAt:   toProtoTimestamp(course.CreatedAt),

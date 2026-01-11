@@ -214,6 +214,60 @@ paths:
               schema:
                 $ref: '#/components/schemas/Error'
 
+  /courses/enrolled:
+    get:
+      tags:
+        - Courses
+      summary: Get enrolled courses
+      description: Retrieve paginated list of courses the authenticated user is enrolled in, with progress information
+      operationId: getEnrolledCourses
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: after
+          in: query
+          required: false
+          description: Cursor for pagination (fetch courses after this cursor)
+          schema:
+            type: string
+        - name: before
+          in: query
+          required: false
+          description: Cursor for backward pagination (fetch courses before this cursor)
+          schema:
+            type: string
+        - name: first
+          in: query
+          required: false
+          description: Number of courses to fetch (default 20)
+          schema:
+            type: integer
+            format: int64
+            default: 20
+        - name: last
+          in: query
+          required: false
+          description: Number of courses to fetch when paginating backward (default 20)
+          schema:
+            type: integer
+            format: int64
+            default: 20
+      responses:
+        '200':
+          description: Paginated list of enrolled courses with progress
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CoursesWithProgressConnectionResponse'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
   /courses/{courseId}/enroll:
     post:
       tags:
@@ -925,6 +979,43 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/LessonWithProgressEdge'
+        page_info:
+          $ref: '#/components/schemas/PageInfo'
+      required:
+        - edges
+        - page_info
+
+    CourseWithProgress:
+      allOf:
+        - $ref: '#/components/schemas/Course'
+        - type: object
+          properties:
+            current_lesson_id:
+              type: string
+              format: uuid
+              description: UUID of the user's current lesson in this course
+          required:
+            - current_lesson_id
+
+    CourseWithProgressEdge:
+      type: object
+      properties:
+        node:
+          $ref: '#/components/schemas/CourseWithProgress'
+        cursor:
+          type: string
+          description: Pagination cursor for this edge
+      required:
+        - node
+        - cursor
+
+    CoursesWithProgressConnectionResponse:
+      type: object
+      properties:
+        edges:
+          type: array
+          items:
+            $ref: '#/components/schemas/CourseWithProgressEdge'
         page_info:
           $ref: '#/components/schemas/PageInfo'
       required:

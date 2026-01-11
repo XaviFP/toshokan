@@ -230,11 +230,11 @@ def create_deck(base_url: str, token: str, title: str) -> Dict[str, Any]:
     return deck
 
 
-def create_course(base_url: str, token: str, title: str, description: str) -> Dict[str, Any]:
-    log_step(f"Creating course: {title}")
+def create_course(base_url: str, token: str, title: str, description: str, order: int = 0) -> Dict[str, Any]:
+    log_step(f"Creating course: {title} (order={order})")
     response = requests.post(
         f"{base_url}/courses",
-        json={"title": title, "description": description},
+        json={"order": order, "title": title, "description": description},
         headers=auth_headers(token),
         timeout=TIMEOUT,
     )
@@ -449,6 +449,79 @@ def paginate_focused_forward(base_url: str, token: str, course_id: str) -> tuple
     return pages, all_edges
 
 
+def list_enrolled_courses(
+    base_url: str,
+    token: str,
+    *,
+    after: str | None = None,
+    before: str | None = None,
+    limit: int = 2,
+    use_last: bool = False,
+) -> Dict[str, Any]:
+    """Fetch enrolled courses with pagination."""
+    if after and before:
+        raise ValueError("use either after or before, not both")
+
+    params: Dict[str, Any] = {}
+    if use_last:
+        if before:
+            params["before"] = before
+        params["last"] = limit
+    else:
+        if after:
+            params["after"] = after
+        params["first"] = limit
+
+    response = requests.get(
+        f"{base_url}/courses/enrolled",
+        params=params,
+        headers=auth_headers(token),
+        timeout=TIMEOUT,
+    )
+    log_response("GET /courses/enrolled", response)
+    response.raise_for_status()
+    return response.json()
+
+
+def paginate_enrolled_courses_forward(base_url: str, token: str) -> tuple[List[Dict[str, Any]], List[Dict[str, Any]]]:
+    """Paginate through enrolled courses forwards."""
+    pages: List[Dict[str, Any]] = []
+    all_edges: List[Dict[str, Any]] = []
+    after: str | None = None
+
+    while True:
+        page = list_enrolled_courses(base_url, token, after=after, limit=2)
+        pages.append(page)
+        edges = page.get("edges", [])
+        all_edges.extend(edges)
+        page_info = page.get("page_info", {})
+        after = page_info.get("end_cursor")
+        if not page_info.get("has_next_page"):
+            break
+
+    return pages, all_edges
+
+
+def paginate_enrolled_courses_backward(base_url: str, token: str) -> List[Dict[str, Any]]:
+    """Paginate through enrolled courses backwards."""
+    backward_edges: List[Dict[str, Any]] = []
+    before: str | None = None
+
+    while True:
+        page = list_enrolled_courses(
+            base_url, token, before=before, limit=2, use_last=True)
+        edges = page.get("edges", [])
+        backward_edges.extend(edges)
+        page_info = page.get("page_info", {})
+
+        if not page_info.get("has_previous_page"):
+            break
+
+        before = page_info.get("start_cursor")
+
+    return backward_edges
+
+
 def paginate_focused_backward(base_url: str, token: str, course_id: str) -> List[Dict[str, Any]]:
     backward_edges: List[Dict[str, Any]] = []
     before: str | None = None
@@ -499,8 +572,8 @@ def get_lesson_state(base_url: str, token: str, course_id: str, lesson_id: str) 
     return response.json()
 
 
-def setup_test_data(base_url: str, token: str) -> tuple[str, List[Dict[str, Any]], List[str]]:
-    """Set up test data: create decks, course, and lessons."""
+def setup_test_data(base_url: str, token: str) -> tuple[str, List[Dict[str, Any]], List[str], List[str]]:
+    """Set up test data: create decks, courses, and lessons."""
     log_step("Creating 4 decks...")
     decks: List[Dict[str, Any]] = []
     for i in range(4):
@@ -508,22 +581,45 @@ def setup_test_data(base_url: str, token: str) -> tuple[str, List[Dict[str, Any]
         decks.append(deck)
 
     log_step("")
-    course = create_course(base_url, token, "course-1", "course desc")
-    course_id = course["id"]
-    log_step(f"✓ Course created: {course_id}")
+    log_step("Creating 5 courses...")
+    courses: List[Dict[str, Any]] = []
+    course_ids: List[str] = []
+    for i in range(5):
+        course = create_course(
+            base_url, token, f"course-{i}", f"course {i} desc", order=i)
+        courses.append(course)
+        course_ids.append(course["id"])
+        log_step(f"✓ Course created: {course['id']}")
+
+        # Add at least one lesson to each course so they can be enrolled
+        deck_id = decks[i % len(decks)]["id"]
+        lesson = create_lesson(base_url, token, course["id"],
+                               order=1, title=f"course-{i}-lesson-1", deck_id=deck_id)
+        log_step(f"  → Added lesson: {lesson['id']}")
+
+    # Use the first course for the main test flow
+    course_id = course_ids[0]
 
     log_step("")
-    log_step("Creating 5 lessons...")
+    log_step("Adding 4 more lessons to first course (5 total)...")
     lessons: List[Dict[str, Any]] = []
     lesson_deck_ids: List[str] = []
-    for i in range(5):
-        deck_id = decks[i % len(decks)]["id"] if i < 4 else decks[0]["id"]
+
+    # Get the first lesson we already created
+    first_lesson_response = list_lessons(base_url, token, course_id, limit=1)
+    first_lesson = first_lesson_response["edges"][0]["node"]
+    lessons.append(first_lesson)
+    lesson_deck_ids.append(decks[0]["id"])
+
+    # Add 4 more lessons
+    for i in range(1, 5):
+        deck_id = decks[i % len(decks)]["id"]
         lesson = create_lesson(base_url, token, course_id,
                                order=i + 1, title=f"lesson-{i}", deck_id=deck_id)
         lessons.append(lesson)
         lesson_deck_ids.append(deck_id)
 
-    return course_id, lessons, lesson_deck_ids
+    return course_id, lessons, lesson_deck_ids, course_ids
 
 
 def run_pagination_before_answering(base_url: str, token: str, course_id: str, lessons: List[Dict[str, Any]]) -> None:
@@ -661,6 +757,44 @@ def run_backward_pagination_after_answering(base_url: str, token: str, course_id
         f"✓ Focused backward pagination: {len(focused_backward_edges)} edge(s)")
 
 
+def run_enrolled_courses_test(base_url: str, token: str, course_id: str) -> None:
+    """Test GET /courses/enrolled endpoint with pagination."""
+    log_step("")
+    log_step("Testing enrolled courses forward pagination...")
+    pages, all_edges = paginate_enrolled_courses_forward(base_url, token)
+    log_step(
+        f"✓ Forward pagination: {len(pages)} page(s), {len(all_edges)} edge(s)")
+
+    assert len(all_edges) > 0, "Should have at least one enrolled course"
+
+    # Find the course we enrolled in
+    enrolled_course = next(
+        (e for e in all_edges if e["node"]["id"] == course_id), None)
+    assert enrolled_course is not None, f"Should find course {course_id} in enrolled courses"
+
+    # Verify course structure
+    node = enrolled_course["node"]
+    assert "id" in node
+    assert "title" in node
+    assert "description" in node
+    assert "current_lesson_id" in node
+    assert node["current_lesson_id"] != "", "Should have a current_lesson_id"
+
+    log_step(f"  - Course: {node['title']}")
+    log_step(f"  - Current lesson: {node['current_lesson_id']}")
+
+    log_step("")
+    log_step("Testing enrolled courses backward pagination...")
+    backward_edges = paginate_enrolled_courses_backward(base_url, token)
+    log_step(f"✓ Backward pagination: {len(backward_edges)} edge(s)")
+
+    assert len(backward_edges) == len(
+        all_edges), "Forward and backward pagination should return same number of courses"
+
+    log_step(
+        f"✓ Enrolled courses pagination complete: {len(all_edges)} course(s) found")
+
+
 def test_basic_flow():
     init_log_file()
 
@@ -672,10 +806,14 @@ def test_basic_flow():
     token = user["token"]
 
     log_step("")
-    course_id, lessons, lesson_deck_ids = setup_test_data(base_url, token)
+    course_id, lessons, lesson_deck_ids, all_course_ids = setup_test_data(
+        base_url, token)
 
     log_step("")
-    enroll_course(base_url, token, course_id)
+    log_step(f"Enrolling in {len(all_course_ids)} courses...")
+    for cid in all_course_ids:
+        enroll_course(base_url, token, cid)
+    log_step(f"✓ Enrolled in {len(all_course_ids)} courses")
 
     run_pagination_before_answering(base_url, token, course_id, lessons)
 
@@ -697,6 +835,8 @@ def test_basic_flow():
         base_url, token, course_id, first_lesson_id)
 
     run_backward_pagination_after_answering(base_url, token, course_id)
+
+    run_enrolled_courses_test(base_url, token, course_id)
 
     log_step("")
     log_step("✅ Test passed!")

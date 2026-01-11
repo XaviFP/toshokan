@@ -10,6 +10,7 @@ service CourseAPI {
   rpc GetLesson (GetLessonRequest) returns (GetLessonResponse) {}
   rpc GetLessons (GetLessonsRequest) returns (GetLessonsResponse) {}
   rpc GetFocusedLessons (GetFocusedLessonsRequest) returns (GetFocusedLessonsResponse) {}
+  rpc GetEnrolledCourses (GetEnrolledCoursesRequest) returns (GetEnrolledCoursesResponse) {}
   rpc EnrollUser (EnrollUserRequest) returns (EnrollUserResponse) {}
   rpc GetUserProgress (GetUserProgressRequest) returns (GetUserProgressResponse) {}
   rpc GetLessonState (GetLessonStateRequest) returns (GetLessonStateResponse) {}
@@ -91,6 +92,21 @@ message LessonsWithProgressConnection {
   PageInfo page_info = 2;
 }
 
+message CourseWithProgress {
+  Course course = 1;
+  string current_lesson_id = 2;
+}
+
+message CoursesWithProgressConnection {
+  message Edge {
+    CourseWithProgress node = 1;
+    string cursor = 2;
+  }
+
+  repeated Edge edges = 1;
+  PageInfo page_info = 2;
+}
+
 message GetCourseRequest {
   string course_id = 1;
 }
@@ -125,6 +141,15 @@ message GetFocusedLessonsRequest {
 
 message GetFocusedLessonsResponse {
   LessonsWithProgressConnection lessons = 1;  // Authenticated - with progress
+}
+
+message GetEnrolledCoursesRequest {
+  string user_id = 1;
+  Pagination pagination = 2;
+}
+
+message GetEnrolledCoursesResponse {
+  CoursesWithProgressConnection courses = 1;
 }
 
 message EnrollUserRequest {
@@ -163,8 +188,9 @@ message AnswerCardsResponse {
 }
 
 message CreateCourseRequest {
-  string title = 1;
-  string description = 2;
+  int64 order = 1;
+  string title = 2;
+  string description = 3;
 }
 
 message CreateCourseResponse {
