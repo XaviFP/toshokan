@@ -1100,16 +1100,6 @@ components:
         success:
           type: boolean
           description: Whether the operation succeeded
-        deck_completed:
-          type: boolean
-          description: Whether the deck was completed with these answers
-        lesson_completed:
-          type: boolean
-          description: Whether the lesson was completed
-        user_progress:
-          allOf:
-            - $ref: '#/components/schemas/UserCourseProgress'
-          nullable: true
       required:
         - success
 

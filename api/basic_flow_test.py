@@ -373,6 +373,9 @@ def answer_deck(base_url: str, token: str, course_id: str, lesson_id: str, deck:
         headers=auth_headers(token),
         timeout=TIMEOUT,
     )
+
+    assert response.json().get("success") is True
+
     log_response(
         "POST /courses/{courseId}/lessons/{lessonId}/decks/{deckId}/answer", response)
     response.raise_for_status()
