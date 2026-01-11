@@ -265,7 +265,7 @@ func (s *Server) GetFocusedLessons(ctx context.Context, req *pb.GetFocusedLesson
 func (s *Server) GetEnrolledCourses(ctx context.Context, req *pb.GetEnrolledCoursesRequest) (*pb.GetEnrolledCoursesResponse, error) {
 	userID, err := uuid.Parse(req.UserId)
 	if err != nil {
-		return nil, errors.Trace(err)
+		return nil, errors.Annotatef(err, "invalid user_id: %q", req.UserId)
 	}
 
 	p := pagination.NewOldestFirstPagination(
