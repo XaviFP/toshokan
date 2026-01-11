@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/XaviFP/toshokan/common/pagination"
 	"github.com/google/uuid"
 	"github.com/juju/errors"
 	"github.com/mediocregopher/radix/v4"
@@ -438,5 +439,51 @@ func TestRedisRepository_UpdateUserProgress_DBError(t *testing.T) {
 	err := repo.UpdateUserProgress(ctx, progress)
 
 	assert.Error(t, err)
+	mockDB.AssertExpectations(t)
+}
+
+func TestRedisRepository_GetEnrolledCourses_PassThrough(t *testing.T) {
+	h := newTestHarness(t)
+	mockDB := new(RepositoryMock)
+
+	repo := NewRedisRepository(h.redisClient, mockDB)
+
+	ctx := context.Background()
+	userID := uuid.New()
+	courseID := uuid.New()
+	lessonID := uuid.New()
+
+	pag := pagination.NewOldestFirstPagination(pagination.WithFirst(10))
+	expectedConn := CoursesWithProgressConnection{
+		Edges: []CourseWithProgressEdge{
+			{
+				Course: &CourseWithProgress{
+					Course: Course{
+						ID:          courseID,
+						Title:       "Go Fundamentals",
+						Description: "Learn Go",
+						CreatedAt:   time.Now().UTC(),
+					},
+					CurrentLessonID: lessonID.String(),
+				},
+				Cursor: "cursor1",
+			},
+		},
+		PageInfo: pagination.PageInfo{
+			HasNextPage:     false,
+			HasPreviousPage: false,
+			StartCursor:     "cursor1",
+			EndCursor:       "cursor1",
+		},
+	}
+
+	mockDB.On("GetEnrolledCourses", ctx, userID, pag).Return(expectedConn, nil)
+
+	result, err := repo.GetEnrolledCourses(ctx, userID, pag)
+
+	assert.NoError(t, err)
+	assert.Equal(t, 1, len(result.Edges))
+	assert.Equal(t, courseID, result.Edges[0].Course.Course.ID)
+	assert.Equal(t, "Go Fundamentals", result.Edges[0].Course.Course.Title)
 	mockDB.AssertExpectations(t)
 }

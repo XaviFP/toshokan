@@ -21,6 +21,11 @@ func (m *RepositoryMock) StoreCourse(ctx context.Context, course Course) error {
 	return m.Called(ctx, course).Error(0)
 }
 
+func (m *RepositoryMock) GetEnrolledCourses(ctx context.Context, userID uuid.UUID, p pagination.Pagination) (CoursesWithProgressConnection, error) {
+	args := m.Called(ctx, userID, p)
+	return args.Get(0).(CoursesWithProgressConnection), args.Error(1)
+}
+
 func (m *RepositoryMock) GetLesson(ctx context.Context, id uuid.UUID) (Lesson, error) {
 	args := m.Called(ctx, id)
 	return args[0].(Lesson), args.Error(1)
@@ -69,4 +74,13 @@ type LessonsBrowserMock struct {
 func (m *LessonsBrowserMock) Browse(ctx context.Context, courseID uuid.UUID, p pagination.Pagination, opts BrowseOptions) (BrowseResult, error) {
 	args := m.Called(ctx, courseID, p, opts)
 	return args[0].(BrowseResult), args.Error(1)
+}
+
+type CoursesBrowserMock struct {
+	mock.Mock
+}
+
+func (m *CoursesBrowserMock) BrowseEnrolled(ctx context.Context, userID uuid.UUID, p pagination.Pagination) (CoursesWithProgressConnection, error) {
+	args := m.Called(ctx, userID, p)
+	return args.Get(0).(CoursesWithProgressConnection), args.Error(1)
 }

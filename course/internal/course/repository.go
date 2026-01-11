@@ -24,6 +24,7 @@ type Repository interface {
 	// Courses
 	GetCourse(ctx context.Context, id uuid.UUID) (Course, error)
 	StoreCourse(ctx context.Context, course Course) error
+	GetEnrolledCourses(ctx context.Context, userID uuid.UUID, p pagination.Pagination) (CoursesWithProgressConnection, error)
 
 	// Lessons
 	GetLesson(ctx context.Context, id uuid.UUID) (Lesson, error)
@@ -165,6 +166,13 @@ func (r *redisRepository) GetLesson(ctx context.Context, id uuid.UUID) (Lesson, 
 // GetLessonsByCourseID retrieves lessons for a course
 func (r *redisRepository) GetLessonsByCourseID(ctx context.Context, courseID uuid.UUID, p pagination.Pagination) (LessonsConnection, error) {
 	return r.db.GetLessonsByCourseID(ctx, courseID, p)
+}
+
+// GetEnrolledCourses retrieves enrolled courses for a user with progress
+func (r *redisRepository) GetEnrolledCourses(ctx context.Context, userID uuid.UUID, p pagination.Pagination) (CoursesWithProgressConnection, error) {
+	// For now, pass through to DB without caching the list
+	// Individual courses are still cached via GetCourse
+	return r.db.GetEnrolledCourses(ctx, userID, p)
 }
 
 // StoreLesson saves a lesson and invalidates cache
@@ -364,6 +372,100 @@ func (r *pgRepository) GetLessonsByCourseID(ctx context.Context, courseID uuid.U
 
 		out.Edges = append(out.Edges, LessonEdge{
 			Lesson: l,
+			Cursor: cursor,
+		})
+	}
+
+	if err := rows.Err(); err != nil {
+		return out, errors.Trace(err)
+	}
+
+	hasMore := len(out.Edges) > p.Limit()
+
+	pageInfo := pagination.PageInfo{
+		HasPreviousPage: hasMore && !p.IsForward(),
+		HasNextPage:     hasMore && p.IsForward(),
+	}
+
+	if hasMore {
+		out.Edges = out.Edges[:len(out.Edges)-1]
+	}
+
+	// If backward pagination, reverse to restore natural order
+	if !p.IsForward() {
+		for i, j := 0, len(out.Edges)-1; i < j; i, j = i+1, j-1 {
+			out.Edges[i], out.Edges[j] = out.Edges[j], out.Edges[i]
+		}
+	}
+
+	if len(out.Edges) > 0 {
+		pageInfo.StartCursor = out.Edges[0].Cursor
+		pageInfo.EndCursor = out.Edges[len(out.Edges)-1].Cursor
+	}
+
+	out.PageInfo = pageInfo
+
+	return out, nil
+}
+
+// GetEnrolledCourses retrieves courses a user is enrolled in with progress information
+func (r *pgRepository) GetEnrolledCourses(ctx context.Context, userID uuid.UUID, p pagination.Pagination) (CoursesWithProgressConnection, error) {
+	var (
+		out   CoursesWithProgressConnection
+		arger db.Argumenter
+	)
+
+	// Join user_course_progress with courses to get enrolled courses
+	whereClauses := []string{
+		"c.deleted_at IS NULL",
+		fmt.Sprintf("ucp.user_id = %s", arger.Add(userID)),
+	}
+
+	if !p.Cursor().IsEmpty() {
+		var cursor CourseCursor
+		if err := pagination.FromCursor(p.Cursor(), &cursor); err != nil {
+			return out, errors.Trace(err)
+		}
+		whereClauses = append(whereClauses, fmt.Sprintf(`c."order" %s %s`, p.Comparator(), arger.Add(cursor.Order)))
+	}
+
+	query := fmt.Sprintf(
+		`SELECT c.id, c."order", c.title, c.description, c.created_at, c.edited_at, c.deleted_at,
+		        ucp.current_lesson
+		 FROM user_course_progress ucp
+		 JOIN courses c ON c.id = ucp.course_id
+		 WHERE %s
+		 ORDER BY c."order" %s
+		 LIMIT %s`,
+		strings.Join(whereClauses, " AND "),
+		p.OrderBy(),
+		arger.Add(p.Limit()+1),
+	)
+
+	rows, err := r.db.QueryContext(ctx, query, arger.Values()...)
+	if err != nil {
+		return out, errors.Trace(err)
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var c Course
+		var currentLessonID uuid.UUID
+
+		if err := rows.Scan(&c.ID, &c.Order, &c.Title, &c.Description, &c.CreatedAt, &c.EditedAt, &c.DeletedAt, &currentLessonID); err != nil {
+			return out, errors.Trace(err)
+		}
+
+		cursor, err := pagination.ToCursor(CourseCursor{Order: c.Order})
+		if err != nil {
+			return out, errors.Trace(err)
+		}
+
+		out.Edges = append(out.Edges, CourseWithProgressEdge{
+			Course: &CourseWithProgress{
+				Course:          c,
+				CurrentLessonID: currentLessonID.String(),
+			},
 			Cursor: cursor,
 		})
 	}

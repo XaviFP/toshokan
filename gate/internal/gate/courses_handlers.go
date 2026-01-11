@@ -129,6 +129,40 @@ func EnrollCourse(ctx *gin.Context, client pb.CourseAPIClient) {
 	ctx.JSON(http.StatusOK, gin.H{"success": res.Success})
 }
 
+func GetEnrolledCourses(ctx *gin.Context, client pb.CourseAPIClient) {
+	userID := getUserID(ctx)
+
+	if userID == "" {
+		ctx.JSON(http.StatusBadRequest, gin.H{"error": "missing user id"})
+		return
+	}
+
+	pagination, err := parsePagination(ctx)
+	if err != nil {
+		ctx.JSON(http.StatusBadRequest, gin.H{"error": "invalid pagination parameters"})
+		return
+	}
+
+	req := &pb.GetEnrolledCoursesRequest{
+		UserId:     userID,
+		Pagination: pagination,
+	}
+
+	res, err := client.GetEnrolledCourses(ctx, req)
+	if err != nil {
+		if isHandledError(ctx, err) {
+			return
+		}
+		ctx.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	ctx.JSON(http.StatusOK, gin.H{
+		"edges":     convertCourseWithProgressEdges(res.Courses.Edges),
+		"page_info": toPageInfoJSON(res.Courses.PageInfo),
+	})
+}
+
 func GetLessonState(ctx *gin.Context, client pb.CourseAPIClient) {
 	courseID := ctx.Param("courseId")
 	lessonID := ctx.Param("lessonId")
@@ -222,6 +256,7 @@ func CreateCourse(ctx *gin.Context, client pb.CourseAPIClient) {
 	}
 
 	createReq := &pb.CreateCourseRequest{
+		Order:       req.Order,
 		Title:       req.Title,
 		Description: req.Description,
 	}
@@ -284,6 +319,9 @@ func RegisterCoursesRoutes(r *gin.RouterGroup, client pb.CourseAPIClient) {
 	{
 		course.POST("", func(ctx *gin.Context) {
 			CreateCourse(ctx, client)
+		})
+		course.GET("/enrolled", func(ctx *gin.Context) {
+			GetEnrolledCourses(ctx, client)
 		})
 		course.GET("/:courseId", func(ctx *gin.Context) {
 			GetCourse(ctx, client)
@@ -353,6 +391,18 @@ type LessonWithProgressEdgeJSON struct {
 	Cursor string                 `json:"cursor"`
 }
 
+// CourseWithProgressJSON represents a course with progress for JSON response (flattened)
+type CourseWithProgressJSON struct {
+	CourseJSON
+	CurrentLessonID string `json:"current_lesson_id"`
+}
+
+// CourseWithProgressEdgeJSON represents a course with progress edge for JSON response
+type CourseWithProgressEdgeJSON struct {
+	Node   CourseWithProgressJSON `json:"node"`
+	Cursor string                 `json:"cursor"`
+}
+
 type PageInfoJSON struct {
 	HasPreviousPage bool   `json:"has_previous_page"`
 	HasNextPage     bool   `json:"has_next_page"`
@@ -382,6 +432,22 @@ func convertLessonWithProgressEdges(edges []*pb.LessonsWithProgressConnection_Ed
 				LessonJSON:  baseLesson,
 				IsCompleted: edge.Node.IsCompleted,
 				IsCurrent:   edge.Node.IsCurrent,
+			},
+			Cursor: edge.Cursor,
+		}
+	}
+	return result
+}
+
+// convertCourseWithProgressEdges converts pb CoursesWithProgressConnection Edges to JSON format
+func convertCourseWithProgressEdges(edges []*pb.CoursesWithProgressConnection_Edge) []CourseWithProgressEdgeJSON {
+	result := make([]CourseWithProgressEdgeJSON, len(edges))
+	for i, edge := range edges {
+		baseCourse := toCourseJSON(edge.Node.Course)
+		result[i] = CourseWithProgressEdgeJSON{
+			Node: CourseWithProgressJSON{
+				CourseJSON:      baseCourse,
+				CurrentLessonID: edge.Node.CurrentLessonId,
 			},
 			Cursor: edge.Cursor,
 		}

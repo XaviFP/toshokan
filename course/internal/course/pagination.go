@@ -33,3 +33,33 @@ type LessonsWithProgressConnection struct {
 	Edges    []LessonWithProgressEdge
 	PageInfo pagination.PageInfo
 }
+
+// Course pagination types
+type CourseCursor struct {
+	Order int64 `json:"order"`
+}
+
+type CourseEdge struct {
+	Course Course
+	Cursor pagination.Cursor
+}
+
+type CoursesConnection struct {
+	Edges    []CourseEdge
+	PageInfo pagination.PageInfo
+}
+
+type CourseWithProgress struct {
+	Course          Course
+	CurrentLessonID string // UUID as string
+}
+
+type CourseWithProgressEdge struct {
+	Course *CourseWithProgress
+	Cursor pagination.Cursor
+}
+
+type CoursesWithProgressConnection struct {
+	Edges    []CourseWithProgressEdge
+	PageInfo pagination.PageInfo
+}
