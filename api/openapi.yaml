@@ -454,7 +454,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/LessonStateResponse'
+                $ref: '#/components/schemas/GetLessonStateResponse'
         '400':
           description: Missing required parameters
           content:
@@ -1138,22 +1138,9 @@ components:
         - created_at
         - updated_at
 
-    DeckState:
+    CardState:
       type: object
-      properties:
-        id:
-          type: string
-          format: uuid
-          description: Deck UUID
-        completed:
-          type: boolean
-          description: Whether the deck is completed
-      required:
-        - id
-        - completed
-
-    CardProgress:
-      type: object
+      description: Completion state for a single card
       properties:
         correct_answers:
           type: integer
@@ -1176,14 +1163,15 @@ components:
         - incorrect_answers
         - is_completed
 
-    DeckProgress:
+    DeckState:
       type: object
+      description: Completion state for a deck, containing card-level state
       properties:
         cards:
           type: object
           additionalProperties:
-            $ref: '#/components/schemas/CardProgress'
-          description: Map of card UUID to card progress (card_id → CardProgress)
+            $ref: '#/components/schemas/CardState'
+          description: Map of card UUID to card state (card_id → CardState)
         is_completed:
           type: boolean
           description: Whether all cards in the deck are completed
@@ -1196,14 +1184,15 @@ components:
         - cards
         - is_completed
 
-    LessonProgress:
+    LessonState:
       type: object
+      description: Completion state for a lesson, containing deck-level state
       properties:
         decks:
           type: object
           additionalProperties:
-            $ref: '#/components/schemas/DeckProgress'
-          description: Map of deck UUID to deck progress (deck_id → DeckProgress)
+            $ref: '#/components/schemas/DeckState'
+          description: Map of deck UUID to deck state (deck_id → DeckState)
         is_completed:
           type: boolean
           description: Whether all decks in the lesson are completed
@@ -1216,61 +1205,16 @@ components:
         - decks
         - is_completed
 
-    LessonState:
+    GetLessonStateResponse:
       type: object
+      description: |
+        Response containing the completion state of a lesson and all its decks/cards.
+        Structure: lesson_state[lessonId].decks[deckId].cards[cardId] → CardState
       properties:
         lesson_state:
           type: object
           additionalProperties:
-            $ref: '#/components/schemas/LessonProgress'
-          description: Map of lesson UUID to lesson progress (lesson_id → LessonProgress)
+            $ref: '#/components/schemas/LessonState'
+          description: Map of lesson UUID to lesson state (lesson_id → LessonState)
       required:
         - lesson_state
-
-    LessonStateResponse:
-      type: object
-      properties:
-        id:
-          type: string
-          format: uuid
-          description: Lesson UUID
-        completed:
-          type: boolean
-          description: Whether the lesson is completed
-        decks:
-          type: array
-          items:
-            type: object
-            properties:
-              id:
-                type: string
-                format: uuid
-                description: Deck UUID
-              completed:
-                type: boolean
-                description: Whether the deck is completed
-              cards:
-                type: array
-                items:
-                  type: object
-                  properties:
-                    id:
-                      type: string
-                      format: uuid
-                      description: Card UUID
-                    completed:
-                      type: boolean
-                      description: Whether the card is completed
-                  required:
-                    - id
-                    - completed
-                description: Array of card completion statuses
-            required:
-              - id
-              - completed
-              - cards
-          description: Array of deck completion statuses
-      required:
-        - id
-        - completed
-        - decks
