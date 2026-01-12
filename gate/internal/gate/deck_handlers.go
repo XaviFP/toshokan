@@ -2,11 +2,13 @@ package gate
 
 import (
 	"context"
+	"log/slog"
 	"net/http"
 	"strings"
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
+	"github.com/juju/errors"
 
 	pbDeck "github.com/XaviFP/toshokan/deck/api/proto/v1"
 	pbUser "github.com/XaviFP/toshokan/user/api/proto/v1"
@@ -21,6 +23,7 @@ func GetDeck(ctx *gin.Context, usersClient pbUser.UserAPIClient, decksClient pbD
 
 	// Validate UUID format
 	if _, err := uuid.Parse(deckID); err != nil {
+		slog.Error("GetDeck: failed to parse deck ID", "error", err, "deckId", deckID, "stack", errors.ErrorStack(err))
 		ctx.JSON(http.StatusBadRequest, gin.H{"error": "invalid deck id format"})
 		return
 	}
@@ -31,9 +34,11 @@ func GetDeck(ctx *gin.Context, usersClient pbUser.UserAPIClient, decksClient pbD
 	if err != nil {
 		// TODO: Handle these errors properly
 		if strings.Contains(err.Error(), "deck: deck not found") {
+			slog.Error("GetDeck: deck not found", "error", err, "deckId", deckID)
 			ctx.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
 			return
 		}
+		slog.Error("GetDeck: gRPC call failed", "error", err, "deckId", deckID, "stack", errors.ErrorStack(err))
 		ctx.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
@@ -44,6 +49,7 @@ func GetDeck(ctx *gin.Context, usersClient pbUser.UserAPIClient, decksClient pbD
 func CreateDeck(ctx *gin.Context, usersClient pbUser.UserAPIClient, decksClient pbDeck.DecksAPIClient) {
 	var d pbDeck.Deck
 	if err := ctx.ShouldBindJSON(&d); err != nil {
+		slog.Error("CreateDeck: failed to bind JSON", "error", err, "stack", errors.ErrorStack(err))
 		ctx.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
@@ -56,6 +62,7 @@ func CreateDeck(ctx *gin.Context, usersClient pbUser.UserAPIClient, decksClient 
 
 	userID := getUserID(ctx)
 	if userID == "" {
+		slog.Error("CreateDeck: missing user ID from context")
 		ctx.JSON(http.StatusInternalServerError, gin.H{"error": "internal server error"})
 		return
 	}
@@ -67,9 +74,11 @@ func CreateDeck(ctx *gin.Context, usersClient pbUser.UserAPIClient, decksClient 
 		// Check if it's a validation error (invalid deck)
 		// TODO: Handle these errors properly
 		if strings.Contains(err.Error(), "deck: invalid deck") {
+			slog.Error("CreateDeck: validation error", "error", err, "title", d.Title)
 			ctx.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 			return
 		}
+		slog.Error("CreateDeck: gRPC call failed", "error", err, "title", d.Title, "stack", errors.ErrorStack(err))
 		ctx.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
@@ -85,12 +94,14 @@ func DeleteDeck(ctx *gin.Context, usersClient pbUser.UserAPIClient, decksClient 
 	}
 
 	if _, err := uuid.Parse(id); err != nil {
+		slog.Error("DeleteDeck: failed to parse deck ID", "error", err, "deckId", id, "stack", errors.ErrorStack(err))
 		ctx.JSON(http.StatusBadRequest, gin.H{"error": "invalid deck id format"})
 		return
 	}
 
 	_, err := decksClient.DeleteDeck(ctx, &pbDeck.DeleteDeckRequest{Id: id})
 	if err != nil {
+		slog.Error("DeleteDeck: gRPC call failed", "error", err, "deckId", id, "stack", errors.ErrorStack(err))
 		ctx.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
@@ -132,6 +143,7 @@ func isAuthorized(ctx *gin.Context, usersClient pbUser.UserAPIClient) {
 		},
 	})
 	if err != nil {
+		slog.Error("isAuthorized: failed to get user ID from token", "error", err, "stack", errors.ErrorStack(err))
 		ctx.JSON(http.StatusUnauthorized, gin.H{})
 		ctx.Abort()
 		return

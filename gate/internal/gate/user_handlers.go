@@ -1,10 +1,12 @@
 package gate
 
 import (
+	"log/slog"
 	"net/http"
 	"strings"
 
 	"github.com/gin-gonic/gin"
+	"github.com/juju/errors"
 
 	userPB "github.com/XaviFP/toshokan/user/api/proto/v1"
 )
@@ -29,6 +31,7 @@ func signUp(ctx *gin.Context, userClient userPB.UserAPIClient) {
 	var req userPB.SignUpRequest
 
 	if err := ctx.ShouldBindJSON(&req); err != nil {
+		slog.Error("signUp: failed to bind JSON", "error", err, "stack", errors.ErrorStack(err))
 		ctx.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
@@ -46,9 +49,11 @@ func signUp(ctx *gin.Context, userClient userPB.UserAPIClient) {
 	if err != nil {
 		// TODO: Handle these errors properly
 		if strings.Contains(err.Error(), "user:") {
+			slog.Error("signUp: user creation error", "error", err, "username", req.Username)
 			ctx.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 			return
 		}
+		slog.Error("signUp: gRPC call failed", "error", err, "username", req.Username, "stack", errors.ErrorStack(err))
 		ctx.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
@@ -60,12 +65,14 @@ func logIn(ctx *gin.Context, userClient userPB.UserAPIClient) {
 	var req userPB.LogInRequest
 
 	if err := ctx.ShouldBindJSON(&req); err != nil {
+		slog.Error("logIn: failed to bind JSON", "error", err, "stack", errors.ErrorStack(err))
 		ctx.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
 
 	res, err := userClient.LogIn(ctx, &req)
 	if err != nil {
+		slog.Error("logIn: authentication failed", "error", err, "username", req.Username, "stack", errors.ErrorStack(err))
 		ctx.JSON(http.StatusUnauthorized, gin.H{"error": err.Error()})
 		return
 	}
