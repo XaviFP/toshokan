@@ -28,6 +28,7 @@ var (
 	ErrNoAnswersProvided = errors.New("deck: no answers provided")
 	ErrNoCorrectAnswer   = errors.New("deck: at least one answer must be correct")
 	ErrNoTextAnswer      = errors.New("deck: all answers must have a non-empty text")
+	ErrInvalidKind       = errors.New("deck: kind must be 'single_choice' or 'fill_in_the_blanks'")
 	ErrDeckAlreadyExists = errors.New("deck: deck already exists")
 	ErrDeckInvalid       = errors.New("deck: invalid deck")
 	ErrInvalidCursor     = errors.New("deck: invalid cusror")
