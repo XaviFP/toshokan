@@ -2,6 +2,7 @@ package grpc
 
 import (
 	"context"
+	"log/slog"
 	"net"
 
 	"github.com/google/uuid"
@@ -48,21 +49,24 @@ func (s *Server) Stop() {
 func (s *Server) GetDeck(ctx context.Context, req *pb.GetDeckRequest) (*pb.GetDeckResponse, error) {
 	deckID, err := uuid.Parse(req.DeckId)
 	if err != nil {
+		slog.Error("GetDeck: failed to parse deck ID", "error", err, "deckId", req.DeckId, "stack", errors.ErrorStack(err))
 		return &pb.GetDeckResponse{}, errors.Trace(err)
 	}
 
 	d, err := s.Repository.GetDeck(ctx, deckID)
 	if err != nil {
 		if errors.Cause(err) == deck.ErrDeckNotFound {
-
+			slog.Error("GetDeck: deck not found", "error", err, "deckId", deckID.String())
 			return &pb.GetDeckResponse{}, status.Error(codes.NotFound, errors.Trace(err).Error())
 		}
+		slog.Error("GetDeck: failed to get deck from repository", "error", err, "deckId", deckID.String(), "stack", errors.ErrorStack(err))
 		return &pb.GetDeckResponse{}, errors.Trace(err)
 	}
 
 	// TODO: Provide an "internal" GetDeck that doesn't require authorization/ownership check
 	// For services that need to access decks regardless of public/private status
 	if (d.AuthorID.String() != req.UserId) && !d.Public {
+		slog.Error("GetDeck: private deck access denied", "deckId", deckID.String(), "authorId", d.AuthorID.String(), "requestUserId", req.UserId)
 		return nil, errors.New("private deck access denied")
 	}
 
@@ -75,6 +79,7 @@ func (s *Server) GetDecks(ctx context.Context, req *pb.GetDecksRequest) (*pb.Get
 	for _, idStr := range req.DeckIds {
 		id, err := uuid.Parse(idStr)
 		if err != nil {
+			slog.Error("GetDecks: failed to parse deck ID", "error", err, "deckId", idStr, "stack", errors.ErrorStack(err))
 			return nil, errors.Trace(err)
 		}
 
@@ -83,6 +88,7 @@ func (s *Server) GetDecks(ctx context.Context, req *pb.GetDecksRequest) (*pb.Get
 
 	decks, err := s.Repository.GetDecks(ctx, ids)
 	if err != nil {
+		slog.Error("GetDecks: failed to get decks from repository", "error", err, "deckCount", len(ids), "stack", errors.ErrorStack(err))
 		return &pb.GetDecksResponse{}, errors.Trace(err)
 	}
 
@@ -98,11 +104,13 @@ func (s *Server) GetDecks(ctx context.Context, req *pb.GetDecksRequest) (*pb.Get
 func (s *Server) GetPopularDecks(ctx context.Context, req *pb.GetPopularDecksRequest) (*pb.GetPopularDecksResponse, error) {
 	userID, err := uuid.Parse(req.UserId)
 	if err != nil {
+		slog.Error("GetPopularDecks: failed to parse user ID", "error", err, "userId", req.UserId, "stack", errors.ErrorStack(err))
 		return nil, errors.Trace(err)
 	}
 
 	res, err := s.Repository.GetPopularDecks(ctx, userID, paginationFromProto(req.Pagination))
 	if err != nil {
+		slog.Error("GetPopularDecks: failed to get popular decks", "error", err, "userId", userID.String(), "stack", errors.ErrorStack(err))
 		return nil, errors.Trace(err)
 	}
 
@@ -114,11 +122,13 @@ func (s *Server) GetPopularDecks(ctx context.Context, req *pb.GetPopularDecksReq
 func (s *Server) CreateCard(ctx context.Context, req *pb.CreateCardRequest) (*pb.CreateCardResponse, error) {
 	deckID, err := uuid.Parse(req.Card.DeckId)
 	if err != nil {
+		slog.Error("CreateCard: failed to parse deck ID", "error", err, "deckId", req.Card.DeckId, "stack", errors.ErrorStack(err))
 		return nil, errors.Trace(err)
 	}
 
 	card, err := fromGRPCCard(req.Card)
 	if err != nil {
+		slog.Error("CreateCard: failed to convert card from gRPC", "error", err, "deckId", deckID.String(), "stack", errors.ErrorStack(err))
 		return nil, errors.Trace(err)
 	}
 
@@ -131,8 +141,10 @@ func (s *Server) CreateCard(ctx context.Context, req *pb.CreateCardRequest) (*pb
 	_, err = s.Repository.GetDeck(ctx, deckID)
 	if err != nil {
 		if errors.Cause(err) == deck.ErrDeckNotFound {
+			slog.Error("CreateCard: deck not found", "error", err, "deckId", deckID.String())
 			return &pb.CreateCardResponse{}, status.Error(codes.NotFound, errors.Trace(err).Error())
 		}
+		slog.Error("CreateCard: failed to get deck", "error", err, "deckId", deckID.String(), "stack", errors.ErrorStack(err))
 		return &pb.CreateCardResponse{}, errors.Trace(err)
 	}
 
@@ -140,6 +152,7 @@ func (s *Server) CreateCard(ctx context.Context, req *pb.CreateCardRequest) (*pb
 
 	err = s.Repository.StoreCard(ctx, card, deckID)
 	if err != nil {
+		slog.Error("CreateCard: failed to store card", "error", err, "deckId", deckID.String(), "cardId", card.ID.String(), "stack", errors.ErrorStack(err))
 		return nil, errors.Trace(err)
 	}
 
@@ -152,6 +165,7 @@ func (s *Server) GetCards(ctx context.Context, req *pb.GetCardsRequest) (*pb.Get
 	for _, idStr := range req.CardIds {
 		id, err := uuid.Parse(idStr)
 		if err != nil {
+			slog.Error("GetCards: failed to parse card ID", "error", err, "cardId", idStr, "stack", errors.ErrorStack(err))
 			return nil, errors.Trace(err)
 		}
 
@@ -160,6 +174,7 @@ func (s *Server) GetCards(ctx context.Context, req *pb.GetCardsRequest) (*pb.Get
 
 	cards, err := s.Repository.GetCards(ctx, ids)
 	if err != nil {
+		slog.Error("GetCards: failed to get cards from repository", "error", err, "cardCount", len(ids), "stack", errors.ErrorStack(err))
 		return &pb.GetCardsResponse{}, errors.Trace(err)
 	}
 
@@ -205,6 +220,7 @@ func connectionToProto(conn deck.PopularDecksConnection) *pb.PopularDecksConnect
 func (s *Server) CreateDeck(ctx context.Context, req *pb.CreateDeckRequest) (*pb.CreateDeckResponse, error) {
 	d, err := fromGRPCDeck(req.Deck)
 	if err != nil {
+		slog.Error("CreateDeck: failed to convert deck from gRPC", "error", err, "stack", errors.ErrorStack(err))
 		return nil, errors.Trace(err)
 	}
 
@@ -216,6 +232,7 @@ func (s *Server) CreateDeck(ctx context.Context, req *pb.CreateDeckRequest) (*pb
 	d.GenerateUUIDs()
 
 	if err := s.Repository.StoreDeck(ctx, d); err != nil {
+		slog.Error("CreateDeck: failed to store deck", "error", err, "deckId", d.ID.String(), "stack", errors.ErrorStack(err))
 		return &pb.CreateDeckResponse{}, errors.Trace(err)
 	}
 
@@ -225,10 +242,14 @@ func (s *Server) CreateDeck(ctx context.Context, req *pb.CreateDeckRequest) (*pb
 func (s *Server) DeleteDeck(ctx context.Context, req *pb.DeleteDeckRequest) (*pb.DeleteDeckResponse, error) {
 	deckID, err := uuid.Parse(req.Id)
 	if err != nil {
+		slog.Error("DeleteDeck: failed to parse deck ID", "error", err, "deckId", req.Id, "stack", errors.ErrorStack(err))
 		return &pb.DeleteDeckResponse{}, errors.Trace(err)
 	}
 
 	err = s.Repository.DeleteDeck(ctx, deckID)
+	if err != nil {
+		slog.Error("DeleteDeck: failed to delete deck", "error", err, "deckId", deckID.String(), "stack", errors.ErrorStack(err))
+	}
 
 	return &pb.DeleteDeckResponse{}, errors.Trace(err)
 }
@@ -300,6 +321,7 @@ func fromGRPCDeck(d *pb.Deck) (deck.Deck, error) {
 
 		deckID, err = uuid.Parse(d.Id)
 		if err != nil {
+			slog.Error("fromGRPCDeck: failed to parse deck ID", "error", err, "deckId", d.Id, "stack", errors.ErrorStack(err))
 			return deck.Deck{}, errors.Trace(err)
 		}
 
@@ -307,11 +329,13 @@ func fromGRPCDeck(d *pb.Deck) (deck.Deck, error) {
 
 	authorID, err := uuid.Parse(d.AuthorId)
 	if err != nil {
+		slog.Error("fromGRPCDeck: failed to parse author ID", "error", err, "authorId", d.AuthorId, "stack", errors.ErrorStack(err))
 		return deck.Deck{}, errors.Trace(err)
 	}
 
 	cards, err := fromGRPCCards(d.Cards)
 	if err != nil {
+		slog.Error("fromGRPCDeck: failed to convert cards", "error", err, "cardCount", len(d.Cards), "stack", errors.ErrorStack(err))
 		return deck.Deck{}, errors.Trace(err)
 	}
 
@@ -331,6 +355,7 @@ func fromGRPCCards(cards []*pb.Card) ([]deck.Card, error) {
 	for _, c := range cards {
 		converted, err := fromGRPCCard(c)
 		if err != nil {
+			slog.Error("fromGRPCCards: failed to convert card", "error", err, "cardTitle", c.Title, "stack", errors.ErrorStack(err))
 			return []deck.Card{}, errors.Trace(err)
 		}
 
@@ -348,12 +373,14 @@ func fromGRPCCard(c *pb.Card) (deck.Card, error) {
 
 		cardID, err = uuid.Parse(c.Id)
 		if err != nil {
+			slog.Error("fromGRPCCard: failed to parse card ID", "error", err, "cardId", c.Id, "stack", errors.ErrorStack(err))
 			return deck.Card{}, errors.Trace(err)
 		}
 	}
 
 	answers, err := fromGRPCAnswers(c.PossibleAnswers)
 	if err != nil {
+		slog.Error("fromGRPCCard: failed to convert answers", "error", err, "answerCount", len(c.PossibleAnswers), "stack", errors.ErrorStack(err))
 		return deck.Card{}, errors.Trace(err)
 	}
 
@@ -376,6 +403,7 @@ func fromGRPCAnswers(answers []*pb.Answer) ([]deck.Answer, error) {
 
 			answerID, err = uuid.Parse(a.Id)
 			if err != nil {
+				slog.Error("fromGRPCAnswers: failed to parse answer ID", "error", err, "answerId", a.Id, "stack", errors.ErrorStack(err))
 				return []deck.Answer{}, errors.Trace(err)
 			}
 		}
