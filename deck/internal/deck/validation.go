@@ -50,6 +50,10 @@ func ValidateCard(c Card) (bool, ErroredCard) {
 		eq.Errs = append(eq.Errs, ErrNoTitle)
 	}
 
+	if c.Kind != CardKindSingleChoice && c.Kind != CardKindFillInTheBlanks {
+		eq.Errs = append(eq.Errs, ErrInvalidKind)
+	}
+
 	if len(c.PossibleAnswers) == 0 {
 		eq.Errs = append(eq.Errs, ErrNoAnswersProvided)
 	}

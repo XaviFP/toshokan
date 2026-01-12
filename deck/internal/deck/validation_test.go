@@ -38,6 +38,7 @@ func TestValidation_ValidateCards(t *testing.T) {
 	testCards := []Card{
 		{
 			Title: "Which is the underlying data type of a slice in Go?",
+			Kind:  CardKindSingleChoice,
 			PossibleAnswers: []Answer{
 				{Text: "Map", IsCorrect: false},
 				{Text: "Linked list", IsCorrect: false},
@@ -46,19 +47,29 @@ func TestValidation_ValidateCards(t *testing.T) {
 		},
 		{
 			Title: "What does CSP stand for?",
+			Kind:  CardKindFillInTheBlanks,
 			PossibleAnswers: []Answer{
 				{Text: "Communicating Sequential Processes", IsCorrect: false},
 			},
 		},
 		{
+			Kind: CardKindSingleChoice,
 			PossibleAnswers: []Answer{
 				{Text: "Communicating Sequential Processes", IsCorrect: true},
 			},
 		},
 		{
 			Title: "What does CSP stand for?",
+			Kind:  CardKindSingleChoice,
 		},
 		{},
+		{
+			Title: "Invalid kind test",
+			Kind:  "invalid_kind",
+			PossibleAnswers: []Answer{
+				{Text: "Answer", IsCorrect: true},
+			},
+		},
 	}
 
 	isValid, erroredCards := ValidateCards(testCards)
@@ -66,5 +77,6 @@ func TestValidation_ValidateCards(t *testing.T) {
 	assert.Equal(t, []error{ErrNoCorrectAnswer}, erroredCards[0].Errs)
 	assert.Equal(t, []error{ErrNoTitle}, erroredCards[1].Errs)
 	assert.Equal(t, []error{ErrNoAnswersProvided, ErrNoCorrectAnswer}, erroredCards[2].Errs)
-	assert.Equal(t, []error{ErrNoTitle, ErrNoAnswersProvided, ErrNoCorrectAnswer}, erroredCards[3].Errs)
+	assert.Equal(t, []error{ErrNoTitle, ErrInvalidKind, ErrNoAnswersProvided, ErrNoCorrectAnswer}, erroredCards[3].Errs)
+	assert.Equal(t, []error{ErrInvalidKind}, erroredCards[4].Errs)
 }

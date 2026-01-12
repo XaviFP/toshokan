@@ -4,6 +4,12 @@ import (
 	"github.com/google/uuid"
 )
 
+// Card kind constants
+const (
+	CardKindSingleChoice    = "single_choice"
+	CardKindFillInTheBlanks = "fill_in_the_blanks"
+)
+
 type Deck struct {
 	ID          uuid.UUID `json:"id,omitempty"`
 	AuthorID    uuid.UUID `json:"authorId,omitempty"`
