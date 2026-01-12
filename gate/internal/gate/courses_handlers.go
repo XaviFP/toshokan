@@ -1,6 +1,7 @@
 package gate
 
 import (
+	"log/slog"
 	"net/http"
 	"strconv"
 	"strings"
@@ -27,6 +28,7 @@ func GetCourse(ctx *gin.Context, client pb.CourseAPIClient) {
 		if isHandledError(ctx, err) {
 			return
 		}
+		slog.Error("GetCourse: gRPC call failed", "error", err, "courseId", courseID, "stack", errors.ErrorStack(err))
 		ctx.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
@@ -43,6 +45,7 @@ func GetLessons(ctx *gin.Context, client pb.CourseAPIClient) {
 
 	pagination, err := parsePagination(ctx)
 	if err != nil {
+		slog.Error("GetLessons: failed to parse pagination", "error", err, "courseId", courseID, "stack", errors.ErrorStack(err))
 		ctx.JSON(http.StatusBadRequest, gin.H{"error": "invalid pagination parameters"})
 		return
 	}
@@ -57,6 +60,7 @@ func GetLessons(ctx *gin.Context, client pb.CourseAPIClient) {
 		if isHandledError(ctx, err) {
 			return
 		}
+		slog.Error("GetLessons: gRPC call failed", "error", err, "courseId", courseID, "stack", errors.ErrorStack(err))
 		ctx.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
@@ -78,6 +82,7 @@ func GetFocusedLessons(ctx *gin.Context, client pb.CourseAPIClient) {
 
 	pagination, err := parsePagination(ctx)
 	if err != nil {
+		slog.Error("GetFocusedLessons: failed to parse pagination", "error", err, "courseId", courseID, "userId", userID, "stack", errors.ErrorStack(err))
 		ctx.JSON(http.StatusBadRequest, gin.H{"error": "invalid pagination parameters"})
 		return
 	}
@@ -93,6 +98,7 @@ func GetFocusedLessons(ctx *gin.Context, client pb.CourseAPIClient) {
 		if isHandledError(ctx, err) {
 			return
 		}
+		slog.Error("GetFocusedLessons: gRPC call failed", "error", err, "courseId", courseID, "userId", userID, "stack", errors.ErrorStack(err))
 		ctx.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
@@ -122,6 +128,7 @@ func EnrollCourse(ctx *gin.Context, client pb.CourseAPIClient) {
 		if isHandledError(ctx, err) {
 			return
 		}
+		slog.Error("EnrollCourse: gRPC call failed", "error", err, "courseId", courseID, "userId", userID, "stack", errors.ErrorStack(err))
 		ctx.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
@@ -139,6 +146,7 @@ func GetEnrolledCourses(ctx *gin.Context, client pb.CourseAPIClient) {
 
 	pagination, err := parsePagination(ctx)
 	if err != nil {
+		slog.Error("GetEnrolledCourses: failed to parse pagination", "error", err, "userId", userID, "stack", errors.ErrorStack(err))
 		ctx.JSON(http.StatusBadRequest, gin.H{"error": "invalid pagination parameters"})
 		return
 	}
@@ -153,6 +161,7 @@ func GetEnrolledCourses(ctx *gin.Context, client pb.CourseAPIClient) {
 		if isHandledError(ctx, err) {
 			return
 		}
+		slog.Error("GetEnrolledCourses: gRPC call failed", "error", err, "userId", userID, "userIdLen", len(userID), "stack", errors.ErrorStack(err))
 		ctx.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
@@ -184,6 +193,7 @@ func GetLessonState(ctx *gin.Context, client pb.CourseAPIClient) {
 		if isHandledError(ctx, err) {
 			return
 		}
+		slog.Error("GetLessonState: gRPC call failed", "error", err, "courseId", courseID, "lessonId", lessonID, "userId", userID, "stack", errors.ErrorStack(err))
 		ctx.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
@@ -196,6 +206,7 @@ func GetLessonState(ctx *gin.Context, client pb.CourseAPIClient) {
 
 	jsonBytes, err := marshaler.Marshal(&pb.GetLessonStateResponse{LessonState: res.LessonState})
 	if err != nil {
+		slog.Error("GetLessonState: failed to marshal response", "error", err, "courseId", courseID, "lessonId", lessonID, "stack", errors.ErrorStack(err))
 		ctx.JSON(http.StatusInternalServerError, gin.H{"error": "failed to marshal response"})
 		return
 	}
@@ -216,6 +227,7 @@ func AnswerCards(ctx *gin.Context, client pb.CourseAPIClient) {
 
 	var cardAnswers []*pb.CardAnswer
 	if err := ctx.ShouldBindJSON(&cardAnswers); err != nil {
+		slog.Error("AnswerCards: failed to bind JSON", "error", err, "courseId", courseID, "lessonId", lessonID, "deckId", deckID, "stack", errors.ErrorStack(err))
 		ctx.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
@@ -232,10 +244,12 @@ func AnswerCards(ctx *gin.Context, client pb.CourseAPIClient) {
 	if err != nil {
 		// TODO: Handle these errors properly
 		if strings.Contains(err.Error(), "lesson") || strings.Contains(err.Error(), "deck") || strings.Contains(err.Error(), "card") || strings.Contains(err.Error(), "invalid UUID") {
+			slog.Error("AnswerCards: validation error", "error", err, "courseId", courseID, "lessonId", lessonID, "deckId", deckID, "userId", userID)
 			ctx.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 			return
 		}
 
+		slog.Error("AnswerCards: gRPC call failed", "error", err, "courseId", courseID, "lessonId", lessonID, "deckId", deckID, "userId", userID, "stack", errors.ErrorStack(err))
 		ctx.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
@@ -263,6 +277,7 @@ func CreateCourse(ctx *gin.Context, client pb.CourseAPIClient) {
 
 	res, err := client.CreateCourse(ctx, createReq)
 	if err != nil {
+		slog.Error("CreateCourse: gRPC call failed", "error", err, "title", req.Title, "stack", errors.ErrorStack(err))
 		ctx.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
@@ -301,12 +316,14 @@ func CreateLesson(ctx *gin.Context, client pb.CourseAPIClient) {
 	if err != nil {
 		//  TODO: Handle these errors properly
 		if strings.Contains(err.Error(), "at least one deck in the body") {
+			slog.Error("CreateLesson: validation error - no deck references", "error", err, "courseId", courseID, "title", req.Title)
 			ctx.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 			return
 		}
 		if isHandledError(ctx, err) {
 			return
 		}
+		slog.Error("CreateLesson: gRPC call failed", "error", err, "courseId", courseID, "title", req.Title, "stack", errors.ErrorStack(err))
 		ctx.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
