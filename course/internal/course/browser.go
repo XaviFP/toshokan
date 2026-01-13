@@ -2,6 +2,7 @@ package course
 
 import (
 	"context"
+	"log/slog"
 
 	"github.com/google/uuid"
 	"github.com/juju/errors"
@@ -15,12 +16,14 @@ type LessonsBrowser interface {
 }
 
 type lessonsBrowser struct {
-	repo Repository
+	repo   Repository
+	syncer StateSyncer
 }
 
-func NewLessonsBrowser(repo Repository) *lessonsBrowser {
+func NewLessonsBrowser(repo Repository, syncer StateSyncer) *lessonsBrowser {
 	return &lessonsBrowser{
-		repo: repo,
+		repo:   repo,
+		syncer: syncer,
 	}
 }
 
@@ -63,6 +66,19 @@ func (b *lessonsBrowser) Browse(ctx context.Context, courseID uuid.UUID, p pagin
 
 	enrichedConn := b.enrichLessonsWithProgress(conn, progress)
 	result.ProgressLessons = &enrichedConn
+
+	if opts.UserID != nil  && *opts.UserID != uuid.Nil{
+		go func(userID uuid.UUID, courseID uuid.UUID) {
+			// The context is detached to avoid being cancelled when the request context is done.
+			if err := b.syncer.Sync(context.WithoutCancel(ctx), userID, courseID); err != nil {
+				slog.Error("syncing user state",
+					"user_id", userID,
+					"course_id", courseID,
+					"error", err,
+				)
+			}
+		}(*opts.UserID, courseID)
+	}
 
 	return result, nil
 }

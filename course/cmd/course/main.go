@@ -59,15 +59,15 @@ func main() {
 
 	realClock := clock.Realtime()
 	srv := &courseGRPC.Server{
-		GRPCTransport:   conf.GRPCConf.TransportProtocol,
-		GRPCAddr:        fmt.Sprintf("%s:%s", conf.GRPCConf.Host, conf.GRPCConf.Port),
-		Repository:      redisRepo,
-		DeckClient:      deckClient,
-		Enroller:        course.NewEnroller(realClock, redisRepo, deckClient),
-		LessonsBrowser:  course.NewLessonsBrowser(redisRepo),
-		CoursesBrowser:  course.NewCoursesBrowser(redisRepo),
-		Answerer:        course.NewAnswerer(redisRepo, course.NewStateSyncer(redisRepo, deckClient), deckClient),
-		Clock:           realClock,
+		GRPCTransport:  conf.GRPCConf.TransportProtocol,
+		GRPCAddr:       fmt.Sprintf("%s:%s", conf.GRPCConf.Host, conf.GRPCConf.Port),
+		Repository:     redisRepo,
+		DeckClient:     deckClient,
+		Enroller:       course.NewEnroller(realClock, redisRepo, deckClient),
+		LessonsBrowser: course.NewLessonsBrowser(redisRepo, course.NewStateSyncer(redisRepo, deckClient)),
+		CoursesBrowser: course.NewCoursesBrowser(redisRepo),
+		Answerer:       course.NewAnswerer(redisRepo, deckClient),
+		Clock:          realClock,
 	}
 
 	var serverError chan error
