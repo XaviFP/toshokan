@@ -84,3 +84,12 @@ func (m *CoursesBrowserMock) BrowseEnrolled(ctx context.Context, userID uuid.UUI
 	args := m.Called(ctx, userID, p)
 	return args.Get(0).(CoursesWithProgressConnection), args.Error(1)
 }
+
+type StateSyncerMock struct {
+	mock.Mock
+}
+
+func (m *StateSyncerMock) Sync(ctx context.Context, userID uuid.UUID, courseID uuid.UUID) error {
+	args := m.Called(ctx, userID, courseID)
+	return args.Error(0)
+}

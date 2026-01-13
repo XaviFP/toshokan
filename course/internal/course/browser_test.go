@@ -493,12 +493,3 @@ func waitForGoroutine(t *testing.T, c <-chan struct{}) {
 		t.Fatal("timeout waiting for goroutine")
 	}
 }
-
-type StateSyncerMock struct {
-	mock.Mock
-}
-
-func (m *StateSyncerMock) Sync(ctx context.Context, userID uuid.UUID, courseID uuid.UUID) error {
-	args := m.Called(ctx, userID, courseID)
-	return args.Error(0)
-}

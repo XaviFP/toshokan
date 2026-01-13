@@ -17,6 +17,7 @@ service CourseAPI {
   rpc AnswerCards (AnswerCardsRequest) returns (AnswerCardsResponse) {}
   rpc CreateCourse (CreateCourseRequest) returns (CreateCourseResponse) {}
   rpc CreateLesson (CreateLessonRequest) returns (CreateLessonResponse) {}
+  rpc SyncState (SyncStateRequest) returns (SyncStateResponse) {}
 }
 
 message Course {
@@ -169,6 +170,13 @@ message GetUserProgressRequest {
 message GetUserProgressResponse {
   UserCourseProgress progress = 1;
 }
+
+message SyncStateRequest {
+  string user_id = 1;
+  string course_id =2;
+}
+
+message SyncStateResponse {}
 
 message CardAnswer {
   string card_id = 1;
