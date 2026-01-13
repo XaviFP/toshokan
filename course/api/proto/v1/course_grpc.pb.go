@@ -33,6 +33,7 @@ type CourseAPIClient interface {
 	AnswerCards(ctx context.Context, in *AnswerCardsRequest, opts ...grpc.CallOption) (*AnswerCardsResponse, error)
 	CreateCourse(ctx context.Context, in *CreateCourseRequest, opts ...grpc.CallOption) (*CreateCourseResponse, error)
 	CreateLesson(ctx context.Context, in *CreateLessonRequest, opts ...grpc.CallOption) (*CreateLessonResponse, error)
+	SyncState(ctx context.Context, in *SyncStateRequest, opts ...grpc.CallOption) (*SyncStateResponse, error)
 }
 
 type courseAPIClient struct {
@@ -142,6 +143,15 @@ func (c *courseAPIClient) CreateLesson(ctx context.Context, in *CreateLessonRequ
 	return out, nil
 }
 
+func (c *courseAPIClient) SyncState(ctx context.Context, in *SyncStateRequest, opts ...grpc.CallOption) (*SyncStateResponse, error) {
+	out := new(SyncStateResponse)
+	err := c.cc.Invoke(ctx, "/course.v1.CourseAPI/SyncState", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // CourseAPIServer is the server API for CourseAPI service.
 // All implementations should embed UnimplementedCourseAPIServer
 // for forward compatibility
@@ -157,6 +167,7 @@ type CourseAPIServer interface {
 	AnswerCards(context.Context, *AnswerCardsRequest) (*AnswerCardsResponse, error)
 	CreateCourse(context.Context, *CreateCourseRequest) (*CreateCourseResponse, error)
 	CreateLesson(context.Context, *CreateLessonRequest) (*CreateLessonResponse, error)
+	SyncState(context.Context, *SyncStateRequest) (*SyncStateResponse, error)
 }
 
 // UnimplementedCourseAPIServer should be embedded to have forward compatible implementations.
@@ -195,6 +206,9 @@ func (UnimplementedCourseAPIServer) CreateCourse(context.Context, *CreateCourseR
 }
 func (UnimplementedCourseAPIServer) CreateLesson(context.Context, *CreateLessonRequest) (*CreateLessonResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method CreateLesson not implemented")
+}
+func (UnimplementedCourseAPIServer) SyncState(context.Context, *SyncStateRequest) (*SyncStateResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method SyncState not implemented")
 }
 
 // UnsafeCourseAPIServer may be embedded to opt out of forward compatibility for this service.
@@ -406,6 +420,24 @@ func _CourseAPI_CreateLesson_Handler(srv interface{}, ctx context.Context, dec f
 	return interceptor(ctx, in, info, handler)
 }
 
+func _CourseAPI_SyncState_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(SyncStateRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(CourseAPIServer).SyncState(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/course.v1.CourseAPI/SyncState",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(CourseAPIServer).SyncState(ctx, req.(*SyncStateRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // CourseAPI_ServiceDesc is the grpc.ServiceDesc for CourseAPI service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -456,6 +488,10 @@ var CourseAPI_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "CreateLesson",
 			Handler:    _CourseAPI_CreateLesson_Handler,
+		},
+		{
+			MethodName: "SyncState",
+			Handler:    _CourseAPI_SyncState_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

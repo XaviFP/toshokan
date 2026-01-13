@@ -30,6 +30,7 @@ type Server struct {
 	LessonsBrowser course.LessonsBrowser
 	CoursesBrowser course.CoursesBrowser
 	Answerer       course.Answerer
+	StateSyncer    course.StateSyncer
 	Clock          clock.Clock
 
 	grpcServer *grpc.Server
@@ -591,4 +592,27 @@ func (s *Server) AnswerCards(ctx context.Context, req *pb.AnswerCardsRequest) (*
 	return &pb.AnswerCardsResponse{
 		Success: true,
 	}, nil
+}
+
+// SyncState synchronizes the user's course state
+func (s *Server) SyncState(ctx context.Context, req *pb.SyncStateRequest) (*pb.SyncStateResponse, error) {
+	userID, err := uuid.Parse(req.UserId)
+	if err != nil {
+		slog.Error("SyncState: failed to parse user ID", "error", err, "userId", req.UserId, "stack", errors.ErrorStack(err))
+		return nil, errors.Trace(err)
+	}
+
+	courseID, err := uuid.Parse(req.CourseId)
+	if err != nil {
+		slog.Error("SyncState: failed to parse course ID", "error", err, "courseId", req.CourseId, "stack", errors.ErrorStack(err))
+		return nil, errors.Trace(err)
+	}
+
+	err = s.StateSyncer.Sync(ctx, userID, courseID)
+	if err != nil {
+		slog.Error("SyncState: failed to sync user course state", "error", err, "userId", userID.String(), "courseId", courseID.String(), "stack", errors.ErrorStack(err))
+		return nil, errors.Trace(err)
+	}
+
+	return &pb.SyncStateResponse{}, nil
 }

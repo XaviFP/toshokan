@@ -331,6 +331,35 @@ func CreateLesson(ctx *gin.Context, client pb.CourseAPIClient) {
 	ctx.JSON(http.StatusCreated, toLessonJSON(res.Lesson))
 }
 
+func SyncState(ctx *gin.Context, client pb.CourseAPIClient) {
+	userID := getUserID(ctx)
+
+	if userID == "" {
+		ctx.JSON(http.StatusBadRequest, gin.H{"error": "missing user id"})
+		return
+	}
+
+	courseID := ctx.Param("courseId")
+	if courseID == "" {
+		ctx.JSON(http.StatusBadRequest, gin.H{"error": "missing course id"})
+		return
+	}
+
+	if _, err := client.SyncState(ctx, &pb.SyncStateRequest{
+		UserId:   userID,
+		CourseId: courseID,
+	}); err != nil {
+		if isHandledError(ctx, err) {
+			return
+		}
+		slog.Error("SyncState: gRPC call failed", "error", err, "userId", userID, "courseId", courseID, "stack", errors.ErrorStack(err))
+		ctx.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	ctx.JSON(http.StatusOK, gin.H{})
+}
+
 func RegisterCoursesRoutes(r *gin.RouterGroup, client pb.CourseAPIClient) {
 	course := r.Group("/courses")
 	{
@@ -360,6 +389,9 @@ func RegisterCoursesRoutes(r *gin.RouterGroup, client pb.CourseAPIClient) {
 		})
 		course.POST("/:courseId/lessons/:lessonId/decks/:deckId/answer", func(ctx *gin.Context) {
 			AnswerCards(ctx, client)
+		})
+		course.POST("/:courseId/sync", func(ctx *gin.Context) {
+			SyncState(ctx, client)
 		})
 	}
 }

@@ -795,6 +795,20 @@ def run_enrolled_courses_test(base_url: str, token: str, course_id: str) -> None
         f"✓ Enrolled courses pagination complete: {len(all_edges)} course(s) found")
 
 
+def sync_state(base_url: str, token: str, course_id: str) -> None:
+    """Call the SyncState endpoint for a course and log the response."""
+    log_step("")
+    log_step(f"Testing SyncState endpoint for course {course_id}...")
+    sync_response = requests.post(
+        f"{base_url}/courses/{course_id}/sync",
+        headers=auth_headers(token),
+        timeout=TIMEOUT,
+    )
+    log_response("POST /courses/{courseId}/sync", sync_response)
+    sync_response.raise_for_status()
+    log_step(f"✓ SyncState endpoint responded with status {sync_response.status_code}")
+
+
 def test_basic_flow():
     init_log_file()
 
@@ -837,6 +851,8 @@ def test_basic_flow():
     run_backward_pagination_after_answering(base_url, token, course_id)
 
     run_enrolled_courses_test(base_url, token, course_id)
+
+    sync_state(base_url, token, course_id)
 
     log_step("")
     log_step("✅ Test passed!")

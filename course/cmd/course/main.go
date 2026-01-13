@@ -67,6 +67,7 @@ func main() {
 		LessonsBrowser: course.NewLessonsBrowser(redisRepo, course.NewStateSyncer(redisRepo, deckClient)),
 		CoursesBrowser: course.NewCoursesBrowser(redisRepo),
 		Answerer:       course.NewAnswerer(redisRepo, deckClient),
+		StateSyncer:    course.NewStateSyncer(redisRepo, deckClient),
 		Clock:          realClock,
 	}
 

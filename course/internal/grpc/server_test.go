@@ -323,3 +323,60 @@ func TestServer_GetUserProgress(t *testing.T) {
 		assert.Nil(t, res)
 	})
 }
+
+func TestServer_SyncState(t *testing.T) {
+	stateSyncerMock := &course.StateSyncerMock{}
+	srv := &Server{StateSyncer: stateSyncerMock}
+
+	t.Run("success", func(t *testing.T) {
+		userID := uuid.MustParse("4e37a600-c29e-4d0f-af44-66f2cd8cc1c9")
+		courseID := uuid.MustParse("fb9ffe2c-ad66-4766-9b7b-46fd5d9acd72")
+
+		stateSyncerMock.On("Sync", mock.Anything, userID, courseID).Return(nil)
+
+		req := pb.SyncStateRequest{
+			UserId:   userID.String(),
+			CourseId: courseID.String(),
+		}
+
+		res, err := srv.SyncState(context.Background(), &req)
+		assert.NoError(t, err)
+		assert.NotNil(t, res)
+	})
+
+	t.Run("failure", func(t *testing.T) {
+		userID := uuid.MustParse("4e37a600-c29e-4d0f-af44-66f2cd8cc1c9")
+		courseID := uuid.MustParse("1f30a72f-5d7a-48da-a5c2-42efece6972a")
+
+		stateSyncerMock.On("Sync", mock.Anything, userID, courseID).Return(assert.AnError)
+
+		req := pb.SyncStateRequest{
+			UserId:   userID.String(),
+			CourseId: courseID.String(),
+		}
+
+		res, err := srv.SyncState(context.Background(), &req)
+		assert.Error(t, err)
+		assert.Nil(t, res)
+	})
+
+	t.Run("error_parse_user_id", func(t *testing.T) {
+		req := pb.SyncStateRequest{}
+
+		_, err := srv.SyncState(context.Background(), &req)
+		assert.Error(t, err)
+	})
+
+	t.Run("error_parse_course_id", func(t *testing.T) {
+		userID := uuid.MustParse("4e37a600-c29e-4d0f-af44-66f2cd8cc1c9")
+
+		req := pb.SyncStateRequest{
+			UserId: userID.String(),
+		}
+
+		_, err := srv.SyncState(context.Background(), &req)
+		assert.Error(t, err)
+	})
+
+	stateSyncerMock.AssertExpectations(t)
+}
