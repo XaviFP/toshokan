@@ -37,11 +37,11 @@ func signUp(ctx *gin.Context, userClient userPB.UserAPIClient) {
 	}
 
 	if len(req.Username) < 3 {
-		ctx.JSON(http.StatusBadRequest, gin.H{"error": "username must be at least 3 characters"})
+		ctx.JSON(http.StatusBadRequest, gin.H{"error": "username must be at least 3 characters long"})
 		return
 	}
-	if len(req.Password) < 8 {
-		ctx.JSON(http.StatusBadRequest, gin.H{"error": "password must be at least 8 characters"})
+	if len(req.Password) < 4 {
+		ctx.JSON(http.StatusBadRequest, gin.H{"error": "password must be at least 4 characters long"})
 		return
 	}
 
