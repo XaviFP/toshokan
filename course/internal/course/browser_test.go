@@ -3,10 +3,12 @@ package course
 import (
 	"context"
 	"testing"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/juju/errors"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 
 	"github.com/XaviFP/toshokan/common/pagination"
@@ -42,7 +44,9 @@ func TestBrowser_Browse_WithoutUserContext_Success(t *testing.T) {
 	p := pagination.Pagination{First: 10}
 	mockRepo.On("GetLessonsByCourseID", ctx, courseID, p).Return(expectedConn, nil)
 
-	browser := NewLessonsBrowser(mockRepo)
+	mockSyncer := new(StateSyncerMock)
+
+	browser := NewLessonsBrowser(mockRepo, mockSyncer)
 	result, err := browser.Browse(ctx, courseID, p, BrowseOptions{UserID: nil})
 	require.NoError(t, err)
 
@@ -52,6 +56,7 @@ func TestBrowser_Browse_WithoutUserContext_Success(t *testing.T) {
 	assert.Equal(t, lesson1ID, result.PublicLessons.Edges[0].Lesson.ID)
 	assert.Equal(t, lesson2ID, result.PublicLessons.Edges[1].Lesson.ID)
 	mockRepo.AssertExpectations(t)
+	mockSyncer.AssertNotCalled(t, "Sync", mock.Anything, mock.Anything, mock.Anything)
 }
 
 func TestBrowser_Browse_WithUserContext_Success(t *testing.T) {
@@ -63,6 +68,7 @@ func TestBrowser_Browse_WithUserContext_Success(t *testing.T) {
 	lesson3ID := uuid.New()
 
 	mockRepo := new(RepositoryMock)
+	mockSyncer := new(StateSyncerMock)
 
 	lessonsConn := LessonsConnection{
 		Edges: []LessonEdge{
@@ -117,7 +123,14 @@ func TestBrowser_Browse_WithUserContext_Success(t *testing.T) {
 	mockRepo.On("GetLessonsByCourseID", ctx, courseID, p).Return(lessonsConn, nil)
 	mockRepo.On("GetUserCourseProgress", ctx, userID, courseID).Return(userProgress, nil)
 
-	browser := NewLessonsBrowser(mockRepo)
+	syncerCallDone := make(chan struct{})
+	mockSyncer.On("Sync", context.WithoutCancel(ctx), userID, courseID).
+		Run(func(args mock.Arguments) {
+			close(syncerCallDone)
+		}).
+		Return(nil)
+
+	browser := NewLessonsBrowser(mockRepo, mockSyncer)
 	result, err := browser.Browse(ctx, courseID, p, BrowseOptions{UserID: &userID})
 
 	require.NoError(t, err)
@@ -142,6 +155,9 @@ func TestBrowser_Browse_WithUserContext_Success(t *testing.T) {
 	assert.False(t, result.ProgressLessons.Edges[2].Lesson.IsCurrent)
 
 	mockRepo.AssertExpectations(t)
+
+	waitForGoroutine(t, syncerCallDone)
+	mockSyncer.AssertExpectations(t)
 }
 
 func TestBrowser_Browse_WithoutUserContext_ErrorGettingLessons(t *testing.T) {
@@ -149,12 +165,13 @@ func TestBrowser_Browse_WithoutUserContext_ErrorGettingLessons(t *testing.T) {
 	courseID := uuid.New()
 
 	mockRepo := new(RepositoryMock)
+	mockSyncer := new(StateSyncerMock)
 
 	expectedErr := errors.New("database error")
 	p := pagination.Pagination{First: 10}
 	mockRepo.On("GetLessonsByCourseID", ctx, courseID, p).Return(LessonsConnection{}, expectedErr)
 
-	browser := NewLessonsBrowser(mockRepo)
+	browser := NewLessonsBrowser(mockRepo, mockSyncer)
 	result, err := browser.Browse(ctx, courseID, p, BrowseOptions{UserID: nil})
 
 	require.Error(t, err)
@@ -170,12 +187,13 @@ func TestBrowser_Browse_WithUserContext_ErrorGettingLessons(t *testing.T) {
 	userID := uuid.New()
 
 	mockRepo := new(RepositoryMock)
+	mockSyncer := new(StateSyncerMock)
 
 	expectedErr := errors.New("database error")
 	p := pagination.Pagination{First: 10}
 	mockRepo.On("GetLessonsByCourseID", ctx, courseID, p).Return(LessonsConnection{}, expectedErr)
 
-	browser := NewLessonsBrowser(mockRepo)
+	browser := NewLessonsBrowser(mockRepo, mockSyncer)
 	result, err := browser.Browse(ctx, courseID, p, BrowseOptions{UserID: &userID})
 
 	require.Error(t, err)
@@ -192,6 +210,7 @@ func TestBrowser_Browse_WithUserContext_ErrorGettingProgress(t *testing.T) {
 	lessonID := uuid.New()
 
 	mockRepo := new(RepositoryMock)
+	mockSyncer := new(StateSyncerMock)
 
 	lessonsConn := LessonsConnection{
 		Edges: []LessonEdge{
@@ -213,7 +232,7 @@ func TestBrowser_Browse_WithUserContext_ErrorGettingProgress(t *testing.T) {
 	mockRepo.On("GetLessonsByCourseID", ctx, courseID, p).Return(lessonsConn, nil)
 	mockRepo.On("GetUserCourseProgress", ctx, userID, courseID).Return(UserCourseProgress{}, expectedErr)
 
-	browser := NewLessonsBrowser(mockRepo)
+	browser := NewLessonsBrowser(mockRepo, mockSyncer)
 	result, err := browser.Browse(ctx, courseID, p, BrowseOptions{UserID: &userID})
 
 	require.Error(t, err)
@@ -229,6 +248,7 @@ func TestBrowser_Browse_WithUserContext_EmptyLessons(t *testing.T) {
 	userID := uuid.New()
 
 	mockRepo := new(RepositoryMock)
+	mockSyncer := new(StateSyncerMock)
 
 	lessonsConn := LessonsConnection{
 		Edges: []LessonEdge{},
@@ -248,7 +268,14 @@ func TestBrowser_Browse_WithUserContext_EmptyLessons(t *testing.T) {
 	mockRepo.On("GetLessonsByCourseID", ctx, courseID, p).Return(lessonsConn, nil)
 	mockRepo.On("GetUserCourseProgress", ctx, userID, courseID).Return(userProgress, nil)
 
-	browser := NewLessonsBrowser(mockRepo)
+	syncerCallDone := make(chan struct{})
+	mockSyncer.On("Sync", context.WithoutCancel(ctx), userID, courseID).
+		Run(func(args mock.Arguments) {
+			close(syncerCallDone)
+		}).
+		Return(nil)
+
+	browser := NewLessonsBrowser(mockRepo, mockSyncer)
 	result, err := browser.Browse(ctx, courseID, p, BrowseOptions{UserID: &userID})
 
 	require.NoError(t, err)
@@ -257,6 +284,9 @@ func TestBrowser_Browse_WithUserContext_EmptyLessons(t *testing.T) {
 	assert.NotNil(t, result.ProgressLessons)
 	assert.Equal(t, 0, len(result.ProgressLessons.Edges))
 	mockRepo.AssertExpectations(t)
+
+	waitForGoroutine(t, syncerCallDone)
+	mockSyncer.AssertExpectations(t)
 }
 
 func TestBrowser_Browse_WithUserContext_AllLessonsCompleted(t *testing.T) {
@@ -267,6 +297,7 @@ func TestBrowser_Browse_WithUserContext_AllLessonsCompleted(t *testing.T) {
 	lesson2ID := uuid.New()
 
 	mockRepo := new(RepositoryMock)
+	mockSyncer := new(StateSyncerMock)
 
 	lessonsConn := LessonsConnection{
 		Edges: []LessonEdge{
@@ -306,7 +337,14 @@ func TestBrowser_Browse_WithUserContext_AllLessonsCompleted(t *testing.T) {
 	mockRepo.On("GetLessonsByCourseID", ctx, courseID, p).Return(lessonsConn, nil)
 	mockRepo.On("GetUserCourseProgress", ctx, userID, courseID).Return(userProgress, nil)
 
-	browser := NewLessonsBrowser(mockRepo)
+	syncerCallDone := make(chan struct{})
+	mockSyncer.On("Sync", context.WithoutCancel(ctx), userID, courseID).
+		Run(func(args mock.Arguments) {
+			close(syncerCallDone)
+		}).
+		Return(nil)
+
+	browser := NewLessonsBrowser(mockRepo, mockSyncer)
 	result, err := browser.Browse(ctx, courseID, p, BrowseOptions{UserID: &userID})
 
 	require.NoError(t, err)
@@ -321,6 +359,9 @@ func TestBrowser_Browse_WithUserContext_AllLessonsCompleted(t *testing.T) {
 	}
 
 	mockRepo.AssertExpectations(t)
+
+	waitForGoroutine(t, syncerCallDone)
+	mockSyncer.AssertExpectations(t)
 }
 
 func TestBrowser_Browse_WithUserContext_PaginationPreserved(t *testing.T) {
@@ -330,6 +371,7 @@ func TestBrowser_Browse_WithUserContext_PaginationPreserved(t *testing.T) {
 	lesson1ID := uuid.New()
 
 	mockRepo := new(RepositoryMock)
+	mockSyncer := new(StateSyncerMock)
 
 	lessonsConn := LessonsConnection{
 		Edges: []LessonEdge{
@@ -356,7 +398,14 @@ func TestBrowser_Browse_WithUserContext_PaginationPreserved(t *testing.T) {
 	mockRepo.On("GetLessonsByCourseID", ctx, courseID, p).Return(lessonsConn, nil)
 	mockRepo.On("GetUserCourseProgress", ctx, userID, courseID).Return(userProgress, nil)
 
-	browser := NewLessonsBrowser(mockRepo)
+	syncerCallDone := make(chan struct{})
+	mockSyncer.On("Sync", context.WithoutCancel(ctx), userID, courseID).
+		Run(func(args mock.Arguments) {
+			close(syncerCallDone)
+		}).
+		Return(nil)
+
+	browser := NewLessonsBrowser(mockRepo, mockSyncer)
 	result, err := browser.Browse(ctx, courseID, p, BrowseOptions{UserID: &userID})
 	require.NoError(t, err)
 
@@ -366,6 +415,9 @@ func TestBrowser_Browse_WithUserContext_PaginationPreserved(t *testing.T) {
 	assert.Equal(t, pagination.Cursor("cursor1"), result.ProgressLessons.PageInfo.EndCursor)
 
 	mockRepo.AssertExpectations(t)
+
+	waitForGoroutine(t, syncerCallDone)
+	mockSyncer.AssertExpectations(t)
 }
 
 func TestBrowser_Browse_WithUserContext_CursorsPreserved(t *testing.T) {
@@ -376,6 +428,7 @@ func TestBrowser_Browse_WithUserContext_CursorsPreserved(t *testing.T) {
 	lesson2ID := uuid.New()
 
 	mockRepo := new(RepositoryMock)
+	mockSyncer := new(StateSyncerMock)
 
 	lessonsConn := LessonsConnection{
 		Edges: []LessonEdge{
@@ -406,7 +459,14 @@ func TestBrowser_Browse_WithUserContext_CursorsPreserved(t *testing.T) {
 	mockRepo.On("GetLessonsByCourseID", ctx, courseID, p).Return(lessonsConn, nil)
 	mockRepo.On("GetUserCourseProgress", ctx, userID, courseID).Return(userProgress, nil)
 
-	browser := NewLessonsBrowser(mockRepo)
+	syncerCallDone := make(chan struct{})
+	mockSyncer.On("Sync", context.WithoutCancel(ctx), userID, courseID).
+		Run(func(args mock.Arguments) {
+			close(syncerCallDone)
+		}).
+		Return(nil)
+
+	browser := NewLessonsBrowser(mockRepo, mockSyncer)
 	result, err := browser.Browse(ctx, courseID, p, BrowseOptions{UserID: &userID})
 
 	require.NoError(t, err)
@@ -419,4 +479,26 @@ func TestBrowser_Browse_WithUserContext_CursorsPreserved(t *testing.T) {
 	assert.Equal(t, pagination.Cursor("custom_cursor_2"), result.ProgressLessons.Edges[1].Cursor)
 
 	mockRepo.AssertExpectations(t)
+
+	waitForGoroutine(t, syncerCallDone)
+	mockSyncer.AssertExpectations(t)
+}
+
+// waitForGoroutine waits for a goroutine to signal completion via the provided channel.
+// Same as just <-c but with a timeout to avoid hanging tests.
+func waitForGoroutine(t *testing.T, c <-chan struct{}) {
+	select {
+	case <-c:
+	case <-time.After(time.Second):
+		t.Fatal("timeout waiting for goroutine")
+	}
+}
+
+type StateSyncerMock struct {
+	mock.Mock
+}
+
+func (m *StateSyncerMock) Sync(ctx context.Context, userID uuid.UUID, courseID uuid.UUID) error {
+	args := m.Called(ctx, userID, courseID)
+	return args.Error(0)
 }

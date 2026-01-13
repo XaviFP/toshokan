@@ -2,7 +2,6 @@ package course
 
 import (
 	"context"
-	"log"
 
 	"github.com/google/uuid"
 	"github.com/juju/errors"
@@ -21,14 +20,12 @@ type Answerer interface {
 
 type answerer struct {
 	repo       Repository
-	syncer     StateSyncer
 	deckClient pbDeck.DecksAPIClient
 }
 
-func NewAnswerer(repo Repository, syncer StateSyncer, deckClient pbDeck.DecksAPIClient) Answerer {
+func NewAnswerer(repo Repository, deckClient pbDeck.DecksAPIClient) Answerer {
 	return &answerer{
 		repo:       repo,
-		syncer:     syncer,
 		deckClient: deckClient,
 	}
 }
@@ -82,17 +79,6 @@ func (a *answerer) Answer(ctx context.Context, userID, courseID, lessonID, deckI
 	if err := a.repo.UpdateUserProgress(ctx, userProgress); err != nil {
 		return errors.Trace(err)
 	}
-
-	go func() {
-		// The context is detached to avoid being cancelled when the request context is done.
-		if err := a.syncer.Sync(context.WithoutCancel(ctx), userID, courseID); err != nil {
-			log.Printf("syncing user state: %v", map[string]interface{}{
-				"user_id":   userID,
-				"course_id": courseID,
-				"error":     err,
-			})
-		}
-	}()
 
 	return nil
 }

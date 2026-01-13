@@ -3,7 +3,6 @@ package course
 import (
 	"context"
 	"testing"
-	"time"
 
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
@@ -12,15 +11,6 @@ import (
 
 	pbDeck "github.com/XaviFP/toshokan/deck/api/proto/v1"
 )
-
-type StateSyncerMock struct {
-	mock.Mock
-}
-
-func (m *StateSyncerMock) Sync(ctx context.Context, userID uuid.UUID, courseID uuid.UUID) error {
-	args := m.Called(ctx, userID, courseID)
-	return args.Error(0)
-}
 
 func TestAnswerer_Answer_Success_AllCorrect(t *testing.T) {
 	ctx := context.Background()
@@ -35,7 +25,6 @@ func TestAnswerer_Answer_Success_AllCorrect(t *testing.T) {
 
 	mockRepo := new(RepositoryMock)
 	mockDecksClient := new(MockDecksAPIClient)
-	mockSyncer := new(StateSyncerMock)
 
 	state := NewProgressState()
 	state.Lessons[lessonID.String()] = &LessonProgress{
@@ -65,13 +54,6 @@ func TestAnswerer_Answer_Success_AllCorrect(t *testing.T) {
 		return ucp.State != nil
 	})).Return(nil)
 
-	syncerCallDone := make(chan struct{})
-	mockSyncer.On("Sync", context.WithoutCancel(ctx), userID, courseID).
-		Run(func(args mock.Arguments) {
-			close(syncerCallDone)
-		}).
-		Return(nil)
-
 	mockDecksClient.On("GetCards", ctx, mock.MatchedBy(func(req *pbDeck.GetCardsRequest) bool {
 		return len(req.CardIds) == 2
 	})).Return(&pbDeck.GetCardsResponse{
@@ -95,16 +77,10 @@ func TestAnswerer_Answer_Success_AllCorrect(t *testing.T) {
 		},
 	}, nil)
 
-	answerer := NewAnswerer(mockRepo, mockSyncer, mockDecksClient)
+	answerer := NewAnswerer(mockRepo, mockDecksClient)
 
 	err := answerer.Answer(ctx, userID, courseID, lessonID, deckID, cardAnswers)
 	require.NoError(t, err)
-
-	select {
-	case <-syncerCallDone:
-	case <-time.After(time.Second):
-		t.Fatal("timeout waiting for goroutine")
-	}
 
 	// Verify cards were marked as answered correctly
 	assert.True(t, userProgress.State.Lessons[lessonID.String()].Decks[deckID.String()].Cards[card1ID.String()].IsCompleted)
@@ -114,7 +90,7 @@ func TestAnswerer_Answer_Success_AllCorrect(t *testing.T) {
 
 	mockRepo.AssertExpectations(t)
 	mockDecksClient.AssertExpectations(t)
-	mockSyncer.AssertExpectations(t)
+
 }
 
 func TestAnswerer_Answer_Success_SomeIncorrect(t *testing.T) {
@@ -130,7 +106,6 @@ func TestAnswerer_Answer_Success_SomeIncorrect(t *testing.T) {
 
 	mockRepo := new(RepositoryMock)
 	mockDecksClient := new(MockDecksAPIClient)
-	mockSyncer := new(StateSyncerMock)
 
 	state := NewProgressState()
 	state.Lessons[lessonID.String()] = &LessonProgress{
@@ -158,13 +133,6 @@ func TestAnswerer_Answer_Success_SomeIncorrect(t *testing.T) {
 	mockRepo.On("GetUserCourseProgress", ctx, userID, courseID).Return(userProgress, nil)
 	mockRepo.On("UpdateUserProgress", ctx, mock.Anything).Return(nil)
 
-	syncerCallDone := make(chan struct{})
-	mockSyncer.On("Sync", context.WithoutCancel(ctx), userID, courseID).
-		Run(func(args mock.Arguments) {
-			close(syncerCallDone)
-		}).
-		Return(nil)
-
 	mockDecksClient.On("GetCards", ctx, mock.MatchedBy(func(req *pbDeck.GetCardsRequest) bool {
 		return len(req.CardIds) == 2
 	})).Return(&pbDeck.GetCardsResponse{
@@ -188,12 +156,10 @@ func TestAnswerer_Answer_Success_SomeIncorrect(t *testing.T) {
 		},
 	}, nil)
 
-	answerer := NewAnswerer(mockRepo, mockSyncer, mockDecksClient)
+	answerer := NewAnswerer(mockRepo, mockDecksClient)
 
 	err := answerer.Answer(ctx, userID, courseID, lessonID, deckID, cardAnswers)
 	require.NoError(t, err)
-
-	waitForGoroutine(t, syncerCallDone)
 
 	// Verify card1 was correct and card2 was incorrect
 	assert.True(t, userProgress.State.Lessons[lessonID.String()].Decks[deckID.String()].Cards[card1ID.String()].IsCompleted)
@@ -203,7 +169,7 @@ func TestAnswerer_Answer_Success_SomeIncorrect(t *testing.T) {
 
 	mockRepo.AssertExpectations(t)
 	mockDecksClient.AssertExpectations(t)
-	mockSyncer.AssertExpectations(t)
+
 }
 
 func TestAnswerer_Answer_ErrorGettingUserProgress(t *testing.T) {
@@ -215,11 +181,10 @@ func TestAnswerer_Answer_ErrorGettingUserProgress(t *testing.T) {
 
 	mockRepo := new(RepositoryMock)
 	mockDecksClient := new(MockDecksAPIClient)
-	mockSyncer := new(StateSyncerMock)
 
 	mockRepo.On("GetUserCourseProgress", ctx, userID, courseID).Return(UserCourseProgress{}, assert.AnError)
 
-	answerer := NewAnswerer(mockRepo, mockSyncer, mockDecksClient)
+	answerer := NewAnswerer(mockRepo, mockDecksClient)
 
 	err := answerer.Answer(ctx, userID, courseID, lessonID, deckID, []CardAnswer{})
 
@@ -237,7 +202,6 @@ func TestAnswerer_Answer_NilProgressState(t *testing.T) {
 
 	mockRepo := new(RepositoryMock)
 	mockDecksClient := new(MockDecksAPIClient)
-	mockSyncer := new(StateSyncerMock)
 
 	userProgress := UserCourseProgress{
 		State: nil,
@@ -245,7 +209,7 @@ func TestAnswerer_Answer_NilProgressState(t *testing.T) {
 
 	mockRepo.On("GetUserCourseProgress", ctx, userID, courseID).Return(userProgress, nil)
 
-	answerer := NewAnswerer(mockRepo, mockSyncer, mockDecksClient)
+	answerer := NewAnswerer(mockRepo, mockDecksClient)
 
 	err := answerer.Answer(ctx, userID, courseID, lessonID, deckID, []CardAnswer{})
 
@@ -265,7 +229,6 @@ func TestAnswerer_Answer_ErrorGettingCards(t *testing.T) {
 
 	mockRepo := new(RepositoryMock)
 	mockDecksClient := new(MockDecksAPIClient)
-	mockSyncer := new(StateSyncerMock)
 
 	state := NewProgressState()
 	state.Lessons[lessonID.String()] = &LessonProgress{
@@ -292,7 +255,7 @@ func TestAnswerer_Answer_ErrorGettingCards(t *testing.T) {
 
 	mockDecksClient.On("GetCards", ctx, mock.Anything).Return(&pbDeck.GetCardsResponse{}, assert.AnError)
 
-	answerer := NewAnswerer(mockRepo, mockSyncer, mockDecksClient)
+	answerer := NewAnswerer(mockRepo, mockDecksClient)
 
 	err := answerer.Answer(ctx, userID, courseID, lessonID, deckID, cardAnswers)
 
@@ -313,7 +276,6 @@ func TestAnswerer_Answer_ErrorAnsweringCard(t *testing.T) {
 
 	mockRepo := new(RepositoryMock)
 	mockDecksClient := new(MockDecksAPIClient)
-	mockSyncer := new(StateSyncerMock)
 
 	state := NewProgressState()
 	state.Lessons[lessonID.String()] = &LessonProgress{
@@ -351,7 +313,7 @@ func TestAnswerer_Answer_ErrorAnsweringCard(t *testing.T) {
 		},
 	}, nil)
 
-	answerer := NewAnswerer(mockRepo, mockSyncer, mockDecksClient)
+	answerer := NewAnswerer(mockRepo, mockDecksClient)
 
 	err := answerer.Answer(ctx, userID, courseID, lessonID, deckID, cardAnswers)
 
@@ -371,7 +333,6 @@ func TestAnswerer_Answer_ErrorUpdatingUserProgress(t *testing.T) {
 
 	mockRepo := new(RepositoryMock)
 	mockDecksClient := new(MockDecksAPIClient)
-	mockSyncer := new(StateSyncerMock)
 
 	state := NewProgressState()
 	state.Lessons[lessonID.String()] = &LessonProgress{
@@ -410,7 +371,7 @@ func TestAnswerer_Answer_ErrorUpdatingUserProgress(t *testing.T) {
 		},
 	}, nil)
 
-	answerer := NewAnswerer(mockRepo, mockSyncer, mockDecksClient)
+	answerer := NewAnswerer(mockRepo, mockDecksClient)
 
 	err := answerer.Answer(ctx, userID, courseID, lessonID, deckID, cardAnswers)
 
@@ -429,7 +390,6 @@ func TestAnswerer_Answer_EmptyCardAnswers(t *testing.T) {
 
 	mockRepo := new(RepositoryMock)
 	mockDecksClient := new(MockDecksAPIClient)
-	mockSyncer := new(StateSyncerMock)
 
 	state := NewProgressState()
 	state.Lessons[lessonID.String()] = &LessonProgress{
@@ -449,29 +409,20 @@ func TestAnswerer_Answer_EmptyCardAnswers(t *testing.T) {
 	mockRepo.On("GetUserCourseProgress", ctx, userID, courseID).Return(userProgress, nil)
 	mockRepo.On("UpdateUserProgress", ctx, mock.Anything).Return(nil)
 
-	syncerCallDone := make(chan struct{})
-	mockSyncer.On("Sync", context.WithoutCancel(ctx), userID, courseID).
-		Run(func(args mock.Arguments) {
-			close(syncerCallDone)
-		}).
-		Return(nil)
-
 	mockDecksClient.On("GetCards", ctx, mock.MatchedBy(func(req *pbDeck.GetCardsRequest) bool {
 		return len(req.CardIds) == 0
 	})).Return(&pbDeck.GetCardsResponse{
 		Cards: map[string]*pbDeck.Card{},
 	}, nil)
 
-	answerer := NewAnswerer(mockRepo, mockSyncer, mockDecksClient)
+	answerer := NewAnswerer(mockRepo, mockDecksClient)
 
 	err := answerer.Answer(ctx, userID, courseID, lessonID, deckID, []CardAnswer{})
 	require.NoError(t, err)
 
-	waitForGoroutine(t, syncerCallDone)
-
 	mockRepo.AssertExpectations(t)
 	mockDecksClient.AssertExpectations(t)
-	mockSyncer.AssertExpectations(t)
+
 }
 
 func TestAnswerer_Answer_MultipleAnswersForSameCard(t *testing.T) {
@@ -486,7 +437,6 @@ func TestAnswerer_Answer_MultipleAnswersForSameCard(t *testing.T) {
 
 	mockRepo := new(RepositoryMock)
 	mockDecksClient := new(MockDecksAPIClient)
-	mockSyncer := new(StateSyncerMock)
 
 	state := NewProgressState()
 	state.Lessons[lessonID.String()] = &LessonProgress{
@@ -514,13 +464,6 @@ func TestAnswerer_Answer_MultipleAnswersForSameCard(t *testing.T) {
 	mockRepo.On("GetUserCourseProgress", ctx, userID, courseID).Return(userProgress, nil)
 	mockRepo.On("UpdateUserProgress", ctx, mock.Anything).Return(nil)
 
-	syncerCallDone := make(chan struct{})
-	mockSyncer.On("Sync", context.WithoutCancel(ctx), userID, courseID).
-		Run(func(args mock.Arguments) {
-			close(syncerCallDone)
-		}).
-		Return(nil)
-
 	mockDecksClient.On("GetCards", ctx, mock.MatchedBy(func(req *pbDeck.GetCardsRequest) bool {
 		// Should have both card IDs (even though they're the same)
 		return len(req.CardIds) == 2
@@ -537,12 +480,10 @@ func TestAnswerer_Answer_MultipleAnswersForSameCard(t *testing.T) {
 		},
 	}, nil)
 
-	answerer := NewAnswerer(mockRepo, mockSyncer, mockDecksClient)
+	answerer := NewAnswerer(mockRepo, mockDecksClient)
 
 	err := answerer.Answer(ctx, userID, courseID, lessonID, deckID, cardAnswers)
 	require.NoError(t, err)
-
-	waitForGoroutine(t, syncerCallDone)
 
 	// Card should be completed after the correct answer
 	assert.True(t, userProgress.State.Lessons[lessonID.String()].Decks[deckID.String()].Cards[cardID.String()].IsCompleted)
@@ -551,13 +492,5 @@ func TestAnswerer_Answer_MultipleAnswersForSameCard(t *testing.T) {
 
 	mockRepo.AssertExpectations(t)
 	mockDecksClient.AssertExpectations(t)
-	mockSyncer.AssertExpectations(t)
-}
 
-func waitForGoroutine(t *testing.T, c <-chan struct{}) {
-	select {
-	case <-c:
-	case <-time.After(time.Second):
-		t.Fatal("timeout waiting for goroutine")
-	}
 }
