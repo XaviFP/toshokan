@@ -3,7 +3,7 @@ package main
 import (
 	"context"
 	"fmt"
-	"log"
+	"log/slog"
 	"os"
 	"os/signal"
 	"syscall"
@@ -12,6 +12,7 @@ import (
 
 	"github.com/XaviFP/toshokan/common/config"
 	"github.com/XaviFP/toshokan/common/db"
+	"github.com/XaviFP/toshokan/common/logging"
 	"github.com/XaviFP/toshokan/deck/internal/deck"
 	"github.com/XaviFP/toshokan/deck/internal/grpc"
 )
@@ -23,15 +24,19 @@ func init() {
 }
 
 func main() {
+	logger := logging.Setup("deck")
+
 	db, err := db.InitDB(conf.DBConf)
 	if err != nil {
-		panic(err)
+		logger.Error("Failed to connect to database", "error", err)
+		os.Exit(1)
 	}
 	defer db.Close()
 
 	redisClient, err := (radix.PoolConfig{}).New(context.Background(), conf.CacheConf.TransportProtocol, fmt.Sprintf("%s:%s", conf.CacheConf.Host, conf.CacheConf.Port))
 	if err != nil {
-		panic(err)
+		logger.Error("Failed to connect to Redis", "error", err)
+		os.Exit(1)
 	}
 	defer redisClient.Close()
 
@@ -54,20 +59,20 @@ func main() {
 
 	defer srv.Stop()
 
-	exitOnTerminationSignal(serverError)
+	exitOnTerminationSignal(logger, serverError)
 }
 
-func exitOnTerminationSignal(serverError chan error) {
+func exitOnTerminationSignal(logger *slog.Logger, serverError chan error) {
 	sigs := make(chan os.Signal, 1)
 	signal.Notify(sigs, syscall.SIGINT, syscall.SIGTERM)
 	select {
 	case <-sigs:
 	case err := <-serverError:
-		log.Printf("GRPC server failure: %s\n", err)
+		logger.Error("gRPC server failure", "error", err)
 	}
 
-	os.Exit(1)
-	log.Println("Shutting down...")
+	logger.Info("Shutting down...")
+	os.Exit(0)
 }
 
 type DecksConfig struct {

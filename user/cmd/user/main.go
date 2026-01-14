@@ -4,7 +4,7 @@ import (
 	"context"
 	"encoding/pem"
 	"fmt"
-	"log"
+	"log/slog"
 	"os"
 	"os/signal"
 	"syscall"
@@ -14,6 +14,7 @@ import (
 
 	"github.com/XaviFP/toshokan/common/config"
 	"github.com/XaviFP/toshokan/common/db"
+	"github.com/XaviFP/toshokan/common/logging"
 	"github.com/XaviFP/toshokan/user/internal/grpc"
 	"github.com/XaviFP/toshokan/user/internal/user"
 )
@@ -25,9 +26,12 @@ func init() {
 }
 
 func main() {
+	logger := logging.Setup("user")
+
 	db, err := db.InitDB(conf.DBConf)
 	if err != nil {
-		log.Fatalf("failed to connect to database: %v", err)
+		logger.Error("Failed to connect to database", "error", err)
+		os.Exit(1)
 	}
 
 	defer db.Close()
@@ -36,7 +40,8 @@ func main() {
 
 	redis, err := (radix.PoolConfig{}).New(context.Background(), conf.CacheConf.TransportProtocol, fmt.Sprintf("%s:%s", conf.CacheConf.Host, conf.CacheConf.Port))
 	if err != nil {
-		panic(err)
+		logger.Error("Failed to connect to Redis", "error", err)
+		os.Exit(1)
 	}
 
 	defer redis.Close()
@@ -45,7 +50,8 @@ func main() {
 
 	tokenRepository, err := user.NewTokenRepository(conf.TokenConfig)
 	if err != nil {
-		panic(err)
+		logger.Error("Failed to create token repository", "error", err)
+		os.Exit(1)
 	}
 
 	srv := &grpc.Server{
@@ -68,20 +74,20 @@ func main() {
 
 	defer srv.Stop()
 
-	exitOnTerminationSignal(serverError)
+	exitOnTerminationSignal(logger, serverError)
 }
 
-func exitOnTerminationSignal(serverError chan error) {
+func exitOnTerminationSignal(logger *slog.Logger, serverError chan error) {
 	sigs := make(chan os.Signal, 1)
 	signal.Notify(sigs, syscall.SIGINT, syscall.SIGTERM)
 	select {
 	case <-sigs:
 	case err := <-serverError:
-		log.Printf("GRPC server failure: %s\n", err)
+		logger.Error("gRPC server failure", "error", err)
 	}
 
-	os.Exit(1)
-	log.Println("Shutting down...")
+	logger.Info("Shutting down...")
+	os.Exit(0)
 }
 
 type UsersConfig struct {
@@ -107,19 +113,22 @@ func loadTokenConfig() config.TokenConfig {
 
 	sExp := os.Getenv("SESSION_EXPIRY")
 	if sExp == "" {
-		log.Fatal("missing environment variable: SESSION_EXPIRY")
+		slog.Error("Missing environment variable: SESSION_EXPIRY")
+		os.Exit(1)
 	}
 
 	var sessionExpiry uint
 	if _, err := fmt.Sscan(sExp, &sessionExpiry); err != nil {
-		log.Fatal("wrong format for environment variable: SESSION_EXPIRY")
+		slog.Error("Wrong format for environment variable: SESSION_EXPIRY", "error", err)
+		os.Exit(1)
 	}
 
 	tokenConfig.SessionExpiry = sessionExpiry
 
 	pubKey := os.Getenv("PUBLIC_KEY")
 	if pubKey == "" {
-		log.Fatal("missing environment variable: PUBLIC_KEY")
+		slog.Error("Missing environment variable: PUBLIC_KEY")
+		os.Exit(1)
 	}
 
 	block, _ := pem.Decode([]byte(pubKey))
@@ -127,7 +136,8 @@ func loadTokenConfig() config.TokenConfig {
 
 	privKeyPem := os.Getenv("PRIVATE_KEY")
 	if privKeyPem == "" {
-		log.Fatal("missing environment variable: PRIVATE_KEY")
+		slog.Error("Missing environment variable: PRIVATE_KEY")
+		os.Exit(1)
 	}
 
 	block, _ = pem.Decode([]byte(privKeyPem))

@@ -12,6 +12,7 @@ import (
 	grpc "google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 
+	"github.com/XaviFP/toshokan/common/logging"
 	pbCourse "github.com/XaviFP/toshokan/course/api/proto/v1"
 	pbDealer "github.com/XaviFP/toshokan/dealer/api/proto/v1"
 	pbDeck "github.com/XaviFP/toshokan/deck/api/proto/v1"
@@ -81,11 +82,14 @@ func corsMiddleware(allowed []string) gin.HandlerFunc {
 }
 
 func main() {
+	logger := logging.Setup("gate")
+
 	c := loadConfig()
 
 	userGRPCConn, err := grpc.Dial(c.users.GRPCAddress(), grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
-		panic(err)
+		logger.Error("Failed to connect to user service", "error", err)
+		os.Exit(1)
 	}
 	defer userGRPCConn.Close()
 
@@ -93,7 +97,8 @@ func main() {
 
 	deckGRPCConn, err := grpc.Dial(c.decks.GRPCAddress(), grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
-		panic(err)
+		logger.Error("Failed to connect to deck service", "error", err)
+		os.Exit(1)
 	}
 	defer deckGRPCConn.Close()
 
@@ -101,7 +106,8 @@ func main() {
 
 	dealerGRPCConn, err := grpc.Dial(c.dealer.GRPCAddress(), grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
-		panic(err)
+		logger.Error("Failed to connect to dealer service", "error", err)
+		os.Exit(1)
 	}
 	defer dealerGRPCConn.Close()
 
@@ -109,13 +115,17 @@ func main() {
 
 	coursesGRPCConn, err := grpc.Dial(c.course.GRPCAddress(), grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
-		panic(err)
+		logger.Error("Failed to connect to course service", "error", err)
+		os.Exit(1)
 	}
 	defer coursesGRPCConn.Close()
 
 	coursesClient := pbCourse.NewCourseAPIClient(coursesGRPCConn)
 
-	router := gin.Default()
+	gin.SetMode(gin.ReleaseMode)
+	router := gin.New()
+	router.Use(logging.GinLogger(logger))
+	router.Use(logging.GinRecovery(logger))
 	// Return 405 for routes that exist but do not support the requested HTTP method
 	router.HandleMethodNotAllowed = true
 
@@ -132,13 +142,17 @@ func main() {
 	gate.RegisterUserRoutes(router, c.gate.signupEnabled, userClient, c.gate.adminConfig)
 	gate.RegisterCoursesRoutes(authorized, coursesClient, c.gate.adminConfig)
 
+	logger.Info("Starting HTTP server", "address", c.gate.HTTPAddress())
+
 	if c.gate.canListenTLS() {
 		if err := router.RunTLS("", c.gate.certificatePath, c.gate.privateKeyPath); err != nil {
-			panic(err)
+			logger.Error("Failed to start TLS server", "error", err)
+			os.Exit(1)
 		}
 	} else {
 		if err := router.Run(c.gate.HTTPAddress()); err != nil {
-			panic(err)
+			logger.Error("Failed to start server", "error", err)
+			os.Exit(1)
 		}
 	}
 }

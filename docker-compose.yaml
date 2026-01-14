@@ -1,4 +1,3 @@
-version: '3.8'
 services:
   db:
     build:
@@ -39,6 +38,9 @@ services:
       - env/.common
       - env/.user
     restart: always
+    labels:
+      - "logging=promtail"
+      - "service=user"
   deck:
     build: deck/
     depends_on:
@@ -50,6 +52,9 @@ services:
       - env/.common
       - env/.deck
     restart: always
+    labels:
+      - "logging=promtail"
+      - "service=deck"
   dealer:
     build: dealer/
     depends_on:
@@ -70,6 +75,9 @@ services:
       - env/.common
       - env/.course
     restart: always
+    labels:
+      - "logging=promtail"
+      - "service=course"
   gate:
     build: gate/
     depends_on:
@@ -86,3 +94,47 @@ services:
       - env/.common
       - env/.gate
     restart: always
+    labels:
+      - "logging=promtail"
+      - "service=gate"
+
+  # Observability Stack
+  loki:
+    image: grafana/loki:2.9.0
+    volumes:
+      - ./observability/loki/loki-config.yaml:/etc/loki/local-config.yaml
+      - loki-data:/loki
+    command: -config.file=/etc/loki/local-config.yaml
+    ports:
+      - "3100:3100"
+    restart: always
+
+  promtail:
+    image: grafana/promtail:2.9.0
+    volumes:
+      - ./observability/promtail/promtail-config.yaml:/etc/promtail/config.yaml
+      - /var/lib/docker/containers:/var/lib/docker/containers:ro
+      - /var/run/docker.sock:/var/run/docker.sock
+    command: -config.file=/etc/promtail/config.yaml
+    depends_on:
+      - loki
+    restart: always
+
+  grafana:
+    image: grafana/grafana:10.2.0
+    volumes:
+      - ./observability/grafana/provisioning:/etc/grafana/provisioning
+      - grafana-data:/var/lib/grafana
+    environment:
+      - GF_SECURITY_ADMIN_USER=admin
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+      - GF_USERS_ALLOW_SIGN_UP=false
+    ports:
+      - "3000:3000"
+    depends_on:
+      - loki
+    restart: always
+
+volumes:
+  loki-data:
+  grafana-data:
