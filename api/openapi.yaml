@@ -63,7 +63,11 @@ paths:
       tags:
         - Authentication
       summary: Register a new user
-      description: Create a new user account and receive an authentication token
+      description: |
+        Create a new user account and receive an authentication token.
+        
+        **Note:** This endpoint may require admin access (`X-Admin-Token` header) depending on server configuration.
+        When `ADMIN_ONLY_SIGNUP=true`, only requests with a valid admin token will be accepted.
       operationId: signUp
       security: []
       requestBody:
@@ -81,6 +85,12 @@ paths:
                 $ref: '#/components/schemas/TokenResponse'
         '400':
           description: Invalid request body
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: Admin access required (when endpoint is admin-protected)
           content:
             application/json:
               schema:
@@ -131,7 +141,10 @@ paths:
       tags:
         - Courses
       summary: Create a new course
-      description: Create a new course with title and description
+      description: |
+        Create a new course with title and description.
+        
+        **Note:** This endpoint may require admin access (`X-Admin-Token` header) depending on server configuration.
       operationId: createCourse
       security:
         - BearerAuth: []
@@ -162,6 +175,12 @@ paths:
                 $ref: '#/components/schemas/Error'
         '401':
           $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          description: Admin access required (when endpoint is admin-protected)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
         '500':
           description: Internal server error
           content:
@@ -303,7 +322,10 @@ paths:
       tags:
         - Courses
       summary: Enroll in a course
-      description: Enroll the authenticated user in a course
+      description: |
+        Enroll the authenticated user in a course.
+        
+        **Note:** This endpoint may require admin access (`X-Admin-Token` header) depending on server configuration.
       operationId: enrollCourse
       security:
         - BearerAuth: []
@@ -333,6 +355,12 @@ paths:
                 $ref: '#/components/schemas/Error'
         '401':
           $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          description: Admin access required (when endpoint is admin-protected)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
         '500':
           description: Internal server error
           content:
@@ -417,7 +445,10 @@ paths:
       tags:
         - Lessons
       summary: Create a new lesson
-      description: Create a new lesson within a course. The lesson body must reference at least one deck using the markdown form `![deck](uuid)`.
+      description: |
+        Create a new lesson within a course. The lesson body must reference at least one deck using the markdown form `![deck](uuid)`.
+        
+        **Note:** This endpoint may require admin access (`X-Admin-Token` header) depending on server configuration.
       operationId: createLesson
       security:
         - BearerAuth: []
@@ -450,6 +481,12 @@ paths:
                 $ref: '#/components/schemas/Error'
         '401':
           $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          description: Admin access required (when endpoint is admin-protected)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
         '404':
           description: Course or Deck not found
           content:
@@ -705,7 +742,10 @@ paths:
       tags:
         - Decks
       summary: Create a new deck
-      description: Create a new flashcard deck
+      description: |
+        Create a new flashcard deck.
+        
+        **Note:** This endpoint may require admin access (`X-Admin-Token` header) depending on server configuration.
       operationId: createDeck
       security:
         - BearerAuth: []
@@ -730,6 +770,12 @@ paths:
                 $ref: '#/components/schemas/Error'
         '401':
           $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          description: Admin access required (when endpoint is admin-protected)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
         '500':
           description: Internal server error
           content:
@@ -746,6 +792,14 @@ components:
       description: |
         JWT token obtained from `/login` or `/signup` endpoints.
         Include in Authorization header as: `Bearer {{token}}`
+    AdminAuth:
+      type: apiKey
+      in: header
+      name: X-Admin-Token
+      description: |
+        Admin access token for protected endpoints.
+        Some endpoints may require admin access depending on server configuration.
+        When required, include this header with the configured admin secret.
 
   responses:
     UnauthorizedError:

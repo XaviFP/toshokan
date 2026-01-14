@@ -15,9 +15,9 @@ type tokenResponse struct {
 	Token string `json:"token"`
 }
 
-func RegisterUserRoutes(r *gin.Engine, enableSignup bool, userClient userPB.UserAPIClient) {
+func RegisterUserRoutes(r *gin.Engine, enableSignup bool, userClient userPB.UserAPIClient, adminCfg AdminConfig) {
 	if enableSignup {
-		r.POST("/signup", func(ctx *gin.Context) {
+		r.POST("/signup", RequireAdmin(adminCfg, adminCfg.SignupAdminOnly), func(ctx *gin.Context) {
 			signUp(ctx, userClient)
 		})
 	}

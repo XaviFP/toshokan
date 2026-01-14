@@ -11,11 +11,13 @@ func TestValidation_ValidateDecks(t *testing.T) {
 		{Title: "Go Learning", Description: "Polish your Go skills", Cards: []Card{
 			{
 				Title: "What does CSP stand for?",
+				Kind:  CardKindSingleChoice,
 				PossibleAnswers: []Answer{
 					{Text: "Communicating Sequential Processes", IsCorrect: true},
 				}},
 			{
 				Title: "Which is the underlying data type of a slice in Go?",
+				Kind:  CardKindSingleChoice,
 				PossibleAnswers: []Answer{
 					{Text: "Map", IsCorrect: false},
 					{Text: "Linked list", IsCorrect: false},
@@ -29,8 +31,12 @@ func TestValidation_ValidateDecks(t *testing.T) {
 
 	isValid, erroredDecks := ValidateDecks(testDecks)
 	assert.False(t, isValid)
+	assert.Len(t, erroredDecks, 3)
+	// testDecks[1]: no title, no cards
 	assert.Equal(t, []error{ErrNoTitle}, erroredDecks[0].Errs)
+	// testDecks[2]: no description, no cards
 	assert.Equal(t, []error{ErrNoDescription}, erroredDecks[1].Errs)
+	// testDecks[3]: no title, no description, no cards
 	assert.Equal(t, []error{ErrNoTitle, ErrNoDescription}, erroredDecks[2].Errs)
 }
 

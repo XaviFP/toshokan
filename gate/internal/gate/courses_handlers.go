@@ -360,10 +360,10 @@ func SyncState(ctx *gin.Context, client pb.CourseAPIClient) {
 	ctx.JSON(http.StatusOK, gin.H{})
 }
 
-func RegisterCoursesRoutes(r *gin.RouterGroup, client pb.CourseAPIClient) {
+func RegisterCoursesRoutes(r *gin.RouterGroup, client pb.CourseAPIClient, adminCfg AdminConfig) {
 	course := r.Group("/courses")
 	{
-		course.POST("", func(ctx *gin.Context) {
+		course.POST("", RequireAdmin(adminCfg, adminCfg.CreateCourseAdminOnly), func(ctx *gin.Context) {
 			CreateCourse(ctx, client)
 		})
 		course.GET("/enrolled", func(ctx *gin.Context) {
@@ -372,13 +372,13 @@ func RegisterCoursesRoutes(r *gin.RouterGroup, client pb.CourseAPIClient) {
 		course.GET("/:courseId", func(ctx *gin.Context) {
 			GetCourse(ctx, client)
 		})
-		course.POST("/:courseId/enroll", func(ctx *gin.Context) {
+		course.POST("/:courseId/enroll", RequireAdmin(adminCfg, adminCfg.EnrollAdminOnly), func(ctx *gin.Context) {
 			EnrollCourse(ctx, client)
 		})
 		course.GET("/:courseId/lessons", func(ctx *gin.Context) {
 			GetLessons(ctx, client)
 		})
-		course.POST("/:courseId/lessons", func(ctx *gin.Context) {
+		course.POST("/:courseId/lessons", RequireAdmin(adminCfg, adminCfg.CreateLessonAdminOnly), func(ctx *gin.Context) {
 			CreateLesson(ctx, client)
 		})
 		course.GET("/:courseId/lessons/focused", func(ctx *gin.Context) {

@@ -109,8 +109,8 @@ func DeleteDeck(ctx *gin.Context, usersClient pbUser.UserAPIClient, decksClient 
 	ctx.JSON(http.StatusOK, gin.H{})
 }
 
-func RegisterDeckRoutes(r *gin.RouterGroup, usersClient pbUser.UserAPIClient, decksClient pbDeck.DecksAPIClient) {
-	r.POST("/decks", func(ctx *gin.Context) {
+func RegisterDeckRoutes(r *gin.RouterGroup, usersClient pbUser.UserAPIClient, decksClient pbDeck.DecksAPIClient, adminCfg AdminConfig) {
+	r.POST("/decks", RequireAdmin(adminCfg, adminCfg.CreateDeckAdminOnly), func(ctx *gin.Context) {
 		CreateDeck(ctx, usersClient, decksClient)
 	})
 

@@ -33,6 +33,7 @@ type gateConfig struct {
 	certificatePath string
 	privateKeyPath  string
 	allowedOrigins  []string
+	adminConfig     gate.AdminConfig
 }
 
 func (c gateConfig) canListenTLS() bool {
@@ -127,9 +128,9 @@ func main() {
 	authorized := router.Group("/")
 	gate.RegisterMiddlewares(authorized, userClient, deckClient)
 	authorized.POST(queryPath, grapher.NewGraphqlHandler(deckClient, userClient, dealerClient))
-	gate.RegisterDeckRoutes(authorized, userClient, deckClient)
-	gate.RegisterUserRoutes(router, c.gate.signupEnabled, userClient)
-	gate.RegisterCoursesRoutes(authorized, coursesClient)
+	gate.RegisterDeckRoutes(authorized, userClient, deckClient, c.gate.adminConfig)
+	gate.RegisterUserRoutes(router, c.gate.signupEnabled, userClient, c.gate.adminConfig)
+	gate.RegisterCoursesRoutes(authorized, coursesClient, c.gate.adminConfig)
 
 	if c.gate.canListenTLS() {
 		if err := router.RunTLS("", c.gate.certificatePath, c.gate.privateKeyPath); err != nil {
@@ -161,6 +162,17 @@ func loadConfig() globalConfig {
 		gateConfig.allowedOrigins = strings.Split(allowedOrigins, ",")
 	}
 
+	// Admin config - defaults to admin-protected
+	gateConfig.adminConfig = gate.AdminConfig{
+		HeaderName:            os.Getenv("ADMIN_HEADER_NAME"),
+		HeaderSecret:          os.Getenv("ADMIN_HEADER_SECRET"),
+		SignupAdminOnly:       parseBoolDefault(os.Getenv("ADMIN_ONLY_SIGNUP"), true),
+		EnrollAdminOnly:       parseBoolDefault(os.Getenv("ADMIN_ONLY_ENROLL"), true),
+		CreateCourseAdminOnly: parseBoolDefault(os.Getenv("ADMIN_ONLY_CREATE_COURSE"), true),
+		CreateLessonAdminOnly: parseBoolDefault(os.Getenv("ADMIN_ONLY_CREATE_LESSON"), true),
+		CreateDeckAdminOnly:   parseBoolDefault(os.Getenv("ADMIN_ONLY_CREATE_DECK"), true),
+	}
+
 	usersConfig := config{}
 	usersConfig.grpcHost = os.Getenv("USERS_GRPC_SERVER_HOST")
 	usersConfig.grpcPort = os.Getenv("USERS_GRPC_SERVER_PORT")
@@ -184,4 +196,16 @@ func loadConfig() globalConfig {
 		dealer: dealerConfig,
 		course: coursesConfig,
 	}
+}
+
+// parseBoolDefault parses a boolean string with a default value if empty or invalid
+func parseBoolDefault(s string, defaultVal bool) bool {
+	if s == "" {
+		return defaultVal
+	}
+	v, err := strconv.ParseBool(s)
+	if err != nil {
+		return defaultVal
+	}
+	return v
 }
