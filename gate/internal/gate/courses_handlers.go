@@ -349,7 +349,7 @@ func UpdateCourse(ctx *gin.Context, client pb.CourseAPIClient) {
 		return
 	}
 
-	// Check if at least one field is provided
+	// TODO: Remove once service errors are handled properly
 	if req.Order == nil && req.Title == nil && req.Description == nil {
 		ctx.JSON(http.StatusBadRequest, gin.H{"error": "at least one field must be provided"})
 		return
@@ -401,7 +401,7 @@ func UpdateLesson(ctx *gin.Context, client pb.CourseAPIClient) {
 		return
 	}
 
-	// Check if at least one field is provided
+	// TODO: Remove once service errors are handled properly
 	if req.Order == nil && req.Title == nil && req.Description == nil && req.Body == nil {
 		ctx.JSON(http.StatusBadRequest, gin.H{"error": "at least one field must be provided"})
 		return
