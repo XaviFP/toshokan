@@ -331,6 +331,108 @@ func CreateLesson(ctx *gin.Context, client pb.CourseAPIClient) {
 	ctx.JSON(http.StatusCreated, toLessonJSON(res.Lesson))
 }
 
+func UpdateCourse(ctx *gin.Context, client pb.CourseAPIClient) {
+	courseID := ctx.Param("courseId")
+	if courseID == "" {
+		ctx.JSON(http.StatusBadRequest, gin.H{"error": "missing course id"})
+		return
+	}
+
+	var req struct {
+		Order       *int64  `json:"order"`
+		Title       *string `json:"title"`
+		Description *string `json:"description"`
+	}
+
+	if err := ctx.ShouldBindJSON(&req); err != nil {
+		ctx.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	// Check if at least one field is provided
+	if req.Order == nil && req.Title == nil && req.Description == nil {
+		ctx.JSON(http.StatusBadRequest, gin.H{"error": "at least one field must be provided"})
+		return
+	}
+
+	updateReq := &pb.UpdateCourseRequest{
+		Id:          courseID,
+		Order:       req.Order,
+		Title:       req.Title,
+		Description: req.Description,
+	}
+
+	res, err := client.UpdateCourse(ctx, updateReq)
+	if err != nil {
+		if strings.Contains(err.Error(), "course not found") {
+			ctx.JSON(http.StatusNotFound, gin.H{"error": "course not found"})
+			return
+		}
+		slog.Error("UpdateCourse: gRPC call failed", "error", err, "courseId", courseID, "stack", errors.ErrorStack(err))
+		ctx.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	ctx.JSON(http.StatusOK, toCourseJSON(res.Course))
+}
+
+func UpdateLesson(ctx *gin.Context, client pb.CourseAPIClient) {
+	courseID := ctx.Param("courseId")
+	lessonID := ctx.Param("lessonId")
+
+	if courseID == "" {
+		ctx.JSON(http.StatusBadRequest, gin.H{"error": "missing course id"})
+		return
+	}
+	if lessonID == "" {
+		ctx.JSON(http.StatusBadRequest, gin.H{"error": "missing lesson id"})
+		return
+	}
+
+	var req struct {
+		Order       *int64  `json:"order"`
+		Title       *string `json:"title"`
+		Description *string `json:"description"`
+		Body        *string `json:"body"`
+	}
+
+	if err := ctx.ShouldBindJSON(&req); err != nil {
+		ctx.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	// Check if at least one field is provided
+	if req.Order == nil && req.Title == nil && req.Description == nil && req.Body == nil {
+		ctx.JSON(http.StatusBadRequest, gin.H{"error": "at least one field must be provided"})
+		return
+	}
+
+	updateReq := &pb.UpdateLessonRequest{
+		Id:          lessonID,
+		Order:       req.Order,
+		Title:       req.Title,
+		Description: req.Description,
+		Body:        req.Body,
+	}
+
+	res, err := client.UpdateLesson(ctx, updateReq)
+	if err != nil {
+		if strings.Contains(err.Error(), "lesson not found") {
+			ctx.JSON(http.StatusNotFound, gin.H{"error": "lesson not found"})
+			return
+		}
+		if strings.Contains(err.Error(), "at least one deck in the body") || strings.Contains(err.Error(), "deck") {
+			ctx.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			return
+		}
+		slog.Error("UpdateLesson: gRPC call failed", "error", err, "courseId", courseID, "lessonId", lessonID, "stack", errors.ErrorStack(err))
+		ctx.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	ctx.JSON(http.StatusOK, toLessonJSON(res.Lesson))
+}
+
 func SyncState(ctx *gin.Context, client pb.CourseAPIClient) {
 	userID := getUserID(ctx)
 
@@ -372,6 +474,9 @@ func RegisterCoursesRoutes(r *gin.RouterGroup, client pb.CourseAPIClient, adminC
 		course.GET("/:courseId", func(ctx *gin.Context) {
 			GetCourse(ctx, client)
 		})
+		course.PATCH("/:courseId", RequireAdmin(adminCfg, adminCfg.UpdateCourseAdminOnly), func(ctx *gin.Context) {
+			UpdateCourse(ctx, client)
+		})
 		course.POST("/:courseId/enroll", RequireAdmin(adminCfg, adminCfg.EnrollAdminOnly), func(ctx *gin.Context) {
 			EnrollCourse(ctx, client)
 		})
@@ -386,6 +491,9 @@ func RegisterCoursesRoutes(r *gin.RouterGroup, client pb.CourseAPIClient, adminC
 		})
 		course.GET("/:courseId/lessons/:lessonId/state", func(ctx *gin.Context) {
 			GetLessonState(ctx, client)
+		})
+		course.PATCH("/:courseId/lessons/:lessonId", RequireAdmin(adminCfg, adminCfg.UpdateLessonAdminOnly), func(ctx *gin.Context) {
+			UpdateLesson(ctx, client)
 		})
 		course.POST("/:courseId/lessons/:lessonId/decks/:deckId/answer", func(ctx *gin.Context) {
 			AnswerCards(ctx, client)

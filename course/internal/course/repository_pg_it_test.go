@@ -120,6 +120,156 @@ func TestRepository_StoreLesson(t *testing.T) {
 	})
 }
 
+func TestRepository_UpdateCourse(t *testing.T) {
+	h := newTestHarness(t)
+	repo := NewPGRepository(h.db)
+
+	t.Run("update_title_only", func(t *testing.T) {
+		id := uuid.MustParse("fb9ffe2c-ad66-4766-9b7b-46fd5d9acd72")
+		newTitle := "Updated Go Fundamentals"
+
+		course, err := repo.UpdateCourse(context.Background(), id, CourseUpdates{
+			Title: &newTitle,
+		})
+		require.NoError(t, err)
+		assert.Equal(t, newTitle, course.Title)
+		assert.Equal(t, "Learn the basics of Go", course.Description) // unchanged
+		assert.NotNil(t, course.EditedAt)
+	})
+
+	t.Run("update_description_only", func(t *testing.T) {
+		id := uuid.MustParse("fb9ffe2c-ad66-4766-9b7b-46fd5d9acd72")
+		newDesc := "A comprehensive guide to Go basics"
+
+		course, err := repo.UpdateCourse(context.Background(), id, CourseUpdates{
+			Description: &newDesc,
+		})
+		require.NoError(t, err)
+		assert.Equal(t, newDesc, course.Description)
+	})
+
+	t.Run("update_order", func(t *testing.T) {
+		id := uuid.MustParse("fb9ffe2c-ad66-4766-9b7b-46fd5d9acd72")
+		newOrder := int64(99)
+
+		course, err := repo.UpdateCourse(context.Background(), id, CourseUpdates{
+			Order: &newOrder,
+		})
+		require.NoError(t, err)
+		assert.Equal(t, newOrder, course.Order)
+	})
+
+	t.Run("update_multiple_fields", func(t *testing.T) {
+		id := uuid.MustParse("fb9ffe2c-ad66-4766-9b7b-46fd5d9acd72")
+		newTitle := "Go Programming 101"
+		newDesc := "Start your Go journey"
+		newOrder := int64(1)
+
+		course, err := repo.UpdateCourse(context.Background(), id, CourseUpdates{
+			Title:       &newTitle,
+			Description: &newDesc,
+			Order:       &newOrder,
+		})
+		require.NoError(t, err)
+		assert.Equal(t, newTitle, course.Title)
+		assert.Equal(t, newDesc, course.Description)
+		assert.Equal(t, newOrder, course.Order)
+	})
+
+	t.Run("update_with_empty_string", func(t *testing.T) {
+		id := uuid.MustParse("fb9ffe2c-ad66-4766-9b7b-46fd5d9acd72")
+		emptyTitle := ""
+
+		course, err := repo.UpdateCourse(context.Background(), id, CourseUpdates{
+			Title: &emptyTitle,
+		})
+		require.NoError(t, err)
+		assert.Equal(t, "", course.Title)
+	})
+
+	t.Run("not_found", func(t *testing.T) {
+		id := uuid.MustParse("00000000-0000-0000-0000-000000000000")
+		newTitle := "Does not exist"
+
+		_, err := repo.UpdateCourse(context.Background(), id, CourseUpdates{
+			Title: &newTitle,
+		})
+		assert.Error(t, err)
+		assert.True(t, errors.Is(err, ErrNotFound))
+	})
+}
+
+func TestRepository_UpdateLesson(t *testing.T) {
+	h := newTestHarness(t)
+	repo := NewPGRepository(h.db)
+
+	t.Run("update_title_only", func(t *testing.T) {
+		id := uuid.MustParse("334ddbf8-1acc-405b-86d8-49f0d1ca636c")
+		newTitle := "Updated Goroutines Tutorial"
+
+		lesson, err := repo.UpdateLesson(context.Background(), id, LessonUpdates{
+			Title: &newTitle,
+		})
+		require.NoError(t, err)
+		assert.Equal(t, newTitle, lesson.Title)
+		assert.Equal(t, "Learn about concurrent programming", lesson.Description) // unchanged
+		assert.NotNil(t, lesson.EditedAt)
+	})
+
+	t.Run("update_body", func(t *testing.T) {
+		id := uuid.MustParse("334ddbf8-1acc-405b-86d8-49f0d1ca636c")
+		newBody := "New body content with ![deck](60766223-ff9f-4871-a497-f765c05a0c5e)"
+
+		lesson, err := repo.UpdateLesson(context.Background(), id, LessonUpdates{
+			Body: &newBody,
+		})
+		require.NoError(t, err)
+		assert.Equal(t, newBody, lesson.Body)
+	})
+
+	t.Run("update_order", func(t *testing.T) {
+		id := uuid.MustParse("334ddbf8-1acc-405b-86d8-49f0d1ca636c")
+		newOrder := int64(50)
+
+		lesson, err := repo.UpdateLesson(context.Background(), id, LessonUpdates{
+			Order: &newOrder,
+		})
+		require.NoError(t, err)
+		assert.Equal(t, int(newOrder), lesson.Order)
+	})
+
+	t.Run("update_multiple_fields", func(t *testing.T) {
+		id := uuid.MustParse("334ddbf8-1acc-405b-86d8-49f0d1ca636c")
+		newTitle := "Concurrency Masterclass"
+		newDesc := "Deep dive into Go concurrency"
+		newBody := "Updated content ![deck](60766223-ff9f-4871-a497-f765c05a0c5e)"
+		newOrder := int64(5)
+
+		lesson, err := repo.UpdateLesson(context.Background(), id, LessonUpdates{
+			Title:       &newTitle,
+			Description: &newDesc,
+			Body:        &newBody,
+			Order:       &newOrder,
+		})
+		require.NoError(t, err)
+		assert.Equal(t, newTitle, lesson.Title)
+		assert.Equal(t, newDesc, lesson.Description)
+		assert.Equal(t, newBody, lesson.Body)
+		assert.Equal(t, int(newOrder), lesson.Order)
+	})
+
+	t.Run("not_found", func(t *testing.T) {
+		id := uuid.MustParse("00000000-0000-0000-0000-000000000000")
+		newTitle := "Does not exist"
+
+		_, err := repo.UpdateLesson(context.Background(), id, LessonUpdates{
+			Title: &newTitle,
+		})
+		assert.Error(t, err)
+		assert.True(t, errors.Is(err, ErrNotFound))
+	})
+}
+
 func TestRepository_GetLesson(t *testing.T) {
 	h := newTestHarness(t)
 	repo := NewPGRepository(h.db)

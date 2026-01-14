@@ -232,6 +232,67 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
+    patch:
+      tags:
+        - Courses
+      summary: Update a course
+      description: |
+        Update one or more fields of an existing course.
+        
+        **Note:** This endpoint may require admin access (`X-Admin-Token` header) depending on server configuration.
+        When `ADMIN_ONLY_UPDATE_COURSE=true`, only requests with a valid admin token will be accepted.
+        
+        At least one field must be provided. Returns 400 if no fields are provided.
+      operationId: updateCourse
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: courseId
+          in: path
+          required: true
+          description: Course UUID
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateCourseRequest'
+      responses:
+        '200':
+          description: Course updated successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Course'
+        '400':
+          description: Invalid request (no fields provided or validation error)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: Admin access required (when endpoint is admin-protected)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Course not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
 
   /courses/{courseId}/sync:
     post:
@@ -532,6 +593,77 @@ paths:
                 $ref: '#/components/schemas/Error'
         '404':
           description: Course not found or no focused lessons
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /courses/{courseId}/lessons/{lessonId}:
+    patch:
+      tags:
+        - Lessons
+      summary: Update a lesson
+      description: |
+        Update one or more fields of an existing lesson.
+        
+        **Note:** This endpoint may require admin access (`X-Admin-Token` header) depending on server configuration.
+        When `ADMIN_ONLY_UPDATE_LESSON=true`, only requests with a valid admin token will be accepted.
+        
+        At least one field must be provided. Returns 400 if no fields are provided.
+        If the body field is updated, it must still contain at least one deck reference in the format `![deck](uuid)`.
+      operationId: updateLesson
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: courseId
+          in: path
+          required: true
+          description: Course UUID
+          schema:
+            type: string
+            format: uuid
+        - name: lessonId
+          in: path
+          required: true
+          description: Lesson UUID
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateLessonRequest'
+      responses:
+        '200':
+          description: Lesson updated successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Lesson'
+        '400':
+          description: Invalid request (no fields provided, missing deck reference, or validation error)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: Admin access required (when endpoint is admin-protected)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Lesson not found
           content:
             application/json:
               schema:
@@ -912,6 +1044,21 @@ components:
         - title
         - description
 
+    UpdateCourseRequest:
+      type: object
+      description: Partial update request for a course. At least one field must be provided.
+      properties:
+        order:
+          type: integer
+          format: int64
+          description: Course order
+        title:
+          type: string
+          description: Course title (empty string allowed)
+        description:
+          type: string
+          description: Course description (empty string allowed)
+
     Lesson:
       type: object
       properties:
@@ -982,6 +1129,25 @@ components:
         - title
         - description
         - body
+
+    UpdateLessonRequest:
+      type: object
+      description: Partial update request for a lesson. At least one field must be provided. If body is updated, deck references will be re-validated.
+      properties:
+        order:
+          type: integer
+          format: int64
+          description: Lesson order within course
+        title:
+          type: string
+          description: Lesson title (empty string allowed)
+        description:
+          type: string
+          description: Lesson description (empty string allowed)
+        body:
+          type: string
+          description: Lesson content body; if provided, must embed at least one deck reference in the markdown form `![deck](uuid)`
+          pattern: '!\[deck\]\([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}\)'
 
     LessonWithProgress:
       allOf:

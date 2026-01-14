@@ -17,6 +17,8 @@ service CourseAPI {
   rpc AnswerCards (AnswerCardsRequest) returns (AnswerCardsResponse) {}
   rpc CreateCourse (CreateCourseRequest) returns (CreateCourseResponse) {}
   rpc CreateLesson (CreateLessonRequest) returns (CreateLessonResponse) {}
+  rpc UpdateCourse (UpdateCourseRequest) returns (UpdateCourseResponse) {}
+  rpc UpdateLesson (UpdateLessonRequest) returns (UpdateLessonResponse) {}
   rpc SyncState (SyncStateRequest) returns (SyncStateResponse) {}
 }
 
@@ -244,4 +246,27 @@ message GetLessonStateRequest {
 
 message GetLessonStateResponse {
   map<string, LessonState> lesson_state = 1;
+}
+
+message UpdateCourseRequest {
+  string id = 1;
+  optional int64 order = 2;
+  optional string title = 3;
+  optional string description = 4;
+}
+
+message UpdateCourseResponse {
+  Course course = 1;
+}
+
+message UpdateLessonRequest {
+  string id = 1;
+  optional int64 order = 2;
+  optional string title = 3;
+  optional string description = 4;
+  optional string body = 5;
+}
+
+message UpdateLessonResponse {
+  Lesson lesson = 1;
 }

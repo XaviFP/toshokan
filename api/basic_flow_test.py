@@ -55,8 +55,12 @@ def load_base_url():
     return DEFAULT_BASE_URL
 
 
+def admin_headers() -> Dict[str, str]:
+    return {"X-ADMIN-TOKEN": "change-me-in-production"}
+
+
 def auth_headers(token: str) -> Dict[str, str]:
-    return {"Authorization": f"Bearer {token}"}
+    return {"Authorization": f"Bearer {token}", "X-ADMIN-TOKEN": "change-me-in-production"}
 
 
 def capture_to_har(response: requests.Response) -> None:
@@ -183,7 +187,7 @@ def create_user(base_url: str) -> Dict[str, str]:
     }
     log_step(f"Signing up user: {username}")
     signup_response = requests.post(
-        f"{base_url}/signup", json=signup_payload, timeout=TIMEOUT)
+        f"{base_url}/signup", json=signup_payload, headers=admin_headers(), timeout=TIMEOUT)
     log_response("POST /signup", signup_response)
 
     login_payload = {"username": username, "password": password}
@@ -806,7 +810,207 @@ def sync_state(base_url: str, token: str, course_id: str) -> None:
     )
     log_response("POST /courses/{courseId}/sync", sync_response)
     sync_response.raise_for_status()
-    log_step(f"✓ SyncState endpoint responded with status {sync_response.status_code}")
+    log_step(
+        f"✓ SyncState endpoint responded with status {sync_response.status_code}")
+
+
+def update_course(base_url: str, token: str, course_id: str, updates: Dict[str, Any]) -> Dict[str, Any]:
+    """Update a course with partial fields."""
+    log_step(f"Updating course {course_id} with: {updates}")
+    response = requests.patch(
+        f"{base_url}/courses/{course_id}",
+        json=updates,
+        headers=auth_headers(token),
+        timeout=TIMEOUT,
+    )
+    log_response("PATCH /courses/{courseId}", response)
+    return response
+
+
+def update_lesson(base_url: str, token: str, course_id: str, lesson_id: str, updates: Dict[str, Any]) -> Dict[str, Any]:
+    """Update a lesson with partial fields."""
+    log_step(f"Updating lesson {lesson_id} with: {updates}")
+    response = requests.patch(
+        f"{base_url}/courses/{course_id}/lessons/{lesson_id}",
+        json=updates,
+        headers=auth_headers(token),
+        timeout=TIMEOUT,
+    )
+    log_response("PATCH /courses/{courseId}/lessons/{lessonId}", response)
+    return response
+
+
+def run_update_course_tests(base_url: str, token: str, course_id: str) -> None:
+    """Test PATCH /courses/{courseId} endpoint."""
+    log_step("")
+    log_step("Testing UpdateCourse endpoint...")
+
+    # Test 1: Update only title
+    response = update_course(base_url, token, course_id, {
+                             "title": "Updated Course Title"})
+    assert response.status_code == 200, f"Expected 200, got {response.status_code}"
+    updated = response.json()
+    assert updated["title"] == "Updated Course Title", "Title should be updated"
+    log_step("  ✓ Update title only - success")
+
+    # Test 2: Update only description
+    response = update_course(base_url, token, course_id, {
+                             "description": "Updated description"})
+    assert response.status_code == 200, f"Expected 200, got {response.status_code}"
+    updated = response.json()
+    assert updated["description"] == "Updated description", "Description should be updated"
+    assert updated["title"] == "Updated Course Title", "Title should remain from previous update"
+    log_step("  ✓ Update description only - success")
+
+    # Test 3: Update order
+    response = update_course(base_url, token, course_id, {"order": 100})
+    assert response.status_code == 200, f"Expected 200, got {response.status_code}"
+    updated = response.json()
+    assert updated["order"] == 100, "Order should be updated"
+    log_step("  ✓ Update order only - success")
+
+    # Test 4: Update multiple fields
+    response = update_course(base_url, token, course_id, {
+        "title": "Final Title",
+        "description": "Final Description",
+        "order": 1
+    })
+    assert response.status_code == 200, f"Expected 200, got {response.status_code}"
+    updated = response.json()
+    assert updated["title"] == "Final Title"
+    assert updated["description"] == "Final Description"
+    assert updated["order"] == 1
+    log_step("  ✓ Update multiple fields - success")
+
+    # Test 5: Re-fetch course to verify persistence
+    log_step("  Verifying persistence by re-fetching course...")
+    get_response = requests.get(
+        f"{base_url}/courses/{course_id}",
+        headers=auth_headers(token),
+        timeout=TIMEOUT,
+    )
+    assert get_response.status_code == 200
+    fetched = get_response.json()
+    assert fetched[
+        "title"] == "Final Title", f"Title not persisted: got {fetched.get('title')}"
+    assert fetched[
+        "description"] == "Final Description", f"Description not persisted: got {fetched.get('description')}"
+    assert fetched["order"] == 1, f"Order not persisted: got {fetched.get('order')}"
+    log_step("  ✓ Re-fetch confirms persistence - success")
+
+    # Test 6: Empty request should return 400
+    response = update_course(base_url, token, course_id, {})
+    assert response.status_code == 400, f"Expected 400 for empty request, got {response.status_code}"
+    log_step("  ✓ Empty request returns 400 - success")
+
+    # Test 7: Non-existent course should return 404
+    fake_uuid = "00000000-0000-0000-0000-000000000000"
+    response = update_course(base_url, token, fake_uuid, {
+                             "title": "Won't work"})
+    assert response.status_code == 404, f"Expected 404 for non-existent course, got {response.status_code}"
+    log_step("  ✓ Non-existent course returns 404 - success")
+
+    # Test 8: Empty string is allowed (not treated as missing)
+    response = update_course(base_url, token, course_id, {"title": ""})
+    assert response.status_code == 200, f"Expected 200 for empty string, got {response.status_code}"
+    updated = response.json()
+    assert updated["title"] == "", "Title should be empty string"
+    log_step("  ✓ Empty string allowed - success")
+
+    # Restore title for other tests
+    update_course(base_url, token, course_id, {"title": "course-0"})
+
+    log_step("✓ UpdateCourse tests passed")
+
+
+def run_update_lesson_tests(base_url: str, token: str, course_id: str, lesson: Dict[str, Any], deck_id: str) -> None:
+    """Test PATCH /courses/{courseId}/lessons/{lessonId} endpoint."""
+    log_step("")
+    log_step("Testing UpdateLesson endpoint...")
+
+    lesson_id = lesson["id"]
+
+    # Test 1: Update only title
+    response = update_lesson(base_url, token, course_id, lesson_id, {
+                             "title": "Updated Lesson Title"})
+    assert response.status_code == 200, f"Expected 200, got {response.status_code}"
+    updated = response.json()
+    assert updated["title"] == "Updated Lesson Title", "Title should be updated"
+    log_step("  ✓ Update title only - success")
+
+    # Test 2: Update only description
+    response = update_lesson(base_url, token, course_id, lesson_id, {
+                             "description": "Updated lesson desc"})
+    assert response.status_code == 200, f"Expected 200, got {response.status_code}"
+    updated = response.json()
+    assert updated["description"] == "Updated lesson desc", "Description should be updated"
+    assert updated["title"] == "Updated Lesson Title", "Title should remain from previous update"
+    log_step("  ✓ Update description only - success")
+
+    # Test 3: Update order
+    response = update_lesson(base_url, token, course_id,
+                             lesson_id, {"order": 99})
+    assert response.status_code == 200, f"Expected 200, got {response.status_code}"
+    updated = response.json()
+    assert updated["order"] == 99, "Order should be updated"
+    log_step("  ✓ Update order only - success")
+
+    # Test 4: Update body with valid deck reference (re-validates deck)
+    new_body = f"New lesson body with deck ![deck]({deck_id})"
+    response = update_lesson(base_url, token, course_id,
+                             lesson_id, {"body": new_body})
+    assert response.status_code == 200, f"Expected 200, got {response.status_code}"
+    updated = response.json()
+    assert updated["body"] == new_body, "Body should be updated"
+    log_step("  ✓ Update body with valid deck reference - success")
+
+    # Test 5: Update body with invalid deck reference should fail
+    invalid_body = "Body with invalid deck ![deck](00000000-0000-0000-0000-000000000000)"
+    response = update_lesson(base_url, token, course_id,
+                             lesson_id, {"body": invalid_body})
+    # This should fail because the deck doesn't exist
+    assert response.status_code in (
+        400, 404, 500), f"Expected error for invalid deck reference, got {response.status_code}"
+    log_step("  ✓ Update body with invalid deck reference rejected - success")
+
+    # Test 6: Update multiple fields
+    response = update_lesson(base_url, token, course_id, lesson_id, {
+        "title": "Final Lesson Title",
+        "description": "Final lesson desc",
+        "order": 1
+    })
+    assert response.status_code == 200, f"Expected 200, got {response.status_code}"
+    updated = response.json()
+    assert updated["title"] == "Final Lesson Title"
+    assert updated["description"] == "Final lesson desc"
+    assert updated["order"] == 1
+    log_step("  ✓ Update multiple fields - success")
+
+    # Test 7: Re-fetch lesson to verify persistence
+    log_step("  Verifying persistence by re-fetching lessons...")
+    lessons_response = list_lessons(base_url, token, course_id, limit=10)
+    fetched_lesson = next(
+        (e["node"] for e in lessons_response["edges"] if e["node"]["id"] == lesson_id), None)
+    assert fetched_lesson is not None, "Lesson should be found"
+    assert fetched_lesson["title"] == "Final Lesson Title", "Title not persisted"
+    assert fetched_lesson["description"] == "Final lesson desc", "Description not persisted"
+    assert fetched_lesson["order"] == 1, "Order not persisted"
+    assert fetched_lesson["body"] == new_body, "Body not persisted"
+    log_step("  ✓ Re-fetch confirms persistence - success")
+
+    # Test 8: Empty request should return 400
+    response = update_lesson(base_url, token, course_id, lesson_id, {})
+    assert response.status_code == 400, f"Expected 400 for empty request, got {response.status_code}"
+    log_step("  ✓ Empty request returns 400 - success")
+
+    # Test 9: Non-existent lesson should return 404
+    fake_uuid = "00000000-0000-0000-0000-000000000000"
+    response = update_lesson(base_url, token, course_id,
+                             fake_uuid, {"title": "Won't work"})
+    assert response.status_code == 404, f"Expected 404 for non-existent lesson, got {response.status_code}"
+    log_step("  ✓ Non-existent lesson returns 404 - success")
+
+    log_step("✓ UpdateLesson tests passed")
 
 
 def test_basic_flow():
@@ -853,6 +1057,11 @@ def test_basic_flow():
     run_enrolled_courses_test(base_url, token, course_id)
 
     sync_state(base_url, token, course_id)
+
+    # Test update endpoints (admin-protected)
+    run_update_course_tests(base_url, token, course_id)
+    run_update_lesson_tests(base_url, token, course_id,
+                            lessons[0], lesson_deck_ids[0])
 
     log_step("")
     log_step("✅ Test passed!")

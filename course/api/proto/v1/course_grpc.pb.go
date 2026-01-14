@@ -33,6 +33,8 @@ type CourseAPIClient interface {
 	AnswerCards(ctx context.Context, in *AnswerCardsRequest, opts ...grpc.CallOption) (*AnswerCardsResponse, error)
 	CreateCourse(ctx context.Context, in *CreateCourseRequest, opts ...grpc.CallOption) (*CreateCourseResponse, error)
 	CreateLesson(ctx context.Context, in *CreateLessonRequest, opts ...grpc.CallOption) (*CreateLessonResponse, error)
+	UpdateCourse(ctx context.Context, in *UpdateCourseRequest, opts ...grpc.CallOption) (*UpdateCourseResponse, error)
+	UpdateLesson(ctx context.Context, in *UpdateLessonRequest, opts ...grpc.CallOption) (*UpdateLessonResponse, error)
 	SyncState(ctx context.Context, in *SyncStateRequest, opts ...grpc.CallOption) (*SyncStateResponse, error)
 }
 
@@ -143,6 +145,24 @@ func (c *courseAPIClient) CreateLesson(ctx context.Context, in *CreateLessonRequ
 	return out, nil
 }
 
+func (c *courseAPIClient) UpdateCourse(ctx context.Context, in *UpdateCourseRequest, opts ...grpc.CallOption) (*UpdateCourseResponse, error) {
+	out := new(UpdateCourseResponse)
+	err := c.cc.Invoke(ctx, "/course.v1.CourseAPI/UpdateCourse", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *courseAPIClient) UpdateLesson(ctx context.Context, in *UpdateLessonRequest, opts ...grpc.CallOption) (*UpdateLessonResponse, error) {
+	out := new(UpdateLessonResponse)
+	err := c.cc.Invoke(ctx, "/course.v1.CourseAPI/UpdateLesson", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *courseAPIClient) SyncState(ctx context.Context, in *SyncStateRequest, opts ...grpc.CallOption) (*SyncStateResponse, error) {
 	out := new(SyncStateResponse)
 	err := c.cc.Invoke(ctx, "/course.v1.CourseAPI/SyncState", in, out, opts...)
@@ -167,6 +187,8 @@ type CourseAPIServer interface {
 	AnswerCards(context.Context, *AnswerCardsRequest) (*AnswerCardsResponse, error)
 	CreateCourse(context.Context, *CreateCourseRequest) (*CreateCourseResponse, error)
 	CreateLesson(context.Context, *CreateLessonRequest) (*CreateLessonResponse, error)
+	UpdateCourse(context.Context, *UpdateCourseRequest) (*UpdateCourseResponse, error)
+	UpdateLesson(context.Context, *UpdateLessonRequest) (*UpdateLessonResponse, error)
 	SyncState(context.Context, *SyncStateRequest) (*SyncStateResponse, error)
 }
 
@@ -206,6 +228,12 @@ func (UnimplementedCourseAPIServer) CreateCourse(context.Context, *CreateCourseR
 }
 func (UnimplementedCourseAPIServer) CreateLesson(context.Context, *CreateLessonRequest) (*CreateLessonResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method CreateLesson not implemented")
+}
+func (UnimplementedCourseAPIServer) UpdateCourse(context.Context, *UpdateCourseRequest) (*UpdateCourseResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method UpdateCourse not implemented")
+}
+func (UnimplementedCourseAPIServer) UpdateLesson(context.Context, *UpdateLessonRequest) (*UpdateLessonResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method UpdateLesson not implemented")
 }
 func (UnimplementedCourseAPIServer) SyncState(context.Context, *SyncStateRequest) (*SyncStateResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method SyncState not implemented")
@@ -420,6 +448,42 @@ func _CourseAPI_CreateLesson_Handler(srv interface{}, ctx context.Context, dec f
 	return interceptor(ctx, in, info, handler)
 }
 
+func _CourseAPI_UpdateCourse_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(UpdateCourseRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(CourseAPIServer).UpdateCourse(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/course.v1.CourseAPI/UpdateCourse",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(CourseAPIServer).UpdateCourse(ctx, req.(*UpdateCourseRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _CourseAPI_UpdateLesson_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(UpdateLessonRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(CourseAPIServer).UpdateLesson(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/course.v1.CourseAPI/UpdateLesson",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(CourseAPIServer).UpdateLesson(ctx, req.(*UpdateLessonRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _CourseAPI_SyncState_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(SyncStateRequest)
 	if err := dec(in); err != nil {
@@ -488,6 +552,14 @@ var CourseAPI_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "CreateLesson",
 			Handler:    _CourseAPI_CreateLesson_Handler,
+		},
+		{
+			MethodName: "UpdateCourse",
+			Handler:    _CourseAPI_UpdateCourse_Handler,
+		},
+		{
+			MethodName: "UpdateLesson",
+			Handler:    _CourseAPI_UpdateLesson_Handler,
 		},
 		{
 			MethodName: "SyncState",
