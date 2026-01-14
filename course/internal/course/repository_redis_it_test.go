@@ -262,6 +262,100 @@ func TestRedisRepository_StoreLesson(t *testing.T) {
 	mockDB.AssertExpectations(t)
 }
 
+func TestRedisRepository_UpdateCourse(t *testing.T) {
+	h := newTestHarness(t)
+	mockDB := new(RepositoryMock)
+
+	repo := NewRedisRepository(h.redisClient, mockDB)
+
+	ctx := context.Background()
+	courseID := uuid.New()
+	originalCourse := Course{
+		ID:          courseID,
+		Title:       "Go Fundamentals",
+		Description: "Learn Go",
+		CreatedAt:   time.Now().UTC(),
+	}
+	updatedCourse := Course{
+		ID:          courseID,
+		Title:       "Updated Go Fundamentals",
+		Description: "Learn Go",
+		CreatedAt:   originalCourse.CreatedAt,
+	}
+	newTitle := "Updated Go Fundamentals"
+	updates := CourseUpdates{Title: &newTitle}
+
+	// Pre-populate cache to verify invalidation
+	courseJSON, _ := json.Marshal(originalCourse)
+	key := "course:" + courseID.String()
+	err := h.redisClient.Do(ctx, radix.FlatCmd(nil, "SETEX", key, 3600, string(courseJSON)))
+	assert.NoError(t, err)
+
+	mockDB.On("UpdateCourse", ctx, courseID, updates).Return(updatedCourse, nil)
+
+	result, err := repo.UpdateCourse(ctx, courseID, updates)
+
+	assert.NoError(t, err)
+	assert.Equal(t, updatedCourse.Title, result.Title)
+
+	// Verify cache was invalidated
+	var cached string
+	mb := radix.Maybe{Rcv: &cached}
+	err = h.redisClient.Do(ctx, radix.Cmd(&mb, "GET", key))
+	assert.NoError(t, err)
+	assert.True(t, mb.Null, "Cache should be invalidated after update")
+
+	mockDB.AssertExpectations(t)
+}
+
+func TestRedisRepository_UpdateLesson(t *testing.T) {
+	h := newTestHarness(t)
+	mockDB := new(RepositoryMock)
+
+	repo := NewRedisRepository(h.redisClient, mockDB)
+
+	ctx := context.Background()
+	lessonID := uuid.New()
+	originalLesson := Lesson{
+		ID:       lessonID,
+		CourseID: uuid.New(),
+		Title:    "Introduction",
+		Body:     "Content",
+		Order:    1,
+	}
+	updatedLesson := Lesson{
+		ID:       lessonID,
+		CourseID: originalLesson.CourseID,
+		Title:    "Updated Introduction",
+		Body:     "Content",
+		Order:    1,
+	}
+	newTitle := "Updated Introduction"
+	updates := LessonUpdates{Title: &newTitle}
+
+	// Pre-populate cache to verify invalidation
+	lessonJSON, _ := json.Marshal(originalLesson)
+	key := "lesson:" + lessonID.String()
+	err := h.redisClient.Do(ctx, radix.FlatCmd(nil, "SETEX", key, 3600, string(lessonJSON)))
+	assert.NoError(t, err)
+
+	mockDB.On("UpdateLesson", ctx, lessonID, updates).Return(updatedLesson, nil)
+
+	result, err := repo.UpdateLesson(ctx, lessonID, updates)
+
+	assert.NoError(t, err)
+	assert.Equal(t, updatedLesson.Title, result.Title)
+
+	// Verify cache was invalidated
+	var cached string
+	mb := radix.Maybe{Rcv: &cached}
+	err = h.redisClient.Do(ctx, radix.Cmd(&mb, "GET", key))
+	assert.NoError(t, err)
+	assert.True(t, mb.Null, "Cache should be invalidated after update")
+
+	mockDB.AssertExpectations(t)
+}
+
 func TestRedisRepository_GetUserCourseProgress_CacheHit(t *testing.T) {
 	h := newTestHarness(t)
 	mockDB := new(RepositoryMock)

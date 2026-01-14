@@ -24,6 +24,7 @@ type Repository interface {
 	// Courses
 	GetCourse(ctx context.Context, id uuid.UUID) (Course, error)
 	StoreCourse(ctx context.Context, course Course) error
+	UpdateCourse(ctx context.Context, id uuid.UUID, updates CourseUpdates) (Course, error)
 	GetEnrolledCourses(ctx context.Context, userID uuid.UUID, p pagination.Pagination) (CoursesWithProgressConnection, error)
 
 	// Lessons
@@ -33,11 +34,37 @@ type Repository interface {
 	// GetLessonsByCourseID retrieves lessons for a course with pagination
 	GetLessonsByCourseID(ctx context.Context, courseID uuid.UUID, p pagination.Pagination) (LessonsConnection, error)
 	StoreLesson(ctx context.Context, lesson Lesson) error
+	UpdateLesson(ctx context.Context, id uuid.UUID, updates LessonUpdates) (Lesson, error)
 
 	// User Progress
 	GetUserCourseProgress(ctx context.Context, userID uuid.UUID, courseID uuid.UUID) (UserCourseProgress, error)
 	EnrollUserInCourse(ctx context.Context, userID uuid.UUID, courseID uuid.UUID, progressState ProgressState) error
 	UpdateUserProgress(ctx context.Context, progress UserCourseProgress) error
+}
+
+// CourseUpdates contains optional fields for updating a course
+type CourseUpdates struct {
+	Order       *int64
+	Title       *string
+	Description *string
+}
+
+// HasUpdates returns true if at least one field is set
+func (u CourseUpdates) HasUpdates() bool {
+	return u.Order != nil || u.Title != nil || u.Description != nil
+}
+
+// LessonUpdates contains optional fields for updating a lesson
+type LessonUpdates struct {
+	Order       *int64
+	Title       *string
+	Description *string
+	Body        *string
+}
+
+// HasUpdates returns true if at least one field is set
+func (u LessonUpdates) HasUpdates() bool {
+	return u.Order != nil || u.Title != nil || u.Description != nil || u.Body != nil
 }
 
 type redisRepository struct {
@@ -131,6 +158,21 @@ func (r *redisRepository) StoreCourse(ctx context.Context, course Course) error 
 	return nil
 }
 
+// UpdateCourse updates a course and invalidates cache
+func (r *redisRepository) UpdateCourse(ctx context.Context, id uuid.UUID, updates CourseUpdates) (Course, error) {
+	course, err := r.db.UpdateCourse(ctx, id, updates)
+	if err != nil {
+		return Course{}, errors.Trace(err)
+	}
+
+	// Invalidate cache
+	if err := r.cache.Delete(ctx, r.courseKey(id)); err != nil {
+		log.Printf("cache delete failed for course %s: %v", id, err)
+	}
+
+	return course, nil
+}
+
 // GetLesson retrieves a lesson, checking cache first
 func (r *redisRepository) GetLesson(ctx context.Context, id uuid.UUID) (Lesson, error) {
 	key := r.lessonKey(id)
@@ -188,6 +230,21 @@ func (r *redisRepository) StoreLesson(ctx context.Context, lesson Lesson) error 
 	}
 
 	return nil
+}
+
+// UpdateLesson updates a lesson and invalidates cache
+func (r *redisRepository) UpdateLesson(ctx context.Context, id uuid.UUID, updates LessonUpdates) (Lesson, error) {
+	lesson, err := r.db.UpdateLesson(ctx, id, updates)
+	if err != nil {
+		return Lesson{}, errors.Trace(err)
+	}
+
+	// Invalidate cache
+	if err := r.cache.Delete(ctx, r.lessonKey(id)); err != nil {
+		log.Printf("cache delete failed for lesson %s: %v", id, err)
+	}
+
+	return lesson, nil
 }
 
 // GetUserCourseProgress retrieves user progress, checking cache first
@@ -265,10 +322,10 @@ func NewPGRepository(db *sql.DB) Repository {
 func (r *pgRepository) GetCourse(ctx context.Context, id uuid.UUID) (Course, error) {
 	var course Course
 	err := r.db.QueryRowContext(ctx,
-		`SELECT id, title, description, created_at, edited_at, deleted_at 
+		`SELECT id, "order", title, description, created_at, edited_at, deleted_at 
 		 FROM courses WHERE id = $1 AND deleted_at IS NULL`,
 		id,
-	).Scan(&course.ID, &course.Title, &course.Description, &course.CreatedAt, &course.EditedAt, &course.DeletedAt)
+	).Scan(&course.ID, &course.Order, &course.Title, &course.Description, &course.CreatedAt, &course.EditedAt, &course.DeletedAt)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return Course{}, errors.Trace(ErrCourseNotFound)
@@ -303,6 +360,44 @@ func (r *pgRepository) StoreCourse(ctx context.Context, course Course) error {
 	return errors.Trace(err)
 }
 
+// UpdateCourse updates a course with the provided fields
+func (r *pgRepository) UpdateCourse(ctx context.Context, id uuid.UUID, updates CourseUpdates) (Course, error) {
+	var arger db.Argumenter
+	setClauses := []string{fmt.Sprintf("edited_at = %s", arger.Add(time.Now()))}
+
+	if updates.Order != nil {
+		setClauses = append(setClauses, fmt.Sprintf(`"order" = %s`, arger.Add(*updates.Order)))
+	}
+	if updates.Title != nil {
+		setClauses = append(setClauses, fmt.Sprintf("title = %s", arger.Add(*updates.Title)))
+	}
+	if updates.Description != nil {
+		setClauses = append(setClauses, fmt.Sprintf("description = %s", arger.Add(*updates.Description)))
+	}
+
+	query := fmt.Sprintf(
+		`UPDATE courses SET %s WHERE id = %s AND deleted_at IS NULL
+		 RETURNING id, "order", title, description, created_at, edited_at, deleted_at`,
+		strings.Join(setClauses, ", "),
+		arger.Add(id),
+	)
+
+	var course Course
+	err := r.db.QueryRowContext(ctx, query, arger.Values()...).Scan(
+		&course.ID, &course.Order, &course.Title, &course.Description,
+		&course.CreatedAt, &course.EditedAt, &course.DeletedAt,
+	)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return Course{}, errors.Trace(ErrNotFound)
+		}
+
+		return Course{}, errors.Trace(err)
+	}
+
+	return course, nil
+}
+
 // GetLesson retrieves a lesson by ID
 func (r *pgRepository) GetLesson(ctx context.Context, id uuid.UUID) (Lesson, error) {
 	var lesson Lesson
@@ -311,11 +406,11 @@ func (r *pgRepository) GetLesson(ctx context.Context, id uuid.UUID) (Lesson, err
 		 FROM lessons WHERE id = $1 AND deleted_at IS NULL`,
 		id,
 	).Scan(&lesson.ID, &lesson.CourseID, &lesson.Order, &lesson.Title, &lesson.Description, &lesson.Body, &lesson.CreatedAt, &lesson.EditedAt, &lesson.DeletedAt)
-
-	if errors.Is(err, sql.ErrNoRows) {
-		return Lesson{}, errors.Trace(ErrLessonNotFound)
-	}
 	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return Lesson{}, errors.Trace(ErrLessonNotFound)
+		}
+
 		return Lesson{}, errors.Trace(err)
 	}
 
@@ -523,6 +618,48 @@ func (r *pgRepository) StoreLesson(ctx context.Context, lesson Lesson) error {
 	)
 
 	return errors.Trace(err)
+}
+
+// UpdateLesson updates a lesson with the provided fields
+func (r *pgRepository) UpdateLesson(ctx context.Context, id uuid.UUID, updates LessonUpdates) (Lesson, error) {
+	var arger db.Argumenter
+	setClauses := []string{fmt.Sprintf("edited_at = %s", arger.Add(time.Now()))}
+
+	if updates.Order != nil {
+		setClauses = append(setClauses, fmt.Sprintf(`"order" = %s`, arger.Add(*updates.Order)))
+	}
+	if updates.Title != nil {
+		setClauses = append(setClauses, fmt.Sprintf("title = %s", arger.Add(*updates.Title)))
+	}
+	if updates.Description != nil {
+		setClauses = append(setClauses, fmt.Sprintf("description = %s", arger.Add(*updates.Description)))
+	}
+	if updates.Body != nil {
+		setClauses = append(setClauses, fmt.Sprintf("body = %s", arger.Add(*updates.Body)))
+	}
+
+	query := fmt.Sprintf(
+		`UPDATE lessons SET %s WHERE id = %s AND deleted_at IS NULL
+		 RETURNING id, course_id, "order", title, description, body, created_at, edited_at, deleted_at`,
+		strings.Join(setClauses, ", "),
+		arger.Add(id),
+	)
+
+	var lesson Lesson
+	err := r.db.QueryRowContext(ctx, query, arger.Values()...).Scan(
+		&lesson.ID, &lesson.CourseID, &lesson.Order, &lesson.Title, &lesson.Description,
+		&lesson.Body, &lesson.CreatedAt, &lesson.EditedAt, &lesson.DeletedAt,
+	)
+
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return Lesson{}, errors.Trace(ErrNotFound)
+		}
+
+		return Lesson{}, errors.Trace(err)
+	}
+
+	return lesson, nil
 }
 
 // GetUserCourseProgress retrieves a user's progress in a course

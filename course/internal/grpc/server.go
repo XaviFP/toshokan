@@ -136,6 +136,7 @@ func (s *Server) GetCourse(ctx context.Context, req *pb.GetCourseRequest) (*pb.G
 	return &pb.GetCourseResponse{
 		Course: &pb.Course{
 			Id:          course.ID.String(),
+			Order:       course.Order,
 			Title:       course.Title,
 			Description: course.Description,
 			CreatedAt:   toProtoTimestamp(course.CreatedAt),
@@ -499,6 +500,115 @@ func (s *Server) CreateLesson(ctx context.Context, req *pb.CreateLessonRequest) 
 			Description: lesson.Description,
 			Body:        lesson.Body,
 			CreatedAt:   toProtoTimestamp(lesson.CreatedAt),
+		},
+	}, nil
+}
+
+// UpdateCourse updates a course with the provided fields
+func (s *Server) UpdateCourse(ctx context.Context, req *pb.UpdateCourseRequest) (*pb.UpdateCourseResponse, error) {
+	courseID, err := uuid.Parse(req.Id)
+	if err != nil {
+		slog.Error("UpdateCourse: failed to parse course ID", "error", err, "courseId", req.Id, "stack", errors.ErrorStack(err))
+		return nil, errors.Trace(err)
+	}
+
+	updates := course.CourseUpdates{
+		Order:       req.Order,
+		Title:       req.Title,
+		Description: req.Description,
+	}
+
+	if !updates.HasUpdates() {
+		err := errors.New("no fields to update")
+		slog.Error("UpdateCourse: no fields provided", "error", err, "courseId", courseID.String())
+		return nil, errors.Trace(err)
+	}
+
+	updatedCourse, err := s.Repository.UpdateCourse(ctx, courseID, updates)
+	if err != nil {
+		if errors.Is(err, course.ErrNotFound) {
+			slog.Error("UpdateCourse: course not found", "error", err, "courseId", courseID.String())
+			return nil, errors.Trace(course.ErrCourseNotFound)
+		}
+		slog.Error("UpdateCourse: failed to update course", "error", err, "courseId", courseID.String(), "stack", errors.ErrorStack(err))
+		return nil, errors.Trace(err)
+	}
+
+	return &pb.UpdateCourseResponse{
+		Course: &pb.Course{
+			Id:          updatedCourse.ID.String(),
+			Order:       updatedCourse.Order,
+			Title:       updatedCourse.Title,
+			Description: updatedCourse.Description,
+			CreatedAt:   toProtoTimestamp(updatedCourse.CreatedAt),
+			EditedAt:    toProtoTimestampPtr(updatedCourse.EditedAt),
+			DeletedAt:   toProtoTimestampPtr(updatedCourse.DeletedAt),
+		},
+	}, nil
+}
+
+// UpdateLesson updates a lesson with the provided fields
+func (s *Server) UpdateLesson(ctx context.Context, req *pb.UpdateLessonRequest) (*pb.UpdateLessonResponse, error) {
+	lessonID, err := uuid.Parse(req.Id)
+	if err != nil {
+		slog.Error("UpdateLesson: failed to parse lesson ID", "error", err, "lessonId", req.Id, "stack", errors.ErrorStack(err))
+		return nil, errors.Trace(err)
+	}
+
+	updates := course.LessonUpdates{
+		Order:       req.Order,
+		Title:       req.Title,
+		Description: req.Description,
+		Body:        req.Body,
+	}
+
+	if !updates.HasUpdates() {
+		err := errors.New("no fields to update")
+		slog.Error("UpdateLesson: no fields provided", "error", err, "lessonId", lessonID.String())
+		return nil, errors.Trace(err)
+	}
+
+	if updates.Body != nil {
+		// Re-validate deck references if body is being updated
+		deckIDs := course.ParseDeckReferences(*updates.Body)
+		if len(deckIDs) == 0 {
+			err := errors.New("lesson must reference at least one deck in the body using ![deck](uuid) format")
+			slog.Error("UpdateLesson: no deck references found", "error", err)
+			return nil, errors.Trace(err)
+		}
+
+		// Validate that all decks exist
+		for _, deckID := range deckIDs {
+			deckReq := &pbDeck.GetDeckRequest{DeckId: deckID.String()}
+			_, err := s.DeckClient.GetDeck(ctx, deckReq)
+			if err != nil {
+				slog.Error("UpdateLesson: deck does not exist", "error", err, "deckId", deckID.String(), "stack", errors.ErrorStack(err))
+				return nil, errors.Annotatef(err, "deck %s does not exist", deckID.String())
+			}
+		}
+	}
+
+	updatedLesson, err := s.Repository.UpdateLesson(ctx, lessonID, updates)
+	if err != nil {
+		if errors.Is(err, course.ErrNotFound) {
+			slog.Error("UpdateLesson: lesson not found", "error", err, "lessonId", lessonID.String())
+			return nil, errors.Trace(course.ErrLessonNotFound)
+		}
+		slog.Error("UpdateLesson: failed to update lesson", "error", err, "lessonId", lessonID.String(), "stack", errors.ErrorStack(err))
+		return nil, errors.Trace(err)
+	}
+
+	return &pb.UpdateLessonResponse{
+		Lesson: &pb.Lesson{
+			Id:          updatedLesson.ID.String(),
+			CourseId:    updatedLesson.CourseID.String(),
+			Order:       int64(updatedLesson.Order),
+			Title:       updatedLesson.Title,
+			Description: updatedLesson.Description,
+			Body:        updatedLesson.Body,
+			CreatedAt:   toProtoTimestamp(updatedLesson.CreatedAt),
+			EditedAt:    toProtoTimestampPtr(updatedLesson.EditedAt),
+			DeletedAt:   toProtoTimestampPtr(updatedLesson.DeletedAt),
 		},
 	}, nil
 }
