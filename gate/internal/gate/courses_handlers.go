@@ -551,7 +551,7 @@ type CourseJSON struct {
 	Title       string  `json:"title"`
 	Description string  `json:"description"`
 	CreatedAt   string  `json:"created_at"`
-	EditedAt    *string `json:"edited_at,omitempty"`
+	UpdatedAt   *string `json:"updated_at,omitempty"`
 	DeletedAt   *string `json:"deleted_at,omitempty"`
 }
 
@@ -564,7 +564,7 @@ type LessonJSON struct {
 	Description string  `json:"description"`
 	Body        string  `json:"body"`
 	CreatedAt   string  `json:"created_at"`
-	EditedAt    *string `json:"edited_at,omitempty"`
+	UpdatedAt   *string `json:"updated_at,omitempty"`
 	DeletedAt   *string `json:"deleted_at,omitempty"`
 }
 
@@ -576,7 +576,7 @@ type BodylessLessonJSON struct {
 	Title       string  `json:"title"`
 	Description string  `json:"description"`
 	CreatedAt   string  `json:"created_at"`
-	EditedAt    *string `json:"edited_at,omitempty"`
+	UpdatedAt   *string `json:"updated_at,omitempty"`
 	DeletedAt   *string `json:"deleted_at,omitempty"`
 }
 
@@ -732,7 +732,7 @@ func toCourseJSON(course *pb.Course) CourseJSON {
 		Title:       course.Title,
 		Description: course.Description,
 		CreatedAt:   convertProtoTimestamp(course.CreatedAt),
-		EditedAt:    protoToJSON(course.EditedAt),
+		UpdatedAt:   protoToJSON(course.UpdatedAt),
 		DeletedAt:   protoToJSON(course.DeletedAt),
 	}
 }
@@ -747,7 +747,7 @@ func toLessonJSON(lesson *pb.Lesson) LessonJSON {
 		Description: lesson.Description,
 		Body:        lesson.Body,
 		CreatedAt:   convertProtoTimestamp(lesson.CreatedAt),
-		EditedAt:    protoToJSON(lesson.EditedAt),
+		UpdatedAt:   protoToJSON(lesson.UpdatedAt),
 		DeletedAt:   protoToJSON(lesson.DeletedAt),
 	}
 }
@@ -761,7 +761,7 @@ func toBodylessLessonJSON(lesson *pb.Lesson) BodylessLessonJSON {
 		Title:       lesson.Title,
 		Description: lesson.Description,
 		CreatedAt:   convertProtoTimestamp(lesson.CreatedAt),
-		EditedAt:    protoToJSON(lesson.EditedAt),
+		UpdatedAt:   protoToJSON(lesson.UpdatedAt),
 		DeletedAt:   protoToJSON(lesson.DeletedAt),
 	}
 }

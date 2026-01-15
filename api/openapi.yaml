@@ -1054,7 +1054,7 @@ components:
           type: string
           format: date-time
           description: Creation timestamp
-        edited_at:
+        updated_at:
           type: string
           format: date-time
           description: Last edit timestamp
@@ -1126,7 +1126,7 @@ components:
           type: string
           format: date-time
           description: Creation timestamp
-        edited_at:
+        updated_at:
           type: string
           format: date-time
           description: Last edit timestamp
@@ -1169,7 +1169,7 @@ components:
           type: string
           format: date-time
           description: Creation timestamp
-        edited_at:
+        updated_at:
           type: string
           format: date-time
           description: Last edit timestamp

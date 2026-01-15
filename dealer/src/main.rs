@@ -163,15 +163,15 @@ impl Repository {
                     WHERE is_correct = true
                     AND id in ({})
                 )
-                INSERT INTO user_card_level (user_id, card_id, edited_at)
+                INSERT INTO user_card_level (user_id, card_id, updated_at)
                 (
-                    SELECT {} as user_id, c.card_id as card_id, now() as edited_at
+                    SELECT {} as user_id, c.card_id as card_id, now() as updated_at
                     FROM correct_answered_cards as c
                 )
                 ON CONFLICT ON CONSTRAINT user_card_level_card_id_user_id_key DO UPDATE
                 SET
                 lvl = LEAST((SELECT lvl FROM user_card_level WHERE user_id = EXCLUDED.user_id AND card_id = EXCLUDED.card_id) + 1, 5),
-                edited_at = now()",
+                updated_at = now()",
                     answers_string_arg,
                     arger.add(&uid),
                 ),

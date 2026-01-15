@@ -37,8 +37,8 @@ impl Ranker {
                 .client
                 .execute(
                     "UPDATE user_card_level
-                SET lvl = lvl - 1, edited_at = now()
-                WHERE edited_at < $1
+                SET lvl = lvl - 1, updated_at = now()
+                WHERE updated_at < $1
                 AND lvl > 1",
                     &[&timestamp_to_compare],
                 )

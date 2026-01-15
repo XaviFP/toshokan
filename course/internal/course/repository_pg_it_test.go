@@ -134,7 +134,7 @@ func TestRepository_UpdateCourse(t *testing.T) {
 		require.NoError(t, err)
 		assert.Equal(t, newTitle, course.Title)
 		assert.Equal(t, "Learn the basics of Go", course.Description) // unchanged
-		assert.NotNil(t, course.EditedAt)
+		assert.NotNil(t, course.UpdatedAt)
 	})
 
 	t.Run("update_description_only", func(t *testing.T) {
@@ -213,7 +213,7 @@ func TestRepository_UpdateLesson(t *testing.T) {
 		require.NoError(t, err)
 		assert.Equal(t, newTitle, lesson.Title)
 		assert.Equal(t, "Learn about concurrent programming", lesson.Description) // unchanged
-		assert.NotNil(t, lesson.EditedAt)
+		assert.NotNil(t, lesson.UpdatedAt)
 	})
 
 	t.Run("update_body", func(t *testing.T) {

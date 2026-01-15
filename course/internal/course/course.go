@@ -32,7 +32,7 @@ type Course struct {
 	Title       string     `json:"title"`
 	Description string     `json:"description"`
 	CreatedAt   time.Time  `json:"created_at"`
-	EditedAt    *time.Time `json:"edited_at,omitempty"`
+	UpdatedAt   *time.Time `json:"updated_at,omitempty"`
 	DeletedAt   *time.Time `json:"deleted_at,omitempty"`
 }
 
@@ -44,7 +44,7 @@ type Lesson struct {
 	Description string     `json:"description"`
 	Body        string     `json:"body"`
 	CreatedAt   time.Time  `json:"created_at"`
-	EditedAt    *time.Time `json:"edited_at,omitempty"`
+	UpdatedAt   *time.Time `json:"updated_at,omitempty"`
 	DeletedAt   *time.Time `json:"deleted_at,omitempty"`
 }
 
