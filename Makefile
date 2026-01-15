@@ -5,6 +5,15 @@ services:
 	$(MAKE) -C course
 	$(MAKE) -C dealer
 
+clean:
+	rm -f user/bin/* gate/bin/* deck/bin/* course/bin/*
+
+rebuild: clean
+	docker compose stop user gate deck dealer course
+	docker compose rm -f user gate deck dealer course
+	$(MAKE) services
+	docker compose up --build -d user gate deck dealer course
+
 test-api-schema:
 	cd api && ./run_schemathesis.sh && cd -
 
