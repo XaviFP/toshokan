@@ -324,10 +324,10 @@ func NewPGRepository(db *sql.DB) Repository {
 func (r *pgRepository) GetCourse(ctx context.Context, id uuid.UUID) (Course, error) {
 	var course Course
 	err := r.db.QueryRowContext(ctx,
-		`SELECT id, "order", title, description, created_at, edited_at, deleted_at 
+		`SELECT id, "order", title, description, created_at, updated_at, deleted_at 
 		 FROM courses WHERE id = $1 AND deleted_at IS NULL`,
 		id,
-	).Scan(&course.ID, &course.Order, &course.Title, &course.Description, &course.CreatedAt, &course.EditedAt, &course.DeletedAt)
+	).Scan(&course.ID, &course.Order, &course.Title, &course.Description, &course.CreatedAt, &course.UpdatedAt, &course.DeletedAt)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return Course{}, errors.Trace(ErrCourseNotFound)
@@ -355,7 +355,7 @@ func (r *pgRepository) StoreCourse(ctx context.Context, course Course) error {
 	_, err := r.db.ExecContext(ctx,
 		`INSERT INTO courses (id, "order", title, description, created_at) 
 		 VALUES ($1, $2, $3, $4, $5)
-		 ON CONFLICT (id) DO UPDATE SET "order" = $2, title = $3, description = $4, edited_at = $5`,
+		 ON CONFLICT (id) DO UPDATE SET "order" = $2, title = $3, description = $4, updated_at = $5`,
 		course.ID, course.Order, course.Title, course.Description, time.Now(),
 	)
 
@@ -365,7 +365,7 @@ func (r *pgRepository) StoreCourse(ctx context.Context, course Course) error {
 // UpdateCourse updates a course with the provided fields
 func (r *pgRepository) UpdateCourse(ctx context.Context, id uuid.UUID, updates CourseUpdates) (Course, error) {
 	var arger db.Argumenter
-	setClauses := []string{fmt.Sprintf("edited_at = %s", arger.Add(time.Now()))}
+	setClauses := []string{fmt.Sprintf("updated_at = %s", arger.Add(time.Now()))}
 
 	if updates.Order != nil {
 		setClauses = append(setClauses, fmt.Sprintf(`"order" = %s`, arger.Add(*updates.Order)))
@@ -379,7 +379,7 @@ func (r *pgRepository) UpdateCourse(ctx context.Context, id uuid.UUID, updates C
 
 	query := fmt.Sprintf(
 		`UPDATE courses SET %s WHERE id = %s AND deleted_at IS NULL
-		 RETURNING id, "order", title, description, created_at, edited_at, deleted_at`,
+		 RETURNING id, "order", title, description, created_at, updated_at, deleted_at`,
 		strings.Join(setClauses, ", "),
 		arger.Add(id),
 	)
@@ -387,7 +387,7 @@ func (r *pgRepository) UpdateCourse(ctx context.Context, id uuid.UUID, updates C
 	var course Course
 	err := r.db.QueryRowContext(ctx, query, arger.Values()...).Scan(
 		&course.ID, &course.Order, &course.Title, &course.Description,
-		&course.CreatedAt, &course.EditedAt, &course.DeletedAt,
+		&course.CreatedAt, &course.UpdatedAt, &course.DeletedAt,
 	)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
@@ -404,10 +404,10 @@ func (r *pgRepository) UpdateCourse(ctx context.Context, id uuid.UUID, updates C
 func (r *pgRepository) GetLesson(ctx context.Context, id uuid.UUID) (Lesson, error) {
 	var lesson Lesson
 	err := r.db.QueryRowContext(ctx,
-		`SELECT id, course_id, "order", title, description, body, created_at, edited_at, deleted_at 
+		`SELECT id, course_id, "order", title, description, body, created_at, updated_at, deleted_at 
 		 FROM lessons WHERE id = $1 AND deleted_at IS NULL`,
 		id,
-	).Scan(&lesson.ID, &lesson.CourseID, &lesson.Order, &lesson.Title, &lesson.Description, &lesson.Body, &lesson.CreatedAt, &lesson.EditedAt, &lesson.DeletedAt)
+	).Scan(&lesson.ID, &lesson.CourseID, &lesson.Order, &lesson.Title, &lesson.Description, &lesson.Body, &lesson.CreatedAt, &lesson.UpdatedAt, &lesson.DeletedAt)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return Lesson{}, errors.Trace(ErrLessonNotFound)
@@ -444,7 +444,7 @@ func (r *pgRepository) GetLessonsByCourseID(ctx context.Context, courseID uuid.U
 	var query string
 	if bodyless {
 		query = fmt.Sprintf(
-			`SELECT id, course_id, "order", title, description, created_at, edited_at, deleted_at
+			`SELECT id, course_id, "order", title, description, created_at, updated_at, deleted_at
 			 FROM lessons
 			 WHERE %s
 			 ORDER BY "order" %s
@@ -455,7 +455,7 @@ func (r *pgRepository) GetLessonsByCourseID(ctx context.Context, courseID uuid.U
 		)
 	} else {
 		query = fmt.Sprintf(
-			`SELECT id, course_id, "order", title, description, body, created_at, edited_at, deleted_at
+			`SELECT id, course_id, "order", title, description, body, created_at, updated_at, deleted_at
 			 FROM lessons
 			 WHERE %s
 			 ORDER BY "order" %s
@@ -475,11 +475,11 @@ func (r *pgRepository) GetLessonsByCourseID(ctx context.Context, courseID uuid.U
 	for rows.Next() {
 		var l Lesson
 		if bodyless {
-			if err := rows.Scan(&l.ID, &l.CourseID, &l.Order, &l.Title, &l.Description, &l.CreatedAt, &l.EditedAt, &l.DeletedAt); err != nil {
+			if err := rows.Scan(&l.ID, &l.CourseID, &l.Order, &l.Title, &l.Description, &l.CreatedAt, &l.UpdatedAt, &l.DeletedAt); err != nil {
 				return out, errors.Trace(err)
 			}
 		} else {
-			if err := rows.Scan(&l.ID, &l.CourseID, &l.Order, &l.Title, &l.Description, &l.Body, &l.CreatedAt, &l.EditedAt, &l.DeletedAt); err != nil {
+			if err := rows.Scan(&l.ID, &l.CourseID, &l.Order, &l.Title, &l.Description, &l.Body, &l.CreatedAt, &l.UpdatedAt, &l.DeletedAt); err != nil {
 				return out, errors.Trace(err)
 			}
 		}
@@ -549,7 +549,7 @@ func (r *pgRepository) GetEnrolledCourses(ctx context.Context, userID uuid.UUID,
 	}
 
 	query := fmt.Sprintf(
-		`SELECT c.id, c."order", c.title, c.description, c.created_at, c.edited_at, c.deleted_at,
+		`SELECT c.id, c."order", c.title, c.description, c.created_at, c.updated_at, c.deleted_at,
 		        ucp.current_lesson
 		 FROM user_course_progress ucp
 		 JOIN courses c ON c.id = ucp.course_id
@@ -571,7 +571,7 @@ func (r *pgRepository) GetEnrolledCourses(ctx context.Context, userID uuid.UUID,
 		var c Course
 		var currentLessonID uuid.UUID
 
-		if err := rows.Scan(&c.ID, &c.Order, &c.Title, &c.Description, &c.CreatedAt, &c.EditedAt, &c.DeletedAt, &currentLessonID); err != nil {
+		if err := rows.Scan(&c.ID, &c.Order, &c.Title, &c.Description, &c.CreatedAt, &c.UpdatedAt, &c.DeletedAt, &currentLessonID); err != nil {
 			return out, errors.Trace(err)
 		}
 
@@ -637,7 +637,7 @@ func (r *pgRepository) StoreLesson(ctx context.Context, lesson Lesson) error {
 	_, err := r.db.ExecContext(ctx,
 		`INSERT INTO lessons (id, course_id, "order", title, description, body, created_at) 
 		 VALUES ($1, $2, $3, $4, $5, $6, $7)
-		 ON CONFLICT (id) DO UPDATE SET title = $4, description = $5, body = $6, edited_at = $7`,
+		 ON CONFLICT (id) DO UPDATE SET title = $4, description = $5, body = $6, updated_at = $7`,
 		lesson.ID, lesson.CourseID, lesson.Order, lesson.Title, lesson.Description, lesson.Body, time.Now(),
 	)
 
@@ -647,7 +647,7 @@ func (r *pgRepository) StoreLesson(ctx context.Context, lesson Lesson) error {
 // UpdateLesson updates a lesson with the provided fields
 func (r *pgRepository) UpdateLesson(ctx context.Context, id uuid.UUID, updates LessonUpdates) (Lesson, error) {
 	var arger db.Argumenter
-	setClauses := []string{fmt.Sprintf("edited_at = %s", arger.Add(time.Now()))}
+	setClauses := []string{fmt.Sprintf("updated_at = %s", arger.Add(time.Now()))}
 
 	if updates.Order != nil {
 		setClauses = append(setClauses, fmt.Sprintf(`"order" = %s`, arger.Add(*updates.Order)))
@@ -664,7 +664,7 @@ func (r *pgRepository) UpdateLesson(ctx context.Context, id uuid.UUID, updates L
 
 	query := fmt.Sprintf(
 		`UPDATE lessons SET %s WHERE id = %s AND deleted_at IS NULL
-		 RETURNING id, course_id, "order", title, description, body, created_at, edited_at, deleted_at`,
+		 RETURNING id, course_id, "order", title, description, body, created_at, updated_at, deleted_at`,
 		strings.Join(setClauses, ", "),
 		arger.Add(id),
 	)
@@ -672,7 +672,7 @@ func (r *pgRepository) UpdateLesson(ctx context.Context, id uuid.UUID, updates L
 	var lesson Lesson
 	err := r.db.QueryRowContext(ctx, query, arger.Values()...).Scan(
 		&lesson.ID, &lesson.CourseID, &lesson.Order, &lesson.Title, &lesson.Description,
-		&lesson.Body, &lesson.CreatedAt, &lesson.EditedAt, &lesson.DeletedAt,
+		&lesson.Body, &lesson.CreatedAt, &lesson.UpdatedAt, &lesson.DeletedAt,
 	)
 
 	if err != nil {

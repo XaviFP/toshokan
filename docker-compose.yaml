@@ -55,15 +55,6 @@ services:
     labels:
       - "logging=promtail"
       - "service=deck"
-  dealer:
-    build: dealer/
-    depends_on:
-      db:
-        condition: service_healthy
-    env_file:
-      - env/.common
-      - env/.dealer
-    restart: always
   course:
     build: course/
     depends_on:

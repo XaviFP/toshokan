@@ -28,7 +28,7 @@ message Course {
   string title = 3;
   string description = 4;
   google.protobuf.Timestamp created_at = 5;
-  google.protobuf.Timestamp edited_at = 6;
+  google.protobuf.Timestamp updated_at = 6;
   google.protobuf.Timestamp deleted_at = 7;
 }
 
@@ -40,7 +40,7 @@ message Lesson {
   string description = 5;
   string body = 6;
   google.protobuf.Timestamp created_at = 7;
-  google.protobuf.Timestamp edited_at = 8;
+  google.protobuf.Timestamp updated_at = 8;
   google.protobuf.Timestamp deleted_at = 9;
 }
 

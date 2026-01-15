@@ -140,7 +140,7 @@ func (s *Server) GetCourse(ctx context.Context, req *pb.GetCourseRequest) (*pb.G
 			Title:       course.Title,
 			Description: course.Description,
 			CreatedAt:   toProtoTimestamp(course.CreatedAt),
-			EditedAt:    toProtoTimestampPtr(course.EditedAt),
+			UpdatedAt:   toProtoTimestampPtr(course.UpdatedAt),
 			DeletedAt:   toProtoTimestampPtr(course.DeletedAt),
 		},
 	}, nil
@@ -169,7 +169,7 @@ func (s *Server) GetLesson(ctx context.Context, req *pb.GetLessonRequest) (*pb.G
 			Description: lesson.Description,
 			Body:        lesson.Body,
 			CreatedAt:   toProtoTimestamp(lesson.CreatedAt),
-			EditedAt:    toProtoTimestampPtr(lesson.EditedAt),
+			UpdatedAt:   toProtoTimestampPtr(lesson.UpdatedAt),
 			DeletedAt:   toProtoTimestampPtr(lesson.DeletedAt),
 		},
 	}, nil
@@ -326,7 +326,7 @@ func courseToProto(c *course.Course) *pb.Course {
 		Title:       c.Title,
 		Description: c.Description,
 		CreatedAt:   toProtoTimestamp(c.CreatedAt),
-		EditedAt:    toProtoTimestampPtr(c.EditedAt),
+		UpdatedAt:   toProtoTimestampPtr(c.UpdatedAt),
 		DeletedAt:   toProtoTimestampPtr(c.DeletedAt),
 	}
 }
@@ -542,7 +542,7 @@ func (s *Server) UpdateCourse(ctx context.Context, req *pb.UpdateCourseRequest) 
 			Title:       updatedCourse.Title,
 			Description: updatedCourse.Description,
 			CreatedAt:   toProtoTimestamp(updatedCourse.CreatedAt),
-			EditedAt:    toProtoTimestampPtr(updatedCourse.EditedAt),
+			UpdatedAt:   toProtoTimestampPtr(updatedCourse.UpdatedAt),
 			DeletedAt:   toProtoTimestampPtr(updatedCourse.DeletedAt),
 		},
 	}, nil
@@ -608,7 +608,7 @@ func (s *Server) UpdateLesson(ctx context.Context, req *pb.UpdateLessonRequest) 
 			Description: updatedLesson.Description,
 			Body:        updatedLesson.Body,
 			CreatedAt:   toProtoTimestamp(updatedLesson.CreatedAt),
-			EditedAt:    toProtoTimestampPtr(updatedLesson.EditedAt),
+			UpdatedAt:   toProtoTimestampPtr(updatedLesson.UpdatedAt),
 			DeletedAt:   toProtoTimestampPtr(updatedLesson.DeletedAt),
 		},
 	}, nil
