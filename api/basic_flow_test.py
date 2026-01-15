@@ -325,6 +325,7 @@ def get_focused_lessons(
     before: str | None = None,
     limit: int = 2,
     use_last: bool = False,
+    bodyless: bool = False,
 ) -> Dict[str, Any]:
     if after and before:
         raise ValueError("use either after or before, not both")
@@ -338,6 +339,9 @@ def get_focused_lessons(
         if after:
             params["after"] = after
         params["first"] = limit
+
+    if bodyless:
+        params["bodyless"] = "true"
 
     response = requests.get(
         f"{base_url}/courses/{course_id}/lessons/focused",
@@ -716,6 +720,84 @@ def run_focused_lessons_after_answering(base_url: str, token: str, course_id: st
             f"✓ All {len(focused_all_edges)} focused lessons are marked complete")
 
 
+def run_bodyless_focused_lessons_test(base_url: str, token: str, course_id: str) -> None:
+    """Test bodyless focused lessons pagination."""
+    log_step("")
+    log_step("Testing bodyless focused lessons...")
+
+    # Test 1: Get bodyless lessons and verify no body field
+    bodyless_response = get_focused_lessons(
+        base_url, token, course_id, limit=5, bodyless=True)
+    bodyless_edges = bodyless_response.get("edges", [])
+    log_step(f"Found {len(bodyless_edges)} bodyless focused lesson(s)")
+
+    assert len(bodyless_edges) > 0, "Should have at least one lesson"
+
+    for edge in bodyless_edges:
+        lesson_data = edge["node"]
+        # Verify body field is NOT present in bodyless response
+        assert "body" not in lesson_data, f"Lesson {lesson_data['id']} should NOT have 'body' field in bodyless response"
+        # Verify required fields ARE present
+        assert "id" in lesson_data, "Lesson should have 'id' field"
+        assert "course_id" in lesson_data, "Lesson should have 'course_id' field"
+        assert "order" in lesson_data, "Lesson should have 'order' field"
+        assert "title" in lesson_data, "Lesson should have 'title' field"
+        assert "description" in lesson_data, "Lesson should have 'description' field"
+        assert "created_at" in lesson_data, "Lesson should have 'created_at' field"
+        # Verify progress fields ARE present
+        assert "is_completed" in lesson_data, "Lesson should have 'is_completed' field"
+        assert "is_current" in lesson_data, "Lesson should have 'is_current' field"
+
+    log_step(
+        f"✓ All {len(bodyless_edges)} lessons have no body field but have all other required fields")
+
+    # Test 2: Compare with regular (with body) response
+    regular_response = get_focused_lessons(
+        base_url, token, course_id, limit=5, bodyless=False)
+    regular_edges = regular_response.get("edges", [])
+
+    assert len(regular_edges) == len(
+        bodyless_edges), "Should have same number of lessons"
+
+    for i, (regular, bodyless) in enumerate(zip(regular_edges, bodyless_edges)):
+        regular_lesson = regular["node"]
+        bodyless_lesson = bodyless["node"]
+
+        # Verify IDs match
+        assert regular_lesson["id"] == bodyless_lesson[
+            "id"], f"Lesson IDs should match at index {i}"
+        # Verify regular has body, bodyless doesn't
+        assert "body" in regular_lesson, f"Regular lesson {regular_lesson['id']} should have 'body' field"
+        assert "body" not in bodyless_lesson, f"Bodyless lesson {bodyless_lesson['id']} should NOT have 'body' field"
+
+    log_step(
+        f"✓ Bodyless and regular responses have same lessons with correct body field presence")
+
+    # Test 3: Test pagination with bodyless
+    log_step("Testing bodyless pagination...")
+    all_bodyless_edges: List[Dict[str, Any]] = []
+    after: str | None = None
+
+    while True:
+        page = get_focused_lessons(
+            base_url, token, course_id, after=after, limit=2, bodyless=True)
+        edges = page.get("edges", [])
+        all_bodyless_edges.extend(edges)
+        page_info = page.get("page_info", {})
+        after = page_info.get("end_cursor")
+        if not page_info.get("has_next_page"):
+            break
+
+    log_step(
+        f"✓ Bodyless pagination completed: {len(all_bodyless_edges)} total lessons")
+
+    # Verify all paginated bodyless lessons have no body
+    for edge in all_bodyless_edges:
+        assert "body" not in edge["node"], "All paginated bodyless lessons should have no body field"
+
+    log_step("✓ All bodyless pagination tests passed")
+
+
 def run_lesson_state_after_answering(base_url: str, token: str, course_id: str, first_lesson_id: str) -> None:
     """Test lesson state after answering - all should be complete."""
     log_step("")
@@ -1036,6 +1118,9 @@ def test_basic_flow():
     run_pagination_before_answering(base_url, token, course_id, lessons)
 
     run_focused_lessons_before_answering(base_url, token, course_id)
+
+    # Run bodyless focused lessons test before answering
+    run_bodyless_focused_lessons_test(base_url, token, course_id)
 
     first_lesson_id = lessons[0]["id"]
     run_lesson_state_before_answering(

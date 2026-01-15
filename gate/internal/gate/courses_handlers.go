@@ -71,6 +71,30 @@ func GetLessons(ctx *gin.Context, client pb.CourseAPIClient) {
 	})
 }
 
+func GetLesson(ctx *gin.Context, client pb.CourseAPIClient) {
+	lessonID := ctx.Param("lessonId")
+	if lessonID == "" {
+		ctx.JSON(http.StatusBadRequest, gin.H{"error": "missing lesson id"})
+		return
+	}
+
+	req := &pb.GetLessonRequest{
+		LessonId: lessonID,
+	}
+
+	res, err := client.GetLesson(ctx, req)
+	if err != nil {
+		if isHandledError(ctx, err) {
+			return
+		}
+		slog.Error("GetLesson: gRPC call failed", "error", err, "lessonId", lessonID, "stack", errors.ErrorStack(err))
+		ctx.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	ctx.JSON(http.StatusOK, toLessonJSON(res.Lesson))
+}
+
 func GetFocusedLessons(ctx *gin.Context, client pb.CourseAPIClient) {
 	courseID := ctx.Param("courseId")
 	userID := getUserID(ctx)
@@ -87,10 +111,14 @@ func GetFocusedLessons(ctx *gin.Context, client pb.CourseAPIClient) {
 		return
 	}
 
+	// Parse bodyless query parameter
+	bodyless := ctx.Query("bodyless") == "true"
+
 	req := &pb.GetFocusedLessonsRequest{
 		CourseId:   courseID,
 		UserId:     userID,
 		Pagination: pagination,
+		Bodyless:   bodyless,
 	}
 
 	res, err := client.GetFocusedLessons(ctx, req)
@@ -100,6 +128,15 @@ func GetFocusedLessons(ctx *gin.Context, client pb.CourseAPIClient) {
 		}
 		slog.Error("GetFocusedLessons: gRPC call failed", "error", err, "courseId", courseID, "userId", userID, "stack", errors.ErrorStack(err))
 		ctx.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	// Return bodyless response if requested
+	if bodyless {
+		ctx.JSON(http.StatusOK, gin.H{
+			"edges":     convertBodylessLessonWithProgressEdges(res.Lessons.Edges),
+			"page_info": toPageInfoJSON(res.Lessons.PageInfo),
+		})
 		return
 	}
 
@@ -492,6 +529,9 @@ func RegisterCoursesRoutes(r *gin.RouterGroup, client pb.CourseAPIClient, adminC
 		course.GET("/:courseId/lessons/:lessonId/state", func(ctx *gin.Context) {
 			GetLessonState(ctx, client)
 		})
+		course.GET("/:courseId/lessons/:lessonId", func(ctx *gin.Context) {
+			GetLesson(ctx, client)
+		})
 		course.PATCH("/:courseId/lessons/:lessonId", RequireAdmin(adminCfg, adminCfg.UpdateLessonAdminOnly), func(ctx *gin.Context) {
 			UpdateLesson(ctx, client)
 		})
@@ -528,6 +568,18 @@ type LessonJSON struct {
 	DeletedAt   *string `json:"deleted_at,omitempty"`
 }
 
+// BodylessLessonJSON is a JSON-serializable version of pb.Lesson without the body field
+type BodylessLessonJSON struct {
+	ID          string  `json:"id"`
+	CourseID    string  `json:"course_id"`
+	Order       int64   `json:"order"`
+	Title       string  `json:"title"`
+	Description string  `json:"description"`
+	CreatedAt   string  `json:"created_at"`
+	EditedAt    *string `json:"edited_at,omitempty"`
+	DeletedAt   *string `json:"deleted_at,omitempty"`
+}
+
 // LessonEdgeJSON represents a lesson edge for JSON response
 type LessonEdgeJSON struct {
 	Node   LessonJSON `json:"node"`
@@ -546,6 +598,19 @@ type LessonWithProgressJSON struct {
 type LessonWithProgressEdgeJSON struct {
 	Node   LessonWithProgressJSON `json:"node"`
 	Cursor string                 `json:"cursor"`
+}
+
+// BodylessLessonWithProgressJSON represents a lesson without body with progress for JSON response (flattened)
+type BodylessLessonWithProgressJSON struct {
+	BodylessLessonJSON
+	IsCompleted bool `json:"is_completed"`
+	IsCurrent   bool `json:"is_current"`
+}
+
+// BodylessLessonWithProgressEdgeJSON represents a bodyless lesson with progress edge for JSON response
+type BodylessLessonWithProgressEdgeJSON struct {
+	Node   BodylessLessonWithProgressJSON `json:"node"`
+	Cursor string                         `json:"cursor"`
 }
 
 // CourseWithProgressJSON represents a course with progress for JSON response (flattened)
@@ -589,6 +654,23 @@ func convertLessonWithProgressEdges(edges []*pb.LessonsWithProgressConnection_Ed
 				LessonJSON:  baseLesson,
 				IsCompleted: edge.Node.IsCompleted,
 				IsCurrent:   edge.Node.IsCurrent,
+			},
+			Cursor: edge.Cursor,
+		}
+	}
+	return result
+}
+
+// convertBodylessLessonWithProgressEdges converts pb LessonWithProgressConnection Edges to JSON format without body
+func convertBodylessLessonWithProgressEdges(edges []*pb.LessonsWithProgressConnection_Edge) []BodylessLessonWithProgressEdgeJSON {
+	result := make([]BodylessLessonWithProgressEdgeJSON, len(edges))
+	for i, edge := range edges {
+		baseLesson := toBodylessLessonJSON(edge.Node.Lesson)
+		result[i] = BodylessLessonWithProgressEdgeJSON{
+			Node: BodylessLessonWithProgressJSON{
+				BodylessLessonJSON: baseLesson,
+				IsCompleted:        edge.Node.IsCompleted,
+				IsCurrent:          edge.Node.IsCurrent,
 			},
 			Cursor: edge.Cursor,
 		}
@@ -664,6 +746,20 @@ func toLessonJSON(lesson *pb.Lesson) LessonJSON {
 		Title:       lesson.Title,
 		Description: lesson.Description,
 		Body:        lesson.Body,
+		CreatedAt:   convertProtoTimestamp(lesson.CreatedAt),
+		EditedAt:    protoToJSON(lesson.EditedAt),
+		DeletedAt:   protoToJSON(lesson.DeletedAt),
+	}
+}
+
+// toBodylessLessonJSON converts pb.Lesson to BodylessLessonJSON (without body field)
+func toBodylessLessonJSON(lesson *pb.Lesson) BodylessLessonJSON {
+	return BodylessLessonJSON{
+		ID:          lesson.Id,
+		CourseID:    lesson.CourseId,
+		Order:       lesson.Order,
+		Title:       lesson.Title,
+		Description: lesson.Description,
 		CreatedAt:   convertProtoTimestamp(lesson.CreatedAt),
 		EditedAt:    protoToJSON(lesson.EditedAt),
 		DeletedAt:   protoToJSON(lesson.DeletedAt),

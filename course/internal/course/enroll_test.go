@@ -43,7 +43,7 @@ func TestEnroller_Enroll_Success(t *testing.T) {
 		},
 	}
 
-	mockRepo.On("GetLessonsByCourseID", ctx, courseID, pagination.Pagination{Kind: pagination.PaginationKindOldestFirst, First: 1000}).Return(lessons, nil)
+	mockRepo.On("GetLessonsByCourseID", ctx, courseID, pagination.Pagination{Kind: pagination.PaginationKindOldestFirst, First: 1000}, false).Return(lessons, nil)
 	mockDecksClient.On("GetDeck", ctx, mock.MatchedBy(func(req *pbDeck.GetDeckRequest) bool {
 		return req.DeckId == deckID.String()
 	})).Return(&pbDeck.GetDeckResponse{
@@ -108,7 +108,7 @@ func TestEnroller_Enroll_NoLessons(t *testing.T) {
 	mockRepo := new(RepositoryMock)
 	mockDecksClient := new(MockDecksAPIClient)
 
-	mockRepo.On("GetLessonsByCourseID", ctx, courseID, pagination.Pagination{Kind: pagination.PaginationKindOldestFirst, First: 1000}).Return(LessonsConnection{Edges: []LessonEdge{}}, nil)
+	mockRepo.On("GetLessonsByCourseID", ctx, courseID, pagination.Pagination{Kind: pagination.PaginationKindOldestFirst, First: 1000}, false).Return(LessonsConnection{Edges: []LessonEdge{}}, nil)
 
 	enroller := NewEnroller(clock.Realtime(), mockRepo, mockDecksClient)
 	_, err := enroller.Enroll(ctx, userID, courseID)
@@ -142,7 +142,7 @@ func TestEnroller_Enroll_NoDecks(t *testing.T) {
 		},
 	}
 
-	mockRepo.On("GetLessonsByCourseID", ctx, courseID, pagination.Pagination{Kind: pagination.PaginationKindOldestFirst, First: 1000}).Return(lessons, nil)
+	mockRepo.On("GetLessonsByCourseID", ctx, courseID, pagination.Pagination{Kind: pagination.PaginationKindOldestFirst, First: 1000}, false).Return(lessons, nil)
 
 	enroller := NewEnroller(clock.Realtime(), mockRepo, mockDecksClient)
 	_, err := enroller.Enroll(ctx, userID, courseID)
@@ -177,7 +177,7 @@ func TestEnroller_Enroll_GetDecksError(t *testing.T) {
 		},
 	}
 
-	mockRepo.On("GetLessonsByCourseID", ctx, courseID, pagination.Pagination{Kind: pagination.PaginationKindOldestFirst, First: 1000}).Return(lessons, nil)
+	mockRepo.On("GetLessonsByCourseID", ctx, courseID, pagination.Pagination{Kind: pagination.PaginationKindOldestFirst, First: 1000}, false).Return(lessons, nil)
 	mockDecksClient.On("GetDeck", ctx, mock.MatchedBy(func(req *pbDeck.GetDeckRequest) bool {
 		return req.DeckId == deckID.String()
 	})).Return((*pbDeck.GetDeckResponse)(nil), assert.AnError)
@@ -217,7 +217,7 @@ func TestEnroller_Enroll_EnrollmentError(t *testing.T) {
 		},
 	}
 
-	mockRepo.On("GetLessonsByCourseID", ctx, courseID, pagination.Pagination{Kind: pagination.PaginationKindOldestFirst, First: 1000}).Return(lessons, nil)
+	mockRepo.On("GetLessonsByCourseID", ctx, courseID, pagination.Pagination{Kind: pagination.PaginationKindOldestFirst, First: 1000}, false).Return(lessons, nil)
 	mockDecksClient.On("GetDeck", ctx, mock.MatchedBy(func(req *pbDeck.GetDeckRequest) bool {
 		return req.DeckId == deckID.String()
 	})).Return(&pbDeck.GetDeckResponse{

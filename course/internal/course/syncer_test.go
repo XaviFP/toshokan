@@ -45,7 +45,7 @@ func TestSync_InitializesMissingLesson(t *testing.T) {
 		},
 	}
 
-	mockRepo.On("GetLessonsByCourseID", ctx, courseID, pagination.Pagination{Kind: pagination.PaginationKindOldestFirst, First: 1000}).Return(lessons, nil)
+	mockRepo.On("GetLessonsByCourseID", ctx, courseID, pagination.Pagination{Kind: pagination.PaginationKindOldestFirst, First: 1000}, false).Return(lessons, nil)
 	mockRepo.On("GetUserCourseProgress", ctx, userID, courseID).Return(userProgress, nil)
 	mockRepo.On("UpdateUserProgress", ctx, mock.MatchedBy(func(ucp UserCourseProgress) bool {
 		if ucp.State == nil || ucp.CurrentLessonID != lessonID {
@@ -130,7 +130,7 @@ func TestSync_AddsNewDecksToExistingLesson(t *testing.T) {
 		},
 	}
 
-	mockRepo.On("GetLessonsByCourseID", ctx, courseID, pagination.Pagination{Kind: pagination.PaginationKindOldestFirst, First: 1000}).Return(lessons, nil)
+	mockRepo.On("GetLessonsByCourseID", ctx, courseID, pagination.Pagination{Kind: pagination.PaginationKindOldestFirst, First: 1000}, false).Return(lessons, nil)
 	mockRepo.On("GetUserCourseProgress", ctx, userID, courseID).Return(userProgress, nil)
 	mockRepo.On("UpdateUserProgress", ctx, mock.MatchedBy(func(ucp UserCourseProgress) bool {
 		expectedState := &ProgressState{
@@ -230,7 +230,7 @@ func TestSync_RemovesRemovedDeck(t *testing.T) {
 		},
 	}
 
-	mockRepo.On("GetLessonsByCourseID", ctx, courseID, pagination.Pagination{Kind: pagination.PaginationKindOldestFirst, First: 1000}).Return(lessons, nil)
+	mockRepo.On("GetLessonsByCourseID", ctx, courseID, pagination.Pagination{Kind: pagination.PaginationKindOldestFirst, First: 1000}, false).Return(lessons, nil)
 	mockRepo.On("GetUserCourseProgress", ctx, userID, courseID).Return(userProgress, nil)
 	mockRepo.On("UpdateUserProgress", ctx, mock.MatchedBy(func(ucp UserCourseProgress) bool {
 		expectedState := &ProgressState{
@@ -314,7 +314,7 @@ func TestSync_RemovesRemovedCard(t *testing.T) {
 		},
 	}
 
-	mockRepo.On("GetLessonsByCourseID", ctx, courseID, pagination.Pagination{Kind: pagination.PaginationKindOldestFirst, First: 1000}).Return(lessons, nil)
+	mockRepo.On("GetLessonsByCourseID", ctx, courseID, pagination.Pagination{Kind: pagination.PaginationKindOldestFirst, First: 1000}, false).Return(lessons, nil)
 	mockRepo.On("GetUserCourseProgress", ctx, userID, courseID).Return(userProgress, nil)
 	mockRepo.On("UpdateUserProgress", ctx, mock.MatchedBy(func(ucp UserCourseProgress) bool {
 		expectedState := &ProgressState{
@@ -404,7 +404,7 @@ func TestSync_RemovesRemovedLesson(t *testing.T) {
 		},
 	}
 
-	mockRepo.On("GetLessonsByCourseID", ctx, courseID, pagination.Pagination{Kind: pagination.PaginationKindOldestFirst, First: 1000}).Return(lessons, nil)
+	mockRepo.On("GetLessonsByCourseID", ctx, courseID, pagination.Pagination{Kind: pagination.PaginationKindOldestFirst, First: 1000}, false).Return(lessons, nil)
 	mockRepo.On("GetUserCourseProgress", ctx, userID, courseID).Return(userProgress, nil)
 	mockRepo.On("UpdateUserProgress", ctx, mock.MatchedBy(func(ucp UserCourseProgress) bool {
 		expectedState := &ProgressState{
@@ -504,7 +504,7 @@ func TestSync_SetsCurrrentLessonToFirstIncomplete(t *testing.T) {
 		},
 	}
 
-	mockRepo.On("GetLessonsByCourseID", ctx, courseID, pagination.Pagination{Kind: pagination.PaginationKindOldestFirst, First: 1000}).Return(lessons, nil)
+	mockRepo.On("GetLessonsByCourseID", ctx, courseID, pagination.Pagination{Kind: pagination.PaginationKindOldestFirst, First: 1000}, false).Return(lessons, nil)
 	mockRepo.On("GetUserCourseProgress", ctx, userID, courseID).Return(userProgress, nil)
 	mockRepo.On("UpdateUserProgress", ctx, mock.MatchedBy(func(ucp UserCourseProgress) bool {
 		expectedState := &ProgressState{
@@ -561,7 +561,7 @@ func TestSync_NilProgressStateReturnsError(t *testing.T) {
 		State: nil,
 	}
 
-	mockRepo.On("GetLessonsByCourseID", ctx, courseID, pagination.Pagination{Kind: pagination.PaginationKindOldestFirst, First: 1000}).Return(LessonsConnection{}, nil)
+	mockRepo.On("GetLessonsByCourseID", ctx, courseID, pagination.Pagination{Kind: pagination.PaginationKindOldestFirst, First: 1000}, false).Return(LessonsConnection{}, nil)
 	mockRepo.On("GetUserCourseProgress", ctx, userID, courseID).Return(userProgress, nil)
 
 	syncer := &stateSyncer{
@@ -663,7 +663,7 @@ func TestSync_Complex_MultiLessonMultiDeckScenario(t *testing.T) {
 		},
 	}
 
-	mockRepo.On("GetLessonsByCourseID", ctx, courseID, pagination.Pagination{Kind: pagination.PaginationKindOldestFirst, First: 1000}).Return(lessons, nil)
+	mockRepo.On("GetLessonsByCourseID", ctx, courseID, pagination.Pagination{Kind: pagination.PaginationKindOldestFirst, First: 1000}, false).Return(lessons, nil)
 	mockRepo.On("GetUserCourseProgress", ctx, userID, courseID).Return(userProgress, nil)
 	mockRepo.On("UpdateUserProgress", ctx, mock.MatchedBy(func(ucp UserCourseProgress) bool {
 		expectedState := &ProgressState{
@@ -801,7 +801,7 @@ func TestSync_NoChangesWhenAlreadyInSync(t *testing.T) {
 		},
 	}
 
-	mockRepo.On("GetLessonsByCourseID", ctx, courseID, pagination.Pagination{Kind: pagination.PaginationKindOldestFirst, First: 1000}).Return(lessons, nil)
+	mockRepo.On("GetLessonsByCourseID", ctx, courseID, pagination.Pagination{Kind: pagination.PaginationKindOldestFirst, First: 1000}, false).Return(lessons, nil)
 	mockRepo.On("GetUserCourseProgress", ctx, userID, courseID).Return(userProgress, nil)
 	mockRepo.On("UpdateUserProgress", ctx, mock.MatchedBy(func(ucp UserCourseProgress) bool {
 		expectedState := &ProgressState{

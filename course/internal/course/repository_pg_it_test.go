@@ -301,7 +301,7 @@ func TestRepository_GetLessonsByCourseID(t *testing.T) {
 	t.Run("success", func(t *testing.T) {
 		pag := pagination.NewOldestFirstPagination(pagination.WithFirst(10))
 
-		conn, err := repo.GetLessonsByCourseID(context.Background(), courseID, pag)
+		conn, err := repo.GetLessonsByCourseID(context.Background(), courseID, pag, false)
 		assert.NoError(t, err)
 		assert.NotEmpty(t, conn.Edges)
 		assert.Equal(t, "Introduction to Goroutines", conn.Edges[0].Lesson.Title)
@@ -311,7 +311,7 @@ func TestRepository_GetLessonsByCourseID(t *testing.T) {
 		emptyID := uuid.MustParse("00000000-0000-0000-0000-000000000001")
 		pag := pagination.NewOldestFirstPagination(pagination.WithFirst(10))
 
-		conn, err := repo.GetLessonsByCourseID(context.Background(), emptyID, pag)
+		conn, err := repo.GetLessonsByCourseID(context.Background(), emptyID, pag, false)
 		assert.NoError(t, err)
 		assert.Empty(t, conn.Edges)
 	})
@@ -321,7 +321,7 @@ func TestRepository_GetLessonsByCourseID(t *testing.T) {
 
 		forward := pagination.NewOldestFirstPagination(pagination.WithFirst(2))
 
-		page1, err := repo.GetLessonsByCourseID(ctx, courseID, forward)
+		page1, err := repo.GetLessonsByCourseID(ctx, courseID, forward, false)
 		assert.NoError(t, err)
 		require.Len(t, page1.Edges, 2)
 		assert.Equal(t, []string{"Introduction to Goroutines", "Channels and Select"}, []string{
@@ -330,7 +330,7 @@ func TestRepository_GetLessonsByCourseID(t *testing.T) {
 		})
 
 		forward.After = page1.Edges[len(page1.Edges)-1].Cursor
-		page2, err := repo.GetLessonsByCourseID(ctx, courseID, forward)
+		page2, err := repo.GetLessonsByCourseID(ctx, courseID, forward, false)
 		assert.NoError(t, err)
 		require.Len(t, page2.Edges, 2)
 		assert.Equal(t, []string{"Interfaces and Structs", "Generics Basics"}, []string{
@@ -339,13 +339,13 @@ func TestRepository_GetLessonsByCourseID(t *testing.T) {
 		})
 
 		forward.After = page2.Edges[len(page2.Edges)-1].Cursor
-		page3, err := repo.GetLessonsByCourseID(ctx, courseID, forward)
+		page3, err := repo.GetLessonsByCourseID(ctx, courseID, forward, false)
 		assert.NoError(t, err)
 		require.Len(t, page3.Edges, 1)
 		assert.Equal(t, "Concurrency Patterns", page3.Edges[0].Lesson.Title)
 
 		backward := pagination.NewOldestFirstPagination(pagination.WithLast(2))
-		b1, err := repo.GetLessonsByCourseID(ctx, courseID, backward)
+		b1, err := repo.GetLessonsByCourseID(ctx, courseID, backward, false)
 		assert.NoError(t, err)
 		require.Len(t, b1.Edges, 2)
 		assert.Equal(t, []string{"Generics Basics", "Concurrency Patterns"}, []string{
@@ -354,7 +354,7 @@ func TestRepository_GetLessonsByCourseID(t *testing.T) {
 		})
 
 		backward.Before = b1.Edges[0].Cursor
-		b2, err := repo.GetLessonsByCourseID(ctx, courseID, backward)
+		b2, err := repo.GetLessonsByCourseID(ctx, courseID, backward, false)
 		assert.NoError(t, err)
 		require.Len(t, b2.Edges, 2)
 		assert.Equal(t, []string{"Channels and Select", "Interfaces and Structs"}, []string{
@@ -363,7 +363,7 @@ func TestRepository_GetLessonsByCourseID(t *testing.T) {
 		})
 
 		backward.Before = b2.Edges[0].Cursor
-		b3, err := repo.GetLessonsByCourseID(ctx, courseID, backward)
+		b3, err := repo.GetLessonsByCourseID(ctx, courseID, backward, false)
 		assert.NoError(t, err)
 		require.Len(t, b3.Edges, 1)
 		assert.Equal(t, "Introduction to Goroutines", b3.Edges[0].Lesson.Title)
