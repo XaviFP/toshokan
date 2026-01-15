@@ -566,7 +566,11 @@ paths:
       tags:
         - Lessons
       summary: Get focused lessons with progress
-      description: Retrieve lessons around the user's current lesson with completion status
+      description: |
+        Retrieve lessons around the user's current lesson with completion status.
+        
+        Use `bodyless=true` to paginate faster by excluding lesson body content.
+        This is useful for displaying a list of lessons where the full content isn't needed.
       operationId: getFocusedLessons
       security:
         - BearerAuth: []
@@ -578,13 +582,48 @@ paths:
           schema:
             type: string
             format: uuid
+        - name: bodyless
+          in: query
+          required: false
+          description: If true, omit lesson body from response for faster pagination
+          schema:
+            type: boolean
+            default: false
+        - name: first
+          in: query
+          required: false
+          description: Number of items to retrieve from the start (forward pagination)
+          schema:
+            type: integer
+            minimum: 1
+        - name: last
+          in: query
+          required: false
+          description: Number of items to retrieve from the end (backward pagination)
+          schema:
+            type: integer
+            minimum: 1
+        - name: after
+          in: query
+          required: false
+          description: Cursor to retrieve items after (forward pagination)
+          schema:
+            type: string
+        - name: before
+          in: query
+          required: false
+          description: Cursor to retrieve items before (backward pagination)
+          schema:
+            type: string
       responses:
         '200':
-          description: Focused lessons with progress information
+          description: Focused lessons with progress information. When bodyless=true, body field is omitted from lessons.
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/LessonsWithProgressConnectionResponse'
+                oneOf:
+                  - $ref: '#/components/schemas/LessonsWithProgressConnectionResponse'
+                  - $ref: '#/components/schemas/BodylessLessonsWithProgressConnectionResponse'
         '400':
           description: Missing course ID or user ID
           content:
@@ -1104,6 +1143,48 @@ components:
         - body
         - created_at
 
+    BodylessLesson:
+      type: object
+      description: Lesson without body field for faster pagination
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Lesson UUID
+        course_id:
+          type: string
+          format: uuid
+          description: Parent course UUID
+        order:
+          type: integer
+          format: int64
+          description: Lesson order within course
+        title:
+          type: string
+          description: Lesson title
+        description:
+          type: string
+          description: Lesson description
+        created_at:
+          type: string
+          format: date-time
+          description: Creation timestamp
+        edited_at:
+          type: string
+          format: date-time
+          description: Last edit timestamp
+        deleted_at:
+          type: string
+          format: date-time
+          description: Deletion timestamp
+      required:
+        - id
+        - course_id
+        - order
+        - title
+        - description
+        - created_at
+
     CreateLessonRequest:
       type: object
       properties:
@@ -1164,6 +1245,22 @@ components:
             - is_completed
             - is_current
 
+    BodylessLessonWithProgress:
+      allOf:
+        - $ref: '#/components/schemas/BodylessLesson'
+        - type: object
+          description: Lesson without body with progress information for faster pagination
+          properties:
+            is_completed:
+              type: boolean
+              description: Whether user has completed this lesson
+            is_current:
+              type: boolean
+              description: Whether this is the user's current lesson
+          required:
+            - is_completed
+            - is_current
+
     LessonEdge:
       type: object
       properties:
@@ -1181,6 +1278,19 @@ components:
       properties:
         node:
           $ref: '#/components/schemas/LessonWithProgress'
+        cursor:
+          type: string
+          description: Pagination cursor for this edge
+      required:
+        - node
+        - cursor
+
+    BodylessLessonWithProgressEdge:
+      type: object
+      description: Edge for bodyless lesson with progress
+      properties:
+        node:
+          $ref: '#/components/schemas/BodylessLessonWithProgress'
         cursor:
           type: string
           description: Pagination cursor for this edge
@@ -1229,6 +1339,20 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/LessonWithProgressEdge'
+        page_info:
+          $ref: '#/components/schemas/PageInfo'
+      required:
+        - edges
+        - page_info
+
+    BodylessLessonsWithProgressConnectionResponse:
+      type: object
+      description: Response for bodyless lessons with progress (faster pagination)
+      properties:
+        edges:
+          type: array
+          items:
+            $ref: '#/components/schemas/BodylessLessonWithProgressEdge'
         page_info:
           $ref: '#/components/schemas/PageInfo'
       required:

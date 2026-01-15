@@ -36,8 +36,8 @@ func (m *RepositoryMock) GetLesson(ctx context.Context, id uuid.UUID) (Lesson, e
 	return args[0].(Lesson), args.Error(1)
 }
 
-func (m *RepositoryMock) GetLessonsByCourseID(ctx context.Context, courseID uuid.UUID, p pagination.Pagination) (LessonsConnection, error) {
-	args := m.Called(ctx, courseID, p)
+func (m *RepositoryMock) GetLessonsByCourseID(ctx context.Context, courseID uuid.UUID, p pagination.Pagination, bodyless bool) (LessonsConnection, error) {
+	args := m.Called(ctx, courseID, p, bodyless)
 	return args[0].(LessonsConnection), args.Error(1)
 }
 

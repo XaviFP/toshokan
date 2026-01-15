@@ -29,7 +29,8 @@ func NewLessonsBrowser(repo Repository, syncer StateSyncer) *lessonsBrowser {
 
 // BrowseOptions holds optional parameters for browsing lessons
 type BrowseOptions struct {
-	UserID *uuid.UUID // Optional user ID for progress enrichment
+	UserID   *uuid.UUID // Optional user ID for progress enrichment
+	Bodyless bool       // If true, omit lesson body from response for faster pagination
 }
 
 // BrowseResult holds the result of browsing lessons
@@ -45,7 +46,7 @@ func (b *lessonsBrowser) Browse(ctx context.Context, courseID uuid.UUID, p pagin
 
 	// If no user option, return public lessons
 	if opts.UserID == nil {
-		conn, err := b.repo.GetLessonsByCourseID(ctx, courseID, p)
+		conn, err := b.repo.GetLessonsByCourseID(ctx, courseID, p, opts.Bodyless)
 		if err != nil {
 			return result, errors.Trace(err)
 		}
@@ -54,7 +55,7 @@ func (b *lessonsBrowser) Browse(ctx context.Context, courseID uuid.UUID, p pagin
 	}
 
 	// Fetch lessons and enrich with user progress
-	conn, err := b.repo.GetLessonsByCourseID(ctx, courseID, p)
+	conn, err := b.repo.GetLessonsByCourseID(ctx, courseID, p, opts.Bodyless)
 	if err != nil {
 		return result, errors.Trace(err)
 	}
@@ -67,7 +68,7 @@ func (b *lessonsBrowser) Browse(ctx context.Context, courseID uuid.UUID, p pagin
 	enrichedConn := b.enrichLessonsWithProgress(conn, progress)
 	result.ProgressLessons = &enrichedConn
 
-	if opts.UserID != nil  && *opts.UserID != uuid.Nil{
+	if opts.UserID != nil && *opts.UserID != uuid.Nil {
 		go func(userID uuid.UUID, courseID uuid.UUID) {
 			// The context is detached to avoid being cancelled when the request context is done.
 			if err := b.syncer.Sync(context.WithoutCancel(ctx), userID, courseID); err != nil {

@@ -140,6 +140,7 @@ message GetFocusedLessonsRequest {
   string course_id = 1;
   string user_id = 2;  // User context provided - returns LessonWithProgress
   Pagination pagination = 3;
+  bool bodyless = 4;   // If true, omit lesson body from response for faster pagination
 }
 
 message GetFocusedLessonsResponse {

@@ -33,7 +33,7 @@ func NewStateSyncer(repo Repository, decksClient pbDeck.DecksAPIClient) StateSyn
 // If lessons or decks are removed from the course, they are also removed from the user's progress state.
 // Sync sets the current lesson too, pointing to the first incomplete lesson.
 func (s *stateSyncer) Sync(ctx context.Context, userID, courseID uuid.UUID) error {
-	courseLessons, err := s.repo.GetLessonsByCourseID(ctx, courseID, pagination.NewOldestFirstPagination(pagination.WithFirst(1000))) // TODO: handle pagination
+	courseLessons, err := s.repo.GetLessonsByCourseID(ctx, courseID, pagination.NewOldestFirstPagination(pagination.WithFirst(1000)), false) // TODO: handle pagination
 	if err != nil {
 		return errors.Trace(err)
 	}

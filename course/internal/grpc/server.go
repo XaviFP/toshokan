@@ -241,7 +241,8 @@ func (s *Server) GetFocusedLessons(ctx context.Context, req *pb.GetFocusedLesson
 
 	// Authenticated endpoint - with user context
 	result, err := s.LessonsBrowser.Browse(ctx, courseID, p, course.BrowseOptions{
-		UserID: &userID,
+		UserID:   &userID,
+		Bodyless: req.Bodyless,
 	})
 	if err != nil {
 		slog.Error("GetFocusedLessons: failed to browse lessons", "error", err, "courseId", courseID.String(), "userId", userID.String(), "stack", errors.ErrorStack(err))

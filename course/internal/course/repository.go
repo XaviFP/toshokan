@@ -32,7 +32,8 @@ type Repository interface {
 	// GetFirstLessonInCourse(ctx context.Context, courseID uuid.UUID) (Lesson, error)
 
 	// GetLessonsByCourseID retrieves lessons for a course with pagination
-	GetLessonsByCourseID(ctx context.Context, courseID uuid.UUID, p pagination.Pagination) (LessonsConnection, error)
+	// If bodyless is true, the body field is not fetched (intended for faster pagination)
+	GetLessonsByCourseID(ctx context.Context, courseID uuid.UUID, p pagination.Pagination, bodyless bool) (LessonsConnection, error)
 	StoreLesson(ctx context.Context, lesson Lesson) error
 	UpdateLesson(ctx context.Context, id uuid.UUID, updates LessonUpdates) (Lesson, error)
 
@@ -206,8 +207,9 @@ func (r *redisRepository) GetLesson(ctx context.Context, id uuid.UUID) (Lesson, 
 }
 
 // GetLessonsByCourseID retrieves lessons for a course
-func (r *redisRepository) GetLessonsByCourseID(ctx context.Context, courseID uuid.UUID, p pagination.Pagination) (LessonsConnection, error) {
-	return r.db.GetLessonsByCourseID(ctx, courseID, p)
+// If bodyless is true, the body field is not fetched for faster pagination
+func (r *redisRepository) GetLessonsByCourseID(ctx context.Context, courseID uuid.UUID, p pagination.Pagination, bodyless bool) (LessonsConnection, error) {
+	return r.db.GetLessonsByCourseID(ctx, courseID, p, bodyless)
 }
 
 // GetEnrolledCourses retrieves enrolled courses for a user with progress
@@ -418,7 +420,8 @@ func (r *pgRepository) GetLesson(ctx context.Context, id uuid.UUID) (Lesson, err
 }
 
 // GetLessonsByCourseID retrieves lessons for a course with pagination
-func (r *pgRepository) GetLessonsByCourseID(ctx context.Context, courseID uuid.UUID, p pagination.Pagination) (LessonsConnection, error) {
+// If bodyless is true, the body field is not fetched for faster pagination
+func (r *pgRepository) GetLessonsByCourseID(ctx context.Context, courseID uuid.UUID, p pagination.Pagination, bodyless bool) (LessonsConnection, error) {
 	var (
 		out   LessonsConnection
 		arger db.Argumenter
@@ -437,16 +440,31 @@ func (r *pgRepository) GetLessonsByCourseID(ctx context.Context, courseID uuid.U
 		whereClauses = append(whereClauses, fmt.Sprintf(`"order" %s %s`, p.Comparator(), arger.Add(cursor.Order)))
 	}
 
-	query := fmt.Sprintf(
-		`SELECT id, course_id, "order", title, description, body, created_at, edited_at, deleted_at
-		 FROM lessons
-		 WHERE %s
-		 ORDER BY "order" %s
-		 LIMIT %s`,
-		strings.Join(whereClauses, " AND "),
-		p.OrderBy(),
-		arger.Add(p.Limit()+1),
-	)
+	// Build query with or without body based on bodyless flag
+	var query string
+	if bodyless {
+		query = fmt.Sprintf(
+			`SELECT id, course_id, "order", title, description, created_at, edited_at, deleted_at
+			 FROM lessons
+			 WHERE %s
+			 ORDER BY "order" %s
+			 LIMIT %s`,
+			strings.Join(whereClauses, " AND "),
+			p.OrderBy(),
+			arger.Add(p.Limit()+1),
+		)
+	} else {
+		query = fmt.Sprintf(
+			`SELECT id, course_id, "order", title, description, body, created_at, edited_at, deleted_at
+			 FROM lessons
+			 WHERE %s
+			 ORDER BY "order" %s
+			 LIMIT %s`,
+			strings.Join(whereClauses, " AND "),
+			p.OrderBy(),
+			arger.Add(p.Limit()+1),
+		)
+	}
 
 	rows, err := r.db.QueryContext(ctx, query, arger.Values()...)
 	if err != nil {
@@ -456,8 +474,14 @@ func (r *pgRepository) GetLessonsByCourseID(ctx context.Context, courseID uuid.U
 
 	for rows.Next() {
 		var l Lesson
-		if err := rows.Scan(&l.ID, &l.CourseID, &l.Order, &l.Title, &l.Description, &l.Body, &l.CreatedAt, &l.EditedAt, &l.DeletedAt); err != nil {
-			return out, errors.Trace(err)
+		if bodyless {
+			if err := rows.Scan(&l.ID, &l.CourseID, &l.Order, &l.Title, &l.Description, &l.CreatedAt, &l.EditedAt, &l.DeletedAt); err != nil {
+				return out, errors.Trace(err)
+			}
+		} else {
+			if err := rows.Scan(&l.ID, &l.CourseID, &l.Order, &l.Title, &l.Description, &l.Body, &l.CreatedAt, &l.EditedAt, &l.DeletedAt); err != nil {
+				return out, errors.Trace(err)
+			}
 		}
 
 		cursor, err := pagination.ToCursor(LessonCursor{Order: l.Order})

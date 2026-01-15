@@ -42,7 +42,7 @@ func TestBrowser_Browse_WithoutUserContext_Success(t *testing.T) {
 	}
 
 	p := pagination.Pagination{First: 10}
-	mockRepo.On("GetLessonsByCourseID", ctx, courseID, p).Return(expectedConn, nil)
+	mockRepo.On("GetLessonsByCourseID", ctx, courseID, p, false).Return(expectedConn, nil)
 
 	mockSyncer := new(StateSyncerMock)
 
@@ -120,7 +120,7 @@ func TestBrowser_Browse_WithUserContext_Success(t *testing.T) {
 	}
 
 	p := pagination.Pagination{First: 10}
-	mockRepo.On("GetLessonsByCourseID", ctx, courseID, p).Return(lessonsConn, nil)
+	mockRepo.On("GetLessonsByCourseID", ctx, courseID, p, false).Return(lessonsConn, nil)
 	mockRepo.On("GetUserCourseProgress", ctx, userID, courseID).Return(userProgress, nil)
 
 	syncerCallDone := make(chan struct{})
@@ -169,7 +169,7 @@ func TestBrowser_Browse_WithoutUserContext_ErrorGettingLessons(t *testing.T) {
 
 	expectedErr := errors.New("database error")
 	p := pagination.Pagination{First: 10}
-	mockRepo.On("GetLessonsByCourseID", ctx, courseID, p).Return(LessonsConnection{}, expectedErr)
+	mockRepo.On("GetLessonsByCourseID", ctx, courseID, p, false).Return(LessonsConnection{}, expectedErr)
 
 	browser := NewLessonsBrowser(mockRepo, mockSyncer)
 	result, err := browser.Browse(ctx, courseID, p, BrowseOptions{UserID: nil})
@@ -191,7 +191,7 @@ func TestBrowser_Browse_WithUserContext_ErrorGettingLessons(t *testing.T) {
 
 	expectedErr := errors.New("database error")
 	p := pagination.Pagination{First: 10}
-	mockRepo.On("GetLessonsByCourseID", ctx, courseID, p).Return(LessonsConnection{}, expectedErr)
+	mockRepo.On("GetLessonsByCourseID", ctx, courseID, p, false).Return(LessonsConnection{}, expectedErr)
 
 	browser := NewLessonsBrowser(mockRepo, mockSyncer)
 	result, err := browser.Browse(ctx, courseID, p, BrowseOptions{UserID: &userID})
@@ -229,7 +229,7 @@ func TestBrowser_Browse_WithUserContext_ErrorGettingProgress(t *testing.T) {
 
 	expectedErr := errors.New("progress not found")
 	p := pagination.Pagination{First: 10}
-	mockRepo.On("GetLessonsByCourseID", ctx, courseID, p).Return(lessonsConn, nil)
+	mockRepo.On("GetLessonsByCourseID", ctx, courseID, p, false).Return(lessonsConn, nil)
 	mockRepo.On("GetUserCourseProgress", ctx, userID, courseID).Return(UserCourseProgress{}, expectedErr)
 
 	browser := NewLessonsBrowser(mockRepo, mockSyncer)
@@ -265,7 +265,7 @@ func TestBrowser_Browse_WithUserContext_EmptyLessons(t *testing.T) {
 	}
 
 	p := pagination.Pagination{First: 10}
-	mockRepo.On("GetLessonsByCourseID", ctx, courseID, p).Return(lessonsConn, nil)
+	mockRepo.On("GetLessonsByCourseID", ctx, courseID, p, false).Return(lessonsConn, nil)
 	mockRepo.On("GetUserCourseProgress", ctx, userID, courseID).Return(userProgress, nil)
 
 	syncerCallDone := make(chan struct{})
@@ -334,7 +334,7 @@ func TestBrowser_Browse_WithUserContext_AllLessonsCompleted(t *testing.T) {
 	}
 
 	p := pagination.Pagination{First: 10}
-	mockRepo.On("GetLessonsByCourseID", ctx, courseID, p).Return(lessonsConn, nil)
+	mockRepo.On("GetLessonsByCourseID", ctx, courseID, p, false).Return(lessonsConn, nil)
 	mockRepo.On("GetUserCourseProgress", ctx, userID, courseID).Return(userProgress, nil)
 
 	syncerCallDone := make(chan struct{})
@@ -395,7 +395,7 @@ func TestBrowser_Browse_WithUserContext_PaginationPreserved(t *testing.T) {
 	}
 
 	p := pagination.Pagination{Kind: pagination.PaginationKindOldestFirst, First: 10}
-	mockRepo.On("GetLessonsByCourseID", ctx, courseID, p).Return(lessonsConn, nil)
+	mockRepo.On("GetLessonsByCourseID", ctx, courseID, p, false).Return(lessonsConn, nil)
 	mockRepo.On("GetUserCourseProgress", ctx, userID, courseID).Return(userProgress, nil)
 
 	syncerCallDone := make(chan struct{})
@@ -456,7 +456,7 @@ func TestBrowser_Browse_WithUserContext_CursorsPreserved(t *testing.T) {
 	}
 
 	p := pagination.Pagination{First: 10}
-	mockRepo.On("GetLessonsByCourseID", ctx, courseID, p).Return(lessonsConn, nil)
+	mockRepo.On("GetLessonsByCourseID", ctx, courseID, p, false).Return(lessonsConn, nil)
 	mockRepo.On("GetUserCourseProgress", ctx, userID, courseID).Return(userProgress, nil)
 
 	syncerCallDone := make(chan struct{})
