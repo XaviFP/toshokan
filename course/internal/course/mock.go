@@ -3,9 +3,10 @@ package course
 import (
 	"context"
 
-	"github.com/XaviFP/toshokan/common/pagination"
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/mock"
+
+	"github.com/XaviFP/toshokan/common/pagination"
 )
 
 type RepositoryMock struct {

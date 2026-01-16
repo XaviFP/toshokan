@@ -6,10 +6,11 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/gin-gonic/gin"
+
 	pbDealer "github.com/XaviFP/toshokan/dealer/api/proto/v1"
 	pbDeck "github.com/XaviFP/toshokan/deck/api/proto/v1"
 	pbUser "github.com/XaviFP/toshokan/user/api/proto/v1"
-	"github.com/gin-gonic/gin"
 )
 
 type Resolver struct {

@@ -9,12 +9,13 @@ import (
 	"strings"
 	"time"
 
-	cachelib "github.com/XaviFP/toshokan/common/cache"
-	"github.com/XaviFP/toshokan/common/db"
-	"github.com/XaviFP/toshokan/common/pagination"
 	"github.com/google/uuid"
 	"github.com/juju/errors"
 	"github.com/mediocregopher/radix/v4"
+
+	cachelib "github.com/XaviFP/toshokan/common/cache"
+	"github.com/XaviFP/toshokan/common/db"
+	"github.com/XaviFP/toshokan/common/pagination"
 )
 
 var ErrNotFound = errors.New("not found")

@@ -8,14 +8,14 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/XaviFP/toshokan/common/db"
-	"github.com/XaviFP/toshokan/common/pagination"
-
 	_ "github.com/golang-migrate/migrate/v4/source/file"
 	"github.com/google/uuid"
 	"github.com/juju/errors"
 	"github.com/lib/pq"
 	"github.com/mediocregopher/radix/v4"
+
+	"github.com/XaviFP/toshokan/common/db"
+	"github.com/XaviFP/toshokan/common/pagination"
 )
 
 var (

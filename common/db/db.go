@@ -4,10 +4,10 @@ import (
 	"database/sql"
 	"fmt"
 
-	"github.com/XaviFP/toshokan/common/config"
-
 	"github.com/lib/pq"
 	"github.com/pkg/errors"
+
+	"github.com/XaviFP/toshokan/common/config"
 )
 
 func InitDB(c config.DBConfig) (*sql.DB, error) {

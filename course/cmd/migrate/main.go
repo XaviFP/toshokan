@@ -4,11 +4,12 @@ import (
 	"errors"
 	"log"
 
-	"github.com/XaviFP/toshokan/common/config"
-	"github.com/XaviFP/toshokan/common/db"
 	"github.com/golang-migrate/migrate/v4"
 	"github.com/golang-migrate/migrate/v4/database/postgres"
 	_ "github.com/golang-migrate/migrate/v4/source/file"
+
+	"github.com/XaviFP/toshokan/common/config"
+	"github.com/XaviFP/toshokan/common/db"
 )
 
 func main() {
