@@ -4,12 +4,11 @@ import (
 	"context"
 	"testing"
 
-	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/status"
-
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 
 	pb "github.com/XaviFP/toshokan/user/api/proto/v1"
 	"github.com/XaviFP/toshokan/user/internal/user"

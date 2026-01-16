@@ -7,11 +7,12 @@ import (
 	"testing"
 	"time"
 
-	"github.com/XaviFP/toshokan/common/pagination"
 	"github.com/google/uuid"
 	"github.com/juju/errors"
 	"github.com/mediocregopher/radix/v4"
 	"github.com/stretchr/testify/assert"
+
+	"github.com/XaviFP/toshokan/common/pagination"
 )
 
 func TestRedisRepository_GetCourse_CacheHit(t *testing.T) {

@@ -6,10 +6,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/XaviFP/toshokan/common/config"
-	"github.com/XaviFP/toshokan/common/db"
-	"github.com/XaviFP/toshokan/common/pagination"
-
 	"github.com/golang-migrate/migrate/v4"
 	"github.com/golang-migrate/migrate/v4/database/postgres"
 	_ "github.com/golang-migrate/migrate/v4/source/file"
@@ -17,6 +13,10 @@ import (
 	"github.com/juju/errors"
 	_ "github.com/lib/pq"
 	"github.com/stretchr/testify/assert"
+
+	"github.com/XaviFP/toshokan/common/config"
+	"github.com/XaviFP/toshokan/common/db"
+	"github.com/XaviFP/toshokan/common/pagination"
 )
 
 func TestRepository_StoreDeck(t *testing.T) {

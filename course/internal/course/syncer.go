@@ -4,10 +4,11 @@ import (
 	"context"
 	"log"
 
-	"github.com/XaviFP/toshokan/common/pagination"
-	pbDeck "github.com/XaviFP/toshokan/deck/api/proto/v1"
 	"github.com/google/uuid"
 	"github.com/juju/errors"
+
+	"github.com/XaviFP/toshokan/common/pagination"
+	pbDeck "github.com/XaviFP/toshokan/deck/api/proto/v1"
 )
 
 type StateSyncer interface {

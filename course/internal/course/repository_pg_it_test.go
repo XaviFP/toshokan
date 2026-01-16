@@ -6,10 +6,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/XaviFP/toshokan/common/config"
-	"github.com/XaviFP/toshokan/common/db"
-	"github.com/XaviFP/toshokan/common/pagination"
-
 	"github.com/golang-migrate/migrate/v4"
 	"github.com/golang-migrate/migrate/v4/database/postgres"
 	_ "github.com/golang-migrate/migrate/v4/source/file"
@@ -19,6 +15,10 @@ import (
 	"github.com/mediocregopher/radix/v4"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/XaviFP/toshokan/common/config"
+	"github.com/XaviFP/toshokan/common/db"
+	"github.com/XaviFP/toshokan/common/pagination"
 )
 
 func TestRepository_StoreCourse(t *testing.T) {
