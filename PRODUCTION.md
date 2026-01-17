@@ -34,5 +34,5 @@ rm private.pem public.pem
 ### 3. Deploy
 
 ```bash
-docker compose -f docker-compose.prod.yaml up -d
+docker compose --env-file .env.prod -f docker-compose.prod.yaml up -d
 ```
