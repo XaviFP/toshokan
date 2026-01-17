@@ -1,7 +1,13 @@
-#golang:1.18.0-alpine3.15
-FROM ubuntu
+FROM debian:bookworm-slim
 
-#WORKDIR /src
-COPY bin/deck /deck
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    netcat-openbsd \
+    && rm -rf /var/lib/apt/lists/* \
+    && useradd -r -u 1001 appuser
 
-ENTRYPOINT [ "/deck" ]
+COPY --chmod=755 bin/deck /deck
+
+USER appuser
+
+EXPOSE 50051
+ENTRYPOINT ["/deck"]

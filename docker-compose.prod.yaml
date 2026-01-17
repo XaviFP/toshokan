@@ -1,0 +1,370 @@
+services:
+  # ===================
+  # Reverse Proxy + SSL
+  # ===================
+  nginx-proxy:
+    image: nginxproxy/nginx-proxy:1.4
+    container_name: nginx-proxy
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - /var/run/docker.sock:/tmp/docker.sock:ro
+      - certs:/etc/nginx/certs:ro
+      - vhost:/etc/nginx/vhost.d
+      - html:/usr/share/nginx/html
+      - ./nginx/custom.conf:/etc/nginx/conf.d/custom.conf:ro
+    networks:
+      - external
+    restart: always
+    labels:
+      - "com.github.jrcs.letsencrypt_nginx_proxy_companion.nginx_proxy"
+
+  acme-companion:
+    image: nginxproxy/acme-companion:2.2
+    container_name: acme-companion
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - certs:/etc/nginx/certs:rw
+      - vhost:/etc/nginx/vhost.d
+      - html:/usr/share/nginx/html
+      - acme:/etc/acme.sh
+    environment:
+      DEFAULT_EMAIL: ${LETSENCRYPT_EMAIL}
+    depends_on:
+      - nginx-proxy
+    networks:
+      - external
+    restart: always
+
+  # ===================
+  # Data Stores
+  # ===================
+  db:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    environment:
+      POSTGRES_USER: ${DB_USER}
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+      POSTGRES_MULTIPLE_DATABASES: deck,users,course
+    networks:
+      - internal
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER} -h localhost"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    restart: always
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+
+  cache:
+    image: redis:7-alpine
+    command: redis-server --maxmemory 128mb --maxmemory-policy allkeys-lru
+    networks:
+      - internal
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+    restart: always
+    deploy:
+      resources:
+        limits:
+          memory: 192M
+
+  # ===================
+  # Toshokan Services
+  # ===================
+  user:
+    build: user/
+    depends_on:
+      db:
+        condition: service_healthy
+      cache:
+        condition: service_healthy
+    environment:
+      DB_HOST: db
+      DB_PORT: 5432
+      DB_NAME: users
+      DB_USER: ${DB_USER}
+      DB_PASSWORD: ${DB_PASSWORD}
+      CACHE_HOST: cache
+      CACHE_PORT: 6379
+      CACHE_TRANSPORT_PROTOCOL: tcp
+      GRPC_SERVER_HOST: user
+      GRPC_SERVER_PORT: 50051
+      GRPC_SERVER_TRANSPORT_PROTOCOL: tcp
+      SESSION_EXPIRY: ${SESSION_EXPIRY}
+      PRIVATE_KEY: ${JWT_PRIVATE_KEY}
+      PUBLIC_KEY: ${JWT_PUBLIC_KEY}
+    networks:
+      - internal
+    healthcheck:
+      test: ["CMD", "nc", "-z", "localhost", "50051"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    restart: always
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+    labels:
+      - "logging=promtail"
+      - "service=user"
+
+  deck:
+    build: deck/
+    depends_on:
+      db:
+        condition: service_healthy
+      cache:
+        condition: service_healthy
+    environment:
+      DB_HOST: db
+      DB_PORT: 5432
+      DB_NAME: deck
+      DB_USER: ${DB_USER}
+      DB_PASSWORD: ${DB_PASSWORD}
+      CACHE_HOST: cache
+      CACHE_PORT: 6379
+      CACHE_TRANSPORT_PROTOCOL: tcp
+      GRPC_SERVER_HOST: deck
+      GRPC_SERVER_PORT: 50051
+      GRPC_SERVER_TRANSPORT_PROTOCOL: tcp
+    networks:
+      - internal
+    healthcheck:
+      test: ["CMD", "nc", "-z", "localhost", "50051"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    restart: always
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+    labels:
+      - "logging=promtail"
+      - "service=deck"
+
+  dealer:
+    build: dealer/
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      DB_HOST: db
+      DB_PORT: 5432
+      DB_NAME: deck
+      DB_USER: ${DB_USER}
+      DB_PASSWORD: ${DB_PASSWORD}
+      GRPC_SERVER_HOST: dealer
+      GRPC_SERVER_PORT: 50051
+      GRPC_SERVER_TRANSPORT_PROTOCOL: tcp
+      UPDATE_CARD_FREQUENCY: ${UPDATE_CARD_FREQUENCY}
+      INACTIVE_CARD_PERIOD: ${INACTIVE_CARD_PERIOD}
+    networks:
+      - internal
+    healthcheck:
+      test: ["CMD", "nc", "-z", "localhost", "50051"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    restart: always
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+    labels:
+      - "logging=promtail"
+      - "service=dealer"
+
+  course:
+    build: course/
+    depends_on:
+      db:
+        condition: service_healthy
+      cache:
+        condition: service_healthy
+    environment:
+      DB_HOST: db
+      DB_PORT: 5432
+      DB_NAME: course
+      DB_USER: ${DB_USER}
+      DB_PASSWORD: ${DB_PASSWORD}
+      CACHE_HOST: cache
+      CACHE_PORT: 6379
+      CACHE_TRANSPORT_PROTOCOL: tcp
+      GRPC_SERVER_HOST: course
+      GRPC_SERVER_PORT: 50051
+      GRPC_SERVER_TRANSPORT_PROTOCOL: tcp
+    networks:
+      - internal
+    healthcheck:
+      test: ["CMD", "nc", "-z", "localhost", "50051"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    restart: always
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+    labels:
+      - "logging=promtail"
+      - "service=course"
+
+  gate:
+    build: gate/
+    depends_on:
+      user:
+        condition: service_healthy
+      deck:
+        condition: service_healthy
+      course:
+        condition: service_healthy
+      dealer:
+        condition: service_healthy
+    environment:
+      USERS_GRPC_SERVER_HOST: user
+      USERS_GRPC_SERVER_PORT: 50051
+      USERS_GRPC_SERVER_TRANSPORT_PROTOCOL: tcp
+      DECKS_GRPC_SERVER_HOST: deck
+      DECKS_GRPC_SERVER_PORT: 50051
+      DECKS_GRPC_SERVER_TRANSPORT_PROTOCOL: tcp
+      DEALER_GRPC_SERVER_HOST: dealer
+      DEALER_GRPC_SERVER_PORT: 50051
+      DEALER_GRPC_SERVER_TRANSPORT_PROTOCOL: tcp
+      COURSE_GRPC_SERVER_HOST: course
+      COURSE_GRPC_SERVER_PORT: 50051
+      COURSE_GRPC_SERVER_TRANSPORT_PROTOCOL: tcp
+      HTTP_HOST: gate
+      HTTP_PORT: 8080
+      SIGNUP_ENABLED: "true"
+      CERTIFICATE_PATH: ""
+      PRIVATE_KEY_PATH: ""
+      ALLOWED_ORIGINS: ${ALLOWED_ORIGINS}
+      ADMIN_HEADER_NAME: ${ADMIN_HEADER_NAME}
+      ADMIN_HEADER_SECRET: ${ADMIN_HEADER_SECRET}
+      ADMIN_ONLY_SIGNUP: "true"
+      ADMIN_ONLY_ENROLL: "true"
+      ADMIN_ONLY_CREATE_COURSE: "true"
+      ADMIN_ONLY_CREATE_LESSON: "true"
+      ADMIN_ONLY_CREATE_DECK: "true"
+      ADMIN_ONLY_UPDATE_COURSE: "true"
+      ADMIN_ONLY_UPDATE_LESSON: "true"
+      VIRTUAL_HOST: ${TOSHOKAN_DOMAIN}
+      VIRTUAL_PORT: 8080
+      LETSENCRYPT_HOST: ${TOSHOKAN_DOMAIN}
+    networks:
+      - external
+      - internal
+    healthcheck:
+      test: ["CMD", "nc", "-z", "localhost", "8080"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    restart: always
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+    labels:
+      - "logging=promtail"
+      - "service=gate"
+
+  # ===================
+  # Observability
+  # ===================
+  loki:
+    image: grafana/loki:2.9.0
+    volumes:
+      - ./observability/loki/loki-config.yaml:/etc/loki/local-config.yaml
+      - loki-data:/loki
+    command: -config.file=/etc/loki/local-config.yaml
+    networks:
+      - internal
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q --spider http://localhost:3100/ready || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    restart: always
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+
+  promtail:
+    image: grafana/promtail:2.9.0
+    volumes:
+      - ./observability/promtail/promtail-config.yaml:/etc/promtail/config.yaml
+      - /var/lib/docker/containers:/var/lib/docker/containers:ro
+      - /var/run/docker.sock:/var/run/docker.sock
+    command: -config.file=/etc/promtail/config.yaml
+    depends_on:
+      - loki
+    networks:
+      - internal
+    restart: always
+    deploy:
+      resources:
+        limits:
+          memory: 128M
+
+  grafana:
+    image: grafana/grafana:10.2.0
+    volumes:
+      - ./observability/grafana/provisioning:/etc/grafana/provisioning
+      - grafana-data:/var/lib/grafana
+    environment:
+      GF_SECURITY_ADMIN_USER: ${GRAFANA_ADMIN_USER}
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD}
+      GF_USERS_ALLOW_SIGN_UP: "false"
+      GF_SERVER_ROOT_URL: https://${GRAFANA_DOMAIN}
+      VIRTUAL_HOST: ${GRAFANA_DOMAIN}
+      VIRTUAL_PORT: 3000
+      LETSENCRYPT_HOST: ${GRAFANA_DOMAIN}
+    depends_on:
+      - loki
+    networks:
+      - external
+      - internal
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q --spider http://localhost:3000/api/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    restart: always
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+
+networks:
+  external:
+  internal:
+    internal: true
+
+volumes:
+  postgres-data:
+  loki-data:
+  grafana-data:
+  certs:
+  vhost:
+  html:
+  acme:
