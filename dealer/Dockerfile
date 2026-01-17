@@ -1,5 +1,14 @@
-FROM ubuntu
+FROM debian:bookworm-slim
 
-COPY target/debug/dealer /dealer
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    netcat-openbsd \
+    && rm -rf /var/lib/apt/lists/* \
+    && useradd -r -u 1001 appuser
 
-ENTRYPOINT [ "/dealer" ]
+# Use release build for production
+COPY --chmod=755 target/release/dealer /dealer
+
+USER appuser
+
+EXPOSE 50051
+ENTRYPOINT ["/dealer"]

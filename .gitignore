@@ -6,6 +6,10 @@
 # Output of the go coverage tool
 *.out
 
+# Production environment variables
+# This should never be in a git repository, but just in case
+.env.prod
+
 # Ignore any bin/ directories
 bin/
 
