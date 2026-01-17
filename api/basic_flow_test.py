@@ -1095,6 +1095,40 @@ def run_update_lesson_tests(base_url: str, token: str, course_id: str, lesson: D
     log_step("✓ UpdateLesson tests passed")
 
 
+def run_get_lesson_tests(base_url: str, token: str, course_id: str, lesson: Dict[str, Any]) -> None:
+    """Test GET /courses/{courseId}/lessons/{lessonId} endpoint."""
+    log_step("")
+    log_step("Testing GetLesson endpoint...")
+
+    # Test 1: Fetch existing lesson
+    response = requests.get(
+        f"{base_url}/courses/{course_id}/lessons/{lesson['id']}",
+        headers=auth_headers(token),
+        timeout=TIMEOUT,
+    )
+    assert response.status_code == 200, f"Expected 200, got {response.status_code}"
+    lesson = response.json()
+    assert lesson["id"] == lesson["id"], "Lesson ID should match"
+    assert lesson["course_id"] == course_id, "Course ID should match"
+    assert lesson["body"] == lesson["body"], "Lesson body should match"
+    assert "title" in lesson
+    assert "description" in lesson
+    assert "body" in lesson
+    log_step("  ✓ Get existing lesson - success")
+
+    # Test 2: Fetch non-existent lesson
+    fake_uuid = "00000000-0000-0000-0000-000000000000"
+    response = requests.get(
+        f"{base_url}/courses/{course_id}/lessons/{fake_uuid}",
+        headers=auth_headers(token),
+        timeout=TIMEOUT,
+    )
+    assert response.status_code == 404, f"Expected 404 for non-existent lesson, got {response.status_code}"
+    log_step("  ✓ Get non-existent lesson returns 404 - success")
+
+    log_step("✓ GetLesson tests passed")
+
+
 def test_basic_flow():
     init_log_file()
 
@@ -1115,6 +1149,9 @@ def test_basic_flow():
         enroll_course(base_url, token, cid)
     log_step(f"✓ Enrolled in {len(all_course_ids)} courses")
 
+    # Test get lesson individually
+    run_get_lesson_tests(base_url, token, course_id, lessons[0])
+
     run_pagination_before_answering(base_url, token, course_id, lessons)
 
     run_focused_lessons_before_answering(base_url, token, course_id)
@@ -1123,6 +1160,7 @@ def test_basic_flow():
     run_bodyless_focused_lessons_test(base_url, token, course_id)
 
     first_lesson_id = lessons[0]["id"]
+
     run_lesson_state_before_answering(
         base_url, token, course_id, first_lesson_id)
 
