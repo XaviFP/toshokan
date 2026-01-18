@@ -44,7 +44,7 @@ func main() {
 	}
 	defer redisClient.Close()
 
-	pgRepo := course.NewPGRepository(db)
+	pgRepo := course.NewPGRepository(logger.With("component", "pgRepository"), db)
 	redisRepo := course.NewRedisRepository(redisClient, pgRepo)
 
 	// Connect to deck service
