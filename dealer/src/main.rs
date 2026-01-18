@@ -290,6 +290,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Start GRPC Server
     let addr = grpc_config.unwrap().to_string().parse()?;
+    println!("Starting Dealer gRPC server on: {}", addr);
+
     let dealer = Dealer {
         repo: Repository { client },
     };

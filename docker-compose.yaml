@@ -28,7 +28,9 @@ services:
       - "6379"
     restart: always
   user:
-    build: user/
+    build:
+      context: .
+      dockerfile: user/Dockerfile
     depends_on:
       db:
         condition: service_healthy
@@ -42,7 +44,9 @@ services:
       - "logging=promtail"
       - "service=user"
   deck:
-    build: deck/
+    build:
+      context: .
+      dockerfile: deck/Dockerfile
     depends_on:
       db:
         condition: service_healthy
@@ -56,7 +60,8 @@ services:
       - "logging=promtail"
       - "service=deck"
   dealer:
-    build: dealer/
+    build:
+      context: dealer/
     depends_on:
       db:
         condition: service_healthy
@@ -65,7 +70,9 @@ services:
       - env/.dealer
     restart: always
   course:
-    build: course/
+    build:
+      context: .
+      dockerfile: course/Dockerfile
     depends_on:
       db:
         condition: service_healthy
@@ -79,7 +86,9 @@ services:
       - "logging=promtail"
       - "service=course"
   gate:
-    build: gate/
+    build:
+      context: .
+      dockerfile: gate/Dockerfile
     depends_on:
       - user
       - deck

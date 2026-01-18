@@ -84,7 +84,9 @@ services:
   # Toshokan Services
   # ===================
   user:
-    build: user/
+    build:
+      context: .
+      dockerfile: user/Dockerfile
     depends_on:
       db:
         condition: service_healthy
@@ -123,7 +125,9 @@ services:
       - "service=user"
 
   deck:
-    build: deck/
+    build:
+      context: .
+      dockerfile: deck/Dockerfile
     depends_on:
       db:
         condition: service_healthy
@@ -159,7 +163,8 @@ services:
       - "service=deck"
 
   dealer:
-    build: dealer/
+    build:
+      context: dealer/
     depends_on:
       db:
         condition: service_healthy
@@ -192,7 +197,9 @@ services:
       - "service=dealer"
 
   course:
-    build: course/
+    build:
+      context: .
+      dockerfile: course/Dockerfile
     depends_on:
       db:
         condition: service_healthy
@@ -228,7 +235,9 @@ services:
       - "service=course"
 
   gate:
-    build: gate/
+    build:
+      context: .
+      dockerfile: gate/Dockerfile
     depends_on:
       user:
         condition: service_healthy

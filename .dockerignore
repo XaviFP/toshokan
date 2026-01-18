@@ -1,0 +1,43 @@
+# Git
+.git
+.gitignore
+
+# Build outputs (now built in Docker)
+*/bin/
+dealer/target/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Test outputs
+*.out
+coverage.out
+
+# Docker
+docker-compose*.yaml
+Dockerfile
+*.Dockerfile
+!migrations.Dockerfile
+
+# Documentation
+*.md
+!README.md
+
+# Environment files (contain secrets)
+.env*
+env/
+
+# Data directories
+data/
+
+# Observability configs (not needed for service builds)
+observability/
+
+# API tests
+api/
+
+# Nginx configs
+nginx/
