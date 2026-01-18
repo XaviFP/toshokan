@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"log/slog"
 	"strings"
 	"time"
 
@@ -313,12 +314,13 @@ func (r *redisRepository) UpdateUserProgress(ctx context.Context, progress UserC
 }
 
 type pgRepository struct {
-	db *sql.DB
+	logger *slog.Logger
+	db     *sql.DB
 }
 
 // NewPGRepository creates a new PostgreSQL repository
-func NewPGRepository(db *sql.DB) Repository {
-	return &pgRepository{db: db}
+func NewPGRepository(logger *slog.Logger, db *sql.DB) Repository {
+	return &pgRepository{logger: logger, db: db}
 }
 
 // GetCourse retrieves a course by ID
@@ -635,18 +637,58 @@ func (r *pgRepository) StoreLesson(ctx context.Context, lesson Lesson) error {
 		lesson.ID = uuid.New()
 	}
 
-	_, err := r.db.ExecContext(ctx,
+	tx, err := r.db.BeginTx(ctx, nil)
+	if err != nil {
+		return errors.Trace(err)
+	}
+
+	defer func() {
+		if err != nil {
+			if errTx := tx.Rollback(); errTx != nil {
+				r.logger.Error("rolling back transaction", "error", errTx, "lesson_id", lesson.ID, "source_error", err)
+			}
+		} else {
+			if errTx := tx.Commit(); errTx != nil {
+				r.logger.Error("committing transaction", "error", errTx, "lesson_id", lesson.ID, "source_error", err)
+			}
+		}
+	}()
+
+	_, err = tx.ExecContext(ctx,
 		`INSERT INTO lessons (id, course_id, "order", title, description, body, created_at) 
 		 VALUES ($1, $2, $3, $4, $5, $6, $7)
 		 ON CONFLICT (id) DO UPDATE SET title = $4, description = $5, body = $6, updated_at = $7`,
 		lesson.ID, lesson.CourseID, lesson.Order, lesson.Title, lesson.Description, lesson.Body, time.Now(),
 	)
+	if err != nil {
+		return errors.Trace(err)
+	}
 
-	return errors.Trace(err)
+	if err := syncLessonDecksTx(ctx, tx, lesson); err != nil {
+		return errors.Trace(err)
+	}
+
+	return nil
 }
 
 // UpdateLesson updates a lesson with the provided fields
 func (r *pgRepository) UpdateLesson(ctx context.Context, id uuid.UUID, updates LessonUpdates) (Lesson, error) {
+	tx, err := r.db.BeginTx(ctx, nil)
+	if err != nil {
+		return Lesson{}, errors.Trace(err)
+	}
+	defer func() {
+		if err != nil {
+			if errTx := tx.Rollback(); errTx != nil {
+				r.logger.Error("rolling back transaction", "error", errTx, "lesson_id", id, "source_error", err)
+			}
+		} else {
+			if errTx := tx.Commit(); errTx != nil {
+				r.logger.Error("committing transaction", "error", errTx, "lesson_id", id, "source_error", err)
+			}
+		}
+	}()
+
 	var arger db.Argumenter
 	setClauses := []string{fmt.Sprintf("updated_at = %s", arger.Add(time.Now()))}
 
@@ -671,20 +713,44 @@ func (r *pgRepository) UpdateLesson(ctx context.Context, id uuid.UUID, updates L
 	)
 
 	var lesson Lesson
-	err := r.db.QueryRowContext(ctx, query, arger.Values()...).Scan(
+	err = tx.QueryRowContext(ctx, query, arger.Values()...).Scan(
 		&lesson.ID, &lesson.CourseID, &lesson.Order, &lesson.Title, &lesson.Description,
 		&lesson.Body, &lesson.CreatedAt, &lesson.UpdatedAt, &lesson.DeletedAt,
 	)
-
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return Lesson{}, errors.Trace(ErrNotFound)
 		}
+		return Lesson{}, errors.Trace(err)
+	}
 
+	if err := syncLessonDecksTx(ctx, tx, lesson); err != nil {
 		return Lesson{}, errors.Trace(err)
 	}
 
 	return lesson, nil
+}
+
+// syncLessonDecksTx ensures lesson_decks are in sync with deck references in lesson body
+func syncLessonDecksTx(ctx context.Context, tx *sql.Tx, lesson Lesson) error {
+	deckIDs := ParseDeckReferences(lesson.Body)
+
+	if _, err := tx.ExecContext(ctx, `DELETE FROM lesson_decks WHERE lesson_id = $1`, lesson.ID); err != nil {
+		return err
+	}
+
+	for i, deckID := range deckIDs {
+		_, err := tx.ExecContext(ctx, `
+			INSERT INTO lesson_decks (id, lesson_id, deck_id, "order", created_at)
+			VALUES ($1, $2, $3, $4, $5)`,
+			uuid.New(), lesson.ID, deckID, i, time.Now().UTC(),
+		)
+		if err != nil {
+			return errors.Trace(err)
+		}
+	}
+
+	return nil
 }
 
 // GetUserCourseProgress retrieves a user's progress in a course

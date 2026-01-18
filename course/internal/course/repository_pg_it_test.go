@@ -3,6 +3,7 @@ package course
 import (
 	"context"
 	"database/sql"
+	"log/slog"
 	"testing"
 	"time"
 
@@ -23,7 +24,7 @@ import (
 
 func TestRepository_StoreCourse(t *testing.T) {
 	h := newTestHarness(t)
-	repo := NewPGRepository(h.db)
+	repo := NewPGRepository(slog.Default(), h.db)
 
 	t.Run("success", func(t *testing.T) {
 		id := uuid.MustParse("ebcfffa0-a96f-450b-a0f3-a2e47263855d")
@@ -60,7 +61,7 @@ func TestRepository_StoreCourse(t *testing.T) {
 
 func TestRepository_GetCourse(t *testing.T) {
 	h := newTestHarness(t)
-	repo := NewPGRepository(h.db)
+	repo := NewPGRepository(slog.Default(), h.db)
 
 	t.Run("success", func(t *testing.T) {
 		id := uuid.MustParse("fb9ffe2c-ad66-4766-9b7b-46fd5d9acd72")
@@ -82,7 +83,7 @@ func TestRepository_GetCourse(t *testing.T) {
 
 func TestRepository_StoreLesson(t *testing.T) {
 	h := newTestHarness(t)
-	repo := NewPGRepository(h.db)
+	repo := NewPGRepository(slog.Default(), h.db)
 
 	courseID := uuid.MustParse("fb9ffe2c-ad66-4766-9b7b-46fd5d9acd72")
 
@@ -107,7 +108,13 @@ func TestRepository_StoreLesson(t *testing.T) {
 		assert.Equal(t, lesson.ID, out.ID)
 		assert.Equal(t, lesson.Title, out.Title)
 
-		// update if exists
+		// Check lesson_decks after insert
+		var deckCount int
+		err = h.db.QueryRow(`SELECT COUNT(*) FROM lesson_decks WHERE lesson_id = $1`, lesson.ID).Scan(&deckCount)
+		assert.NoError(t, err)
+		assert.Equal(t, 1, deckCount)
+
+		// update if exists (change title, keep deck)
 		lesson.Title = "Advanced Patterns Updated"
 		err = repo.StoreLesson(context.Background(), lesson)
 		assert.NoError(t, err)
@@ -117,12 +124,38 @@ func TestRepository_StoreLesson(t *testing.T) {
 		assert.NoError(t, err)
 		assert.Equal(t, lesson.ID, out.ID)
 		assert.Equal(t, "Advanced Patterns Updated", out.Title)
+
+		// update with new deck reference
+		lesson.Body = "Now with two decks: ![deck](60766223-ff9f-4871-a497-f765c05a0c5e) and ![deck](11111111-1111-1111-1111-111111111111)"
+		err = repo.StoreLesson(context.Background(), lesson)
+		assert.NoError(t, err)
+		err = h.db.QueryRow(`SELECT COUNT(*) FROM lesson_decks WHERE lesson_id = $1`, lesson.ID).Scan(&deckCount)
+		assert.NoError(t, err)
+		assert.Equal(t, 2, deckCount)
+
+		// update with only one deck (remove one)
+		lesson.Body = "Just one deck: ![deck](11111111-1111-1111-1111-111111111111)"
+		err = repo.StoreLesson(context.Background(), lesson)
+		assert.NoError(t, err)
+		err = h.db.QueryRow(`SELECT COUNT(*) FROM lesson_decks WHERE lesson_id = $1`, lesson.ID).Scan(&deckCount)
+		assert.NoError(t, err)
+		assert.Equal(t, 1, deckCount)
+
+		// update with no decks
+		// Lessons without decks aren't allowed, so this scenario is not likely in practice,
+		// but we test it to ensure the code handles it gracefully.
+		lesson.Body = "No decks here!"
+		err = repo.StoreLesson(context.Background(), lesson)
+		assert.NoError(t, err)
+		err = h.db.QueryRow(`SELECT COUNT(*) FROM lesson_decks WHERE lesson_id = $1`, lesson.ID).Scan(&deckCount)
+		assert.NoError(t, err)
+		assert.Equal(t, 0, deckCount)
 	})
 }
 
 func TestRepository_UpdateCourse(t *testing.T) {
 	h := newTestHarness(t)
-	repo := NewPGRepository(h.db)
+	repo := NewPGRepository(slog.Default(), h.db)
 
 	t.Run("update_title_only", func(t *testing.T) {
 		id := uuid.MustParse("fb9ffe2c-ad66-4766-9b7b-46fd5d9acd72")
@@ -201,7 +234,7 @@ func TestRepository_UpdateCourse(t *testing.T) {
 
 func TestRepository_UpdateLesson(t *testing.T) {
 	h := newTestHarness(t)
-	repo := NewPGRepository(h.db)
+	repo := NewPGRepository(slog.Default(), h.db)
 
 	t.Run("update_title_only", func(t *testing.T) {
 		id := uuid.MustParse("334ddbf8-1acc-405b-86d8-49f0d1ca636c")
@@ -225,6 +258,34 @@ func TestRepository_UpdateLesson(t *testing.T) {
 		})
 		require.NoError(t, err)
 		assert.Equal(t, newBody, lesson.Body)
+
+		// Check lesson_decks updated
+		var deckCount int
+		err = h.db.QueryRow(`SELECT COUNT(*) FROM lesson_decks WHERE lesson_id = $1`, id).Scan(&deckCount)
+		assert.NoError(t, err)
+		assert.Equal(t, 1, deckCount)
+
+		// Add a second deck
+		newBody2 := "Two decks: ![deck](60766223-ff9f-4871-a497-f765c05a0c5e) ![deck](11111111-1111-1111-1111-111111111111)"
+		lesson, err = repo.UpdateLesson(context.Background(), id, LessonUpdates{
+			Body: &newBody2,
+		})
+		require.NoError(t, err)
+		assert.Equal(t, newBody2, lesson.Body)
+		err = h.db.QueryRow(`SELECT COUNT(*) FROM lesson_decks WHERE lesson_id = $1`, id).Scan(&deckCount)
+		assert.NoError(t, err)
+		assert.Equal(t, 2, deckCount)
+
+		// Remove all decks
+		newBody3 := "No decks now!"
+		lesson, err = repo.UpdateLesson(context.Background(), id, LessonUpdates{
+			Body: &newBody3,
+		})
+		require.NoError(t, err)
+		assert.Equal(t, newBody3, lesson.Body)
+		err = h.db.QueryRow(`SELECT COUNT(*) FROM lesson_decks WHERE lesson_id = $1`, id).Scan(&deckCount)
+		assert.NoError(t, err)
+		assert.Equal(t, 0, deckCount)
 	})
 
 	t.Run("update_order", func(t *testing.T) {
@@ -272,7 +333,7 @@ func TestRepository_UpdateLesson(t *testing.T) {
 
 func TestRepository_GetLesson(t *testing.T) {
 	h := newTestHarness(t)
-	repo := NewPGRepository(h.db)
+	repo := NewPGRepository(slog.Default(), h.db)
 
 	t.Run("success", func(t *testing.T) {
 		id := uuid.MustParse("334ddbf8-1acc-405b-86d8-49f0d1ca636c")
@@ -294,7 +355,7 @@ func TestRepository_GetLesson(t *testing.T) {
 
 func TestRepository_GetLessonsByCourseID(t *testing.T) {
 	h := newTestHarness(t)
-	repo := NewPGRepository(h.db)
+	repo := NewPGRepository(slog.Default(), h.db)
 
 	courseID := uuid.MustParse("fb9ffe2c-ad66-4766-9b7b-46fd5d9acd72")
 
@@ -372,7 +433,7 @@ func TestRepository_GetLessonsByCourseID(t *testing.T) {
 
 func TestRepository_EnrollUserInCourse(t *testing.T) {
 	h := newTestHarness(t)
-	repo := NewPGRepository(h.db)
+	repo := NewPGRepository(slog.Default(), h.db)
 
 	userID := uuid.MustParse("4e37a600-c29e-4d0f-af44-66f2cd8cc1c9")
 	courseID := uuid.MustParse("fb9ffe2c-ad66-4766-9b7b-46fd5d9acd72")
@@ -397,7 +458,7 @@ func TestRepository_EnrollUserInCourse(t *testing.T) {
 
 func TestRepository_GetUserCourseProgress(t *testing.T) {
 	h := newTestHarness(t)
-	repo := NewPGRepository(h.db)
+	repo := NewPGRepository(slog.Default(), h.db)
 
 	userID := uuid.MustParse("4e37a600-c29e-4d0f-af44-66f2cd8cc1c9")
 	courseID := uuid.MustParse("fb9ffe2c-ad66-4766-9b7b-46fd5d9acd72")
@@ -424,7 +485,7 @@ func TestRepository_GetUserCourseProgress(t *testing.T) {
 
 func TestRepository_UpdateUserProgress(t *testing.T) {
 	h := newTestHarness(t)
-	repo := NewPGRepository(h.db)
+	repo := NewPGRepository(slog.Default(), h.db)
 
 	userID := uuid.MustParse("6363e2c6-d89e-4610-92e8-1e1d2fea49ec")
 	courseID := uuid.MustParse("fb9ffe2c-ad66-4766-9b7b-46fd5d9acd72")
@@ -458,7 +519,7 @@ func TestRepository_UpdateUserProgress(t *testing.T) {
 
 func TestRepository_GetEnrolledCourses(t *testing.T) {
 	h := newTestHarness(t)
-	repo := NewPGRepository(h.db)
+	repo := NewPGRepository(slog.Default(), h.db)
 
 	userID := uuid.MustParse("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa")
 	courseID := uuid.MustParse("fb9ffe2c-ad66-4766-9b7b-46fd5d9acd72")
