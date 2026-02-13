@@ -915,3 +915,27 @@ func (m *DeckClientMock) GetCards(ctx context.Context, in *pbDeck.GetCardsReques
 	args := m.Called(ctx, in)
 	return args.Get(0).(*pbDeck.GetCardsResponse), args.Error(1)
 }
+
+func (m *DeckClientMock) UpdateDeck(ctx context.Context, in *pbDeck.UpdateDeckRequest, opts ...grpc.CallOption) (*pbDeck.UpdateDeckResponse, error) {
+	args := m.Called(ctx, in)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*pbDeck.UpdateDeckResponse), args.Error(1)
+}
+
+func (m *DeckClientMock) UpdateCard(ctx context.Context, in *pbDeck.UpdateCardRequest, opts ...grpc.CallOption) (*pbDeck.UpdateCardResponse, error) {
+	args := m.Called(ctx, in)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*pbDeck.UpdateCardResponse), args.Error(1)
+}
+
+func (m *DeckClientMock) UpdateAnswer(ctx context.Context, in *pbDeck.UpdateAnswerRequest, opts ...grpc.CallOption) (*pbDeck.UpdateAnswerResponse, error) {
+	args := m.Called(ctx, in)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*pbDeck.UpdateAnswerResponse), args.Error(1)
+}

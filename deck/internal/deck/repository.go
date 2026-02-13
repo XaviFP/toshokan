@@ -21,7 +21,9 @@ import (
 var (
 	ErrCards             = errors.New("deck: one or more cards are not valid")
 	ErrCardInvalid       = errors.New("deck: invalid card")
+	ErrCardNotFound      = errors.New("deck: card not found")
 	ErrCardAlreadyExists = errors.New("deck: card already exists")
+	ErrAnswerNotFound    = errors.New("deck: answer not found")
 	ErrDeckNotFound      = errors.New("deck: deck not found")
 	ErrNoTitle           = errors.New("deck: title is missing")
 	ErrNoDescription     = errors.New("deck: description is missing")
@@ -45,6 +47,11 @@ type Repository interface {
 	GetPopularDecks(ctx context.Context, userID uuid.UUID, p pagination.Pagination) (PopularDecksConnection, error)
 
 	GetCards(ctx context.Context, ids []uuid.UUID) (map[uuid.UUID]Card, error)
+
+	// Update operations
+	UpdateDeck(ctx context.Context, id uuid.UUID, updates DeckUpdates) (Deck, error)
+	UpdateCard(ctx context.Context, deckID, cardID uuid.UUID, updates CardUpdates) (Card, error)
+	UpdateAnswer(ctx context.Context, deckID, cardID, answerID uuid.UUID, updates AnswerUpdates) (Answer, error)
 }
 
 type redisRepository struct {
@@ -139,6 +146,48 @@ func (r *redisRepository) GetPopularDecks(ctx context.Context, userID uuid.UUID,
 
 func (r *redisRepository) GetCards(ctx context.Context, ids []uuid.UUID) (map[uuid.UUID]Card, error) {
 	return r.pgRepo.GetCards(ctx, ids)
+}
+
+func (r *redisRepository) UpdateDeck(ctx context.Context, id uuid.UUID, updates DeckUpdates) (Deck, error) {
+	d, err := r.pgRepo.UpdateDeck(ctx, id, updates)
+	if err != nil {
+		return Deck{}, errors.Trace(err)
+	}
+
+	// Invalidate cache
+	if err := r.delete(ctx, r.getDeckCacheKey(id)); err != nil {
+		return d, errors.Trace(err)
+	}
+
+	return d, nil
+}
+
+func (r *redisRepository) UpdateCard(ctx context.Context, deckID, cardID uuid.UUID, updates CardUpdates) (Card, error) {
+	c, err := r.pgRepo.UpdateCard(ctx, deckID, cardID, updates)
+	if err != nil {
+		return Card{}, errors.Trace(err)
+	}
+
+	// Invalidate deck cache since cards are part of deck
+	if err := r.delete(ctx, r.getDeckCacheKey(deckID)); err != nil {
+		return c, errors.Trace(err)
+	}
+
+	return c, nil
+}
+
+func (r *redisRepository) UpdateAnswer(ctx context.Context, deckID, cardID, answerID uuid.UUID, updates AnswerUpdates) (Answer, error) {
+	a, err := r.pgRepo.UpdateAnswer(ctx, deckID, cardID, answerID, updates)
+	if err != nil {
+		return Answer{}, errors.Trace(err)
+	}
+
+	// Invalidate deck cache since answers are part of deck
+	if err := r.delete(ctx, r.getDeckCacheKey(deckID)); err != nil {
+		return a, errors.Trace(err)
+	}
+
+	return a, nil
 }
 
 func (r *redisRepository) getDeckFromDB(ctx context.Context, id uuid.UUID) (Deck, error) {
@@ -572,6 +621,135 @@ func (r *pgRepository) GetCards(ctx context.Context, ids []uuid.UUID) (map[uuid.
 	}
 
 	return out, nil
+}
+
+// UpdateDeck updates a deck with the provided fields
+func (r *pgRepository) UpdateDeck(ctx context.Context, id uuid.UUID, updates DeckUpdates) (Deck, error) {
+	var arger db.Argumenter
+	setClauses := []string{fmt.Sprintf("updated_at = %s", arger.Add("NOW()"))}
+
+	if updates.Title != nil {
+		setClauses = append(setClauses, fmt.Sprintf("title = %s", arger.Add(*updates.Title)))
+	}
+	if updates.Description != nil {
+		setClauses = append(setClauses, fmt.Sprintf("description = %s", arger.Add(*updates.Description)))
+	}
+	if updates.IsPublic != nil {
+		setClauses = append(setClauses, fmt.Sprintf("is_public = %s", arger.Add(*updates.IsPublic)))
+	}
+
+	query := fmt.Sprintf(
+		`UPDATE decks SET %s WHERE id = %s AND deleted_at IS NULL
+		 RETURNING id, author_id, title, description, is_public`,
+		strings.Join(setClauses, ", "),
+		arger.Add(id),
+	)
+
+	var d Deck
+	err := r.db.QueryRowContext(ctx, query, arger.Values()...).Scan(
+		&d.ID, &d.AuthorID, &d.Title, &d.Description, &d.Public,
+	)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return Deck{}, errors.Trace(ErrDeckNotFound)
+		}
+		return Deck{}, errors.Trace(err)
+	}
+
+	return d, nil
+}
+
+// UpdateCard updates a card with the provided fields
+func (r *pgRepository) UpdateCard(ctx context.Context, deckID, cardID uuid.UUID, updates CardUpdates) (Card, error) {
+	var arger db.Argumenter
+	setClauses := []string{fmt.Sprintf("updated_at = %s", arger.Add("NOW()"))}
+
+	if updates.Title != nil {
+		setClauses = append(setClauses, fmt.Sprintf("title = %s", arger.Add(*updates.Title)))
+	}
+	if updates.Explanation != nil {
+		setClauses = append(setClauses, fmt.Sprintf("explanation = %s", arger.Add(*updates.Explanation)))
+	}
+	if updates.Kind != nil {
+		setClauses = append(setClauses, fmt.Sprintf("kind = %s", arger.Add(*updates.Kind)))
+	}
+
+	query := fmt.Sprintf(
+		`UPDATE cards SET %s WHERE id = %s AND deck_id = %s AND deleted_at IS NULL
+		 RETURNING id, title, explanation, kind`,
+		strings.Join(setClauses, ", "),
+		arger.Add(cardID),
+		arger.Add(deckID),
+	)
+
+	var c Card
+	var explanation sql.NullString
+	err := r.db.QueryRowContext(ctx, query, arger.Values()...).Scan(
+		&c.ID, &c.Title, &explanation, &c.Kind,
+	)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return Card{}, errors.Trace(ErrCardNotFound)
+		}
+		return Card{}, errors.Trace(err)
+	}
+	c.Explanation = explanation.String
+
+	// Fetch answers
+	answers, err := r.GetCardAnswers(ctx, cardID)
+	if err != nil {
+		return Card{}, errors.Trace(err)
+	}
+	c.PossibleAnswers = answers
+
+	return c, nil
+}
+
+// UpdateAnswer updates an answer with the provided fields
+func (r *pgRepository) UpdateAnswer(ctx context.Context, deckID, cardID, answerID uuid.UUID, updates AnswerUpdates) (Answer, error) {
+	// First verify the card belongs to the deck
+	var exists bool
+	err := r.db.QueryRowContext(ctx,
+		`SELECT EXISTS(SELECT 1 FROM cards WHERE id = $1 AND deck_id = $2 AND deleted_at IS NULL)`,
+		cardID, deckID,
+	).Scan(&exists)
+	if err != nil {
+		return Answer{}, errors.Trace(err)
+	}
+	if !exists {
+		return Answer{}, errors.Trace(ErrCardNotFound)
+	}
+
+	var arger db.Argumenter
+	setClauses := []string{fmt.Sprintf("updated_at = %s", arger.Add("NOW()"))}
+
+	if updates.Text != nil {
+		setClauses = append(setClauses, fmt.Sprintf("text = %s", arger.Add(*updates.Text)))
+	}
+	if updates.IsCorrect != nil {
+		setClauses = append(setClauses, fmt.Sprintf("is_correct = %s", arger.Add(*updates.IsCorrect)))
+	}
+
+	query := fmt.Sprintf(
+		`UPDATE answers SET %s WHERE id = %s AND card_id = %s AND deleted_at IS NULL
+		 RETURNING id, text, is_correct`,
+		strings.Join(setClauses, ", "),
+		arger.Add(answerID),
+		arger.Add(cardID),
+	)
+
+	var a Answer
+	err = r.db.QueryRowContext(ctx, query, arger.Values()...).Scan(
+		&a.ID, &a.Text, &a.IsCorrect,
+	)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return Answer{}, errors.Trace(ErrAnswerNotFound)
+		}
+		return Answer{}, errors.Trace(err)
+	}
+
+	return a, nil
 }
 
 func (r *redisRepository) getDeckCacheKey(id uuid.UUID) string {

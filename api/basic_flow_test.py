@@ -922,6 +922,56 @@ def update_lesson(base_url: str, token: str, course_id: str, lesson_id: str, upd
     return response
 
 
+def update_deck(base_url: str, token: str, deck_id: str, updates: Dict[str, Any]) -> requests.Response:
+    """Update a deck with partial fields."""
+    log_step(f"Updating deck {deck_id} with: {updates}")
+    response = requests.patch(
+        f"{base_url}/decks/{deck_id}",
+        json=updates,
+        headers=auth_headers(token),
+        timeout=TIMEOUT,
+    )
+    log_response("PATCH /decks/{id}", response)
+    return response
+
+
+def update_card(base_url: str, token: str, deck_id: str, card_id: str, updates: Dict[str, Any]) -> requests.Response:
+    """Update a card with partial fields."""
+    log_step(f"Updating card {card_id} in deck {deck_id} with: {updates}")
+    response = requests.patch(
+        f"{base_url}/decks/{deck_id}/cards/{card_id}",
+        json=updates,
+        headers=auth_headers(token),
+        timeout=TIMEOUT,
+    )
+    log_response("PATCH /decks/{deckId}/cards/{cardId}", response)
+    return response
+
+
+def update_answer(base_url: str, token: str, deck_id: str, card_id: str, answer_id: str, updates: Dict[str, Any]) -> requests.Response:
+    """Update an answer with partial fields."""
+    log_step(f"Updating answer {answer_id} in card {card_id} with: {updates}")
+    response = requests.patch(
+        f"{base_url}/decks/{deck_id}/cards/{card_id}/answers/{answer_id}",
+        json=updates,
+        headers=auth_headers(token),
+        timeout=TIMEOUT,
+    )
+    log_response("PATCH /decks/{deckId}/cards/{cardId}/answers/{answerId}", response)
+    return response
+
+
+def get_deck_response(base_url: str, token: str, deck_id: str) -> requests.Response:
+    """Fetch a deck by ID and return the raw response."""
+    response = requests.get(
+        f"{base_url}/decks/{deck_id}",
+        headers=auth_headers(token),
+        timeout=TIMEOUT,
+    )
+    log_response("GET /decks/{id}", response)
+    return response
+
+
 def run_update_course_tests(base_url: str, token: str, course_id: str) -> None:
     """Test PATCH /courses/{courseId} endpoint."""
     log_step("")
@@ -1095,6 +1145,180 @@ def run_update_lesson_tests(base_url: str, token: str, course_id: str, lesson: D
     log_step("✓ UpdateLesson tests passed")
 
 
+def run_update_deck_tests(base_url: str, token: str, deck_id: str) -> None:
+    """Test PATCH /decks/{id} endpoint."""
+    log_step("")
+    log_step("Testing UpdateDeck endpoint...")
+
+    # Test 1: Update only title
+    response = update_deck(base_url, token, deck_id, {"title": "Updated Deck Title"})
+    assert response.status_code == 200, f"Expected 200, got {response.status_code}"
+    updated = response.json()
+    assert updated["title"] == "Updated Deck Title", "Title should be updated"
+    log_step("  ✓ Update title only - success")
+
+    # Test 2: Update only description
+    response = update_deck(base_url, token, deck_id, {"description": "Updated deck desc"})
+    assert response.status_code == 200, f"Expected 200, got {response.status_code}"
+    updated = response.json()
+    assert updated["description"] == "Updated deck desc", "Description should be updated"
+    assert updated["title"] == "Updated Deck Title", "Title should remain from previous update"
+    log_step("  ✓ Update description only - success")
+
+    # Test 3: Update multiple fields
+    response = update_deck(base_url, token, deck_id, {
+        "title": "Final Deck Title",
+        "description": "Final deck desc"
+    })
+    assert response.status_code == 200, f"Expected 200, got {response.status_code}"
+    updated = response.json()
+    assert updated["title"] == "Final Deck Title"
+    assert updated["description"] == "Final deck desc"
+    log_step("  ✓ Update multiple fields - success")
+
+    # Test 4: Re-fetch deck to verify persistence
+    log_step("  Verifying persistence by re-fetching deck...")
+    get_response = get_deck_response(base_url, token, deck_id)
+    assert get_response.status_code == 200
+    fetched = get_response.json()
+    assert fetched["title"] == "Final Deck Title", "Title not persisted"
+    assert fetched["description"] == "Final deck desc", "Description not persisted"
+    log_step("  ✓ Re-fetch confirms persistence - success")
+
+    # Test 5: Empty request should return 400
+    response = update_deck(base_url, token, deck_id, {})
+    assert response.status_code == 400, f"Expected 400 for empty request, got {response.status_code}"
+    log_step("  ✓ Empty request returns 400 - success")
+
+    # Test 6: Non-existent deck should return 404
+    fake_uuid = "00000000-0000-0000-0000-000000000000"
+    response = update_deck(base_url, token, fake_uuid, {"title": "Won't work"})
+    assert response.status_code == 404, f"Expected 404 for non-existent deck, got {response.status_code}"
+    log_step("  ✓ Non-existent deck returns 404 - success")
+
+    log_step("✓ UpdateDeck tests passed")
+
+
+def run_update_card_tests(base_url: str, token: str, deck_id: str, card_id: str) -> None:
+    """Test PATCH /decks/{deckId}/cards/{cardId} endpoint."""
+    log_step("")
+    log_step("Testing UpdateCard endpoint...")
+
+    # Test 1: Update only title
+    response = update_card(base_url, token, deck_id, card_id, {"title": "Updated Card Title"})
+    assert response.status_code == 200, f"Expected 200, got {response.status_code}"
+    updated = response.json()
+    assert updated["title"] == "Updated Card Title", "Title should be updated"
+    log_step("  ✓ Update title only - success")
+
+    # Test 2: Update explanation
+    response = update_card(base_url, token, deck_id, card_id, {"explanation": "Updated explanation"})
+    assert response.status_code == 200, f"Expected 200, got {response.status_code}"
+    updated = response.json()
+    assert updated["explanation"] == "Updated explanation", "Explanation should be updated"
+    log_step("  ✓ Update explanation only - success")
+
+    # Test 3: Update kind (valid value)
+    response = update_card(base_url, token, deck_id, card_id, {"kind": "fill_in_the_blanks"})
+    assert response.status_code == 200, f"Expected 200, got {response.status_code}"
+    updated = response.json()
+    assert updated["kind"] == "fill_in_the_blanks", "Kind should be updated"
+    log_step("  ✓ Update kind only - success")
+
+    # Test 4: Update kind with invalid value should fail
+    response = update_card(base_url, token, deck_id, card_id, {"kind": "invalid_kind"})
+    assert response.status_code == 400, f"Expected 400 for invalid kind, got {response.status_code}"
+    log_step("  ✓ Invalid kind returns 400 - success")
+
+    # Test 5: Update multiple fields
+    response = update_card(base_url, token, deck_id, card_id, {
+        "title": "Final Card Title",
+        "explanation": "Final explanation",
+        "kind": "single_choice"
+    })
+    assert response.status_code == 200, f"Expected 200, got {response.status_code}"
+    updated = response.json()
+    assert updated["title"] == "Final Card Title"
+    assert updated["explanation"] == "Final explanation"
+    assert updated["kind"] == "single_choice"
+    log_step("  ✓ Update multiple fields - success")
+
+    # Test 6: Re-fetch deck to verify card persistence
+    log_step("  Verifying persistence by re-fetching deck...")
+    get_response = get_deck_response(base_url, token, deck_id)
+    assert get_response.status_code == 200
+    fetched_deck = get_response.json()
+    fetched_card = next((c for c in fetched_deck["cards"] if c["id"] == card_id), None)
+    assert fetched_card is not None, "Card should be found in deck"
+    assert fetched_card["title"] == "Final Card Title", "Title not persisted"
+    assert fetched_card["explanation"] == "Final explanation", "Explanation not persisted"
+    log_step("  ✓ Re-fetch confirms persistence - success")
+
+    # Test 7: Empty request should return 400
+    response = update_card(base_url, token, deck_id, card_id, {})
+    assert response.status_code == 400, f"Expected 400 for empty request, got {response.status_code}"
+    log_step("  ✓ Empty request returns 400 - success")
+
+    # Test 8: Non-existent card should return 404
+    fake_uuid = "00000000-0000-0000-0000-000000000000"
+    response = update_card(base_url, token, deck_id, fake_uuid, {"title": "Won't work"})
+    assert response.status_code == 404, f"Expected 404 for non-existent card, got {response.status_code}"
+    log_step("  ✓ Non-existent card returns 404 - success")
+
+    log_step("✓ UpdateCard tests passed")
+
+
+def run_update_answer_tests(base_url: str, token: str, deck_id: str, card_id: str, answer_id: str) -> None:
+    """Test PATCH /decks/{deckId}/cards/{cardId}/answers/{answerId} endpoint."""
+    log_step("")
+    log_step("Testing UpdateAnswer endpoint...")
+
+    # Test 1: Update only text
+    response = update_answer(base_url, token, deck_id, card_id, answer_id, {"text": "Updated Answer Text"})
+    assert response.status_code == 200, f"Expected 200, got {response.status_code}"
+    updated = response.json()
+    assert updated["text"] == "Updated Answer Text", "Text should be updated"
+    log_step("  ✓ Update text only - success")
+
+    # Test 2: Update is_correct
+    response = update_answer(base_url, token, deck_id, card_id, answer_id, {"is_correct": True})
+    assert response.status_code == 200, f"Expected 200, got {response.status_code}"
+    updated = response.json()
+    assert updated["is_correct"] == True, "is_correct should be updated"
+    log_step("  ✓ Update is_correct only - success")
+
+    # Test 3: Update multiple fields
+    response = update_answer(base_url, token, deck_id, card_id, answer_id, {
+        "text": "Final Answer Text",
+        "is_correct": False
+    })
+    assert response.status_code == 200, f"Expected 200, got {response.status_code}"
+    updated = response.json()
+    assert updated["text"] == "Final Answer Text"
+    assert updated["is_correct"] == False
+    log_step("  ✓ Update multiple fields - success")
+
+    # Test 4: Re-fetch deck to verify answer persistence
+    log_step("  Verifying persistence by re-fetching deck...")
+    get_response = get_deck_response(base_url, token, deck_id)
+    assert get_response.status_code == 200
+    fetched_deck = get_response.json()
+    fetched_card = next((c for c in fetched_deck["cards"] if c["id"] == card_id), None)
+    assert fetched_card is not None, "Card should be found in deck"
+    fetched_answer = next((a for a in fetched_card["possible_answers"] if a["id"] == answer_id), None)
+    assert fetched_answer is not None, "Answer should be found in card"
+    assert fetched_answer["text"] == "Final Answer Text", "Text not persisted"
+    assert fetched_answer["is_correct"] == False, "is_correct not persisted"
+    log_step("  ✓ Re-fetch confirms persistence - success")
+
+    # Test 5: Empty request should return 400
+    response = update_answer(base_url, token, deck_id, card_id, answer_id, {})
+    assert response.status_code == 400, f"Expected 400 for empty request, got {response.status_code}"
+    log_step("  ✓ Empty request returns 400 - success")
+
+    log_step("✓ UpdateAnswer tests passed")
+
+
 def run_get_lesson_tests(base_url: str, token: str, course_id: str, lesson: Dict[str, Any]) -> None:
     """Test GET /courses/{courseId}/lessons/{lessonId} endpoint."""
     log_step("")
@@ -1185,6 +1409,22 @@ def test_basic_flow():
     run_update_course_tests(base_url, token, course_id)
     run_update_lesson_tests(base_url, token, course_id,
                             lessons[0], lesson_deck_ids[0])
+
+    # Test deck/card/answer update endpoints
+    deck_id = lesson_deck_ids[0]
+    run_update_deck_tests(base_url, token, deck_id)
+
+    # Fetch deck to get card and answer IDs for testing
+    deck_response = get_deck_response(base_url, token, deck_id)
+    assert deck_response.status_code == 200, f"Failed to fetch deck: {deck_response.status_code}"
+    deck_data = deck_response.json()
+    first_card = deck_data["cards"][0]
+    card_id = first_card["id"]
+    first_answer = first_card["possible_answers"][0]
+    answer_id = first_answer["id"]
+
+    run_update_card_tests(base_url, token, deck_id, card_id)
+    run_update_answer_tests(base_url, token, deck_id, card_id, answer_id)
 
     log_step("")
     log_step("✅ Test passed!")

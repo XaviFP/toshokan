@@ -278,3 +278,17 @@ func (m *MockDecksAPIClient) GetCards(ctx context.Context, in *pbDeck.GetCardsRe
 	args := m.Called(ctx, in)
 	return args[0].(*pbDeck.GetCardsResponse), args.Error(1)
 }
+func (m *MockDecksAPIClient) UpdateDeck(ctx context.Context, in *pbDeck.UpdateDeckRequest, opts ...grpc.CallOption) (*pbDeck.UpdateDeckResponse, error) {
+	args := m.Called(ctx, in)
+	return args.Get(0).(*pbDeck.UpdateDeckResponse), args.Error(1)
+}
+
+func (m *MockDecksAPIClient) UpdateCard(ctx context.Context, in *pbDeck.UpdateCardRequest, opts ...grpc.CallOption) (*pbDeck.UpdateCardResponse, error) {
+	args := m.Called(ctx, in)
+	return args.Get(0).(*pbDeck.UpdateCardResponse), args.Error(1)
+}
+
+func (m *MockDecksAPIClient) UpdateAnswer(ctx context.Context, in *pbDeck.UpdateAnswerRequest, opts ...grpc.CallOption) (*pbDeck.UpdateAnswerResponse, error) {
+	args := m.Called(ctx, in)
+	return args.Get(0).(*pbDeck.UpdateAnswerResponse), args.Error(1)
+}

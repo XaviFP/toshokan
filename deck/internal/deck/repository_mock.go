@@ -60,3 +60,21 @@ func (m *RepositoryMock) GetCards(ctx context.Context, ids []uuid.UUID) (map[uui
 
 	return args[0].(map[uuid.UUID]Card), args.Error(1)
 }
+
+func (m *RepositoryMock) UpdateDeck(ctx context.Context, id uuid.UUID, updates DeckUpdates) (Deck, error) {
+	args := m.Called(ctx, id, updates)
+
+	return args.Get(0).(Deck), args.Error(1)
+}
+
+func (m *RepositoryMock) UpdateCard(ctx context.Context, deckID, cardID uuid.UUID, updates CardUpdates) (Card, error) {
+	args := m.Called(ctx, deckID, cardID, updates)
+
+	return args.Get(0).(Card), args.Error(1)
+}
+
+func (m *RepositoryMock) UpdateAnswer(ctx context.Context, deckID, cardID, answerID uuid.UUID, updates AnswerUpdates) (Answer, error) {
+	args := m.Called(ctx, deckID, cardID, answerID, updates)
+
+	return args.Get(0).(Answer), args.Error(1)
+}

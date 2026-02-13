@@ -20,6 +20,9 @@ type AdminConfig struct {
 	CreateDeckAdminOnly   bool
 	UpdateCourseAdminOnly bool
 	UpdateLessonAdminOnly bool
+	UpdateDeckAdminOnly   bool
+	UpdateCardAdminOnly   bool
+	UpdateAnswerAdminOnly bool
 }
 
 // IsConfigured returns true if admin auth is properly configured

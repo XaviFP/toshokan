@@ -35,6 +35,7 @@ func TestRepository_StoreDeck(t *testing.T) {
 		row := h.db.QueryRow(`SELECT id, author_id, title, description FROM decks WHERE id = $1 AND deleted_at IS NULL`, id)
 		err = row.Scan(&out.ID, &out.AuthorID, &out.Title, &out.Description)
 		assert.NoError(t, err)
+
 		assert.Equal(t, d, out)
 	})
 
@@ -478,6 +479,198 @@ func TestPGRepository_GetCards(t *testing.T) {
 		cards, err := repo.GetCards(context.Background(), []uuid.UUID{id})
 		assert.NoError(t, err)
 		assert.Empty(t, cards)
+	})
+}
+
+func TestRepository_UpdateDeck(t *testing.T) {
+	h := newTestHarness(t)
+	repo := NewPGRepository(h.db)
+
+	deckID := uuid.MustParse("fb9ffe2c-ad66-4766-9b7b-46fd5d9acd72")
+
+	t.Run("success_update_title", func(t *testing.T) {
+		newTitle := "Updated Programming Languages"
+		updates := DeckUpdates{Title: &newTitle}
+
+		d, err := repo.UpdateDeck(context.Background(), deckID, updates)
+		assert.NoError(t, err)
+		assert.Equal(t, newTitle, d.Title)
+		assert.Equal(t, "Compiled or interpreted?", d.Description) // unchanged
+
+		fetched, err := repo.GetDeck(context.Background(), deckID)
+		assert.NoError(t, err)
+		assert.Equal(t, newTitle, fetched.Title)
+	})
+
+	t.Run("success_update_description", func(t *testing.T) {
+		newDesc := "Updated description"
+		updates := DeckUpdates{Description: &newDesc}
+
+		d, err := repo.UpdateDeck(context.Background(), deckID, updates)
+		assert.NoError(t, err)
+		assert.Equal(t, newDesc, d.Description)
+	})
+
+	t.Run("success_update_multiple_fields", func(t *testing.T) {
+		newTitle := "Final Title"
+		newDesc := "Final Description"
+		isPublic := false
+		updates := DeckUpdates{Title: &newTitle, Description: &newDesc, IsPublic: &isPublic}
+
+		d, err := repo.UpdateDeck(context.Background(), deckID, updates)
+		assert.NoError(t, err)
+		assert.Equal(t, newTitle, d.Title)
+		assert.Equal(t, newDesc, d.Description)
+		assert.Equal(t, isPublic, d.Public)
+	})
+
+	t.Run("failure_deck_not_found", func(t *testing.T) {
+		nonExistentID := uuid.MustParse("00000000-0000-0000-0000-000000000000")
+		newTitle := "Won't work"
+		updates := DeckUpdates{Title: &newTitle}
+
+		_, err := repo.UpdateDeck(context.Background(), nonExistentID, updates)
+		assert.ErrorIs(t, err, ErrDeckNotFound)
+	})
+}
+
+func TestRepository_UpdateCard(t *testing.T) {
+	h := newTestHarness(t)
+	repo := NewPGRepository(h.db)
+
+	deckID := uuid.MustParse("fb9ffe2c-ad66-4766-9b7b-46fd5d9acd72")
+	cardID := uuid.MustParse("72bdff92-5bc8-4e1d-9217-d0b23e22ff33")
+
+	t.Run("success_update_title", func(t *testing.T) {
+		newTitle := "Updated Golang Question"
+		updates := CardUpdates{Title: &newTitle}
+
+		c, err := repo.UpdateCard(context.Background(), deckID, cardID, updates)
+		assert.NoError(t, err)
+		assert.Equal(t, newTitle, c.Title)
+		assert.Equal(t, "single_choice", c.Kind) // unchanged
+
+		cards, err := repo.GetCards(context.Background(), []uuid.UUID{cardID})
+		assert.NoError(t, err)
+		assert.Equal(t, newTitle, cards[cardID].Title)
+	})
+
+	t.Run("success_update_explanation", func(t *testing.T) {
+		newExplanation := "Updated explanation for the card"
+		updates := CardUpdates{Explanation: &newExplanation}
+
+		c, err := repo.UpdateCard(context.Background(), deckID, cardID, updates)
+		assert.NoError(t, err)
+		assert.Equal(t, newExplanation, c.Explanation)
+	})
+
+	t.Run("success_update_kind", func(t *testing.T) {
+		newKind := "fill_in_the_blanks"
+		updates := CardUpdates{Kind: &newKind}
+
+		c, err := repo.UpdateCard(context.Background(), deckID, cardID, updates)
+		assert.NoError(t, err)
+		assert.Equal(t, newKind, c.Kind)
+	})
+
+	t.Run("success_update_multiple_fields", func(t *testing.T) {
+		newTitle := "Final Card Title"
+		newExplanation := "Final explanation"
+		newKind := "single_choice"
+		updates := CardUpdates{Title: &newTitle, Explanation: &newExplanation, Kind: &newKind}
+
+		c, err := repo.UpdateCard(context.Background(), deckID, cardID, updates)
+		assert.NoError(t, err)
+		assert.Equal(t, newTitle, c.Title)
+		assert.Equal(t, newExplanation, c.Explanation)
+		assert.Equal(t, newKind, c.Kind)
+	})
+
+	t.Run("failure_card_not_found", func(t *testing.T) {
+		nonExistentID := uuid.MustParse("00000000-0000-0000-0000-000000000000")
+		newTitle := "Won't work"
+		updates := CardUpdates{Title: &newTitle}
+
+		_, err := repo.UpdateCard(context.Background(), deckID, nonExistentID, updates)
+		assert.ErrorIs(t, err, ErrCardNotFound)
+	})
+
+	t.Run("failure_wrong_deck_id", func(t *testing.T) {
+		wrongDeckID := uuid.MustParse("334ddbf8-1acc-405b-86d8-49f0d1ca636c") // Different deck
+		newTitle := "Won't work"
+		updates := CardUpdates{Title: &newTitle}
+
+		_, err := repo.UpdateCard(context.Background(), wrongDeckID, cardID, updates)
+		assert.ErrorIs(t, err, ErrCardNotFound)
+	})
+}
+
+func TestRepository_UpdateAnswer(t *testing.T) {
+	h := newTestHarness(t)
+	repo := NewPGRepository(h.db)
+
+	deckID := uuid.MustParse("fb9ffe2c-ad66-4766-9b7b-46fd5d9acd72")
+	cardID := uuid.MustParse("72bdff92-5bc8-4e1d-9217-d0b23e22ff33")
+	answerID := uuid.MustParse("7e6926da-82b2-4ae8-99b4-1b803ebf1877")
+
+	t.Run("success_update_text", func(t *testing.T) {
+		newText := "Updated Compiled Answer"
+		updates := AnswerUpdates{Text: &newText}
+
+		a, err := repo.UpdateAnswer(context.Background(), deckID, cardID, answerID, updates)
+		assert.NoError(t, err)
+		assert.Equal(t, newText, a.Text)
+		assert.True(t, a.IsCorrect) // unchanged
+
+		answers, err := repo.GetCardAnswers(context.Background(), cardID)
+		assert.NoError(t, err)
+		found := false
+		for _, ans := range answers {
+			if ans.ID == answerID {
+				assert.Equal(t, newText, ans.Text)
+				found = true
+				break
+			}
+		}
+		assert.True(t, found, "Answer should be found in card answers")
+	})
+
+	t.Run("success_update_is_correct", func(t *testing.T) {
+		isCorrect := false
+		updates := AnswerUpdates{IsCorrect: &isCorrect}
+
+		a, err := repo.UpdateAnswer(context.Background(), deckID, cardID, answerID, updates)
+		assert.NoError(t, err)
+		assert.False(t, a.IsCorrect)
+	})
+
+	t.Run("success_update_multiple_fields", func(t *testing.T) {
+		newText := "Final Answer Text"
+		isCorrect := true
+		updates := AnswerUpdates{Text: &newText, IsCorrect: &isCorrect}
+
+		a, err := repo.UpdateAnswer(context.Background(), deckID, cardID, answerID, updates)
+		assert.NoError(t, err)
+		assert.Equal(t, newText, a.Text)
+		assert.True(t, a.IsCorrect)
+	})
+
+	t.Run("failure_answer_not_found", func(t *testing.T) {
+		nonExistentID := uuid.MustParse("00000000-0000-0000-0000-000000000000")
+		newText := "Won't work"
+		updates := AnswerUpdates{Text: &newText}
+
+		_, err := repo.UpdateAnswer(context.Background(), deckID, cardID, nonExistentID, updates)
+		assert.Error(t, err)
+	})
+
+	t.Run("failure_wrong_card_id", func(t *testing.T) {
+		wrongCardID := uuid.MustParse("c924f7e0-efd8-4c2d-9c43-8eafb7102ebc") // Different card
+		newText := "Won't work"
+		updates := AnswerUpdates{Text: &newText}
+
+		_, err := repo.UpdateAnswer(context.Background(), deckID, wrongCardID, answerID, updates)
+		assert.Error(t, err)
 	})
 }
 

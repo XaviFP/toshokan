@@ -254,6 +254,124 @@ func (s *Server) DeleteDeck(ctx context.Context, req *pb.DeleteDeckRequest) (*pb
 	return &pb.DeleteDeckResponse{}, errors.Trace(err)
 }
 
+func (s *Server) UpdateDeck(ctx context.Context, req *pb.UpdateDeckRequest) (*pb.UpdateDeckResponse, error) {
+	deckID, err := uuid.Parse(req.Id)
+	if err != nil {
+		slog.Error("UpdateDeck: failed to parse deck ID", "error", err, "deckId", req.Id, "stack", errors.ErrorStack(err))
+		return nil, errors.Trace(err)
+	}
+
+	updates := deck.DeckUpdates{
+		Title:       req.Title,
+		Description: req.Description,
+		IsPublic:    req.IsPublic,
+	}
+
+	if !updates.HasUpdates() {
+		err := errors.New("no fields to update")
+		slog.Error("UpdateDeck: no fields provided", "error", err, "deckId", deckID.String())
+		return nil, errors.Trace(err)
+	}
+
+	d, err := s.Repository.UpdateDeck(ctx, deckID, updates)
+	if err != nil {
+		if errors.Cause(err) == deck.ErrDeckNotFound {
+			slog.Error("UpdateDeck: deck not found", "error", err, "deckId", deckID.String())
+			return nil, status.Error(codes.NotFound, errors.Trace(err).Error())
+		}
+		slog.Error("UpdateDeck: failed to update deck", "error", err, "deckId", deckID.String(), "stack", errors.ErrorStack(err))
+		return nil, errors.Trace(err)
+	}
+
+	return &pb.UpdateDeckResponse{Deck: toGRPCDeck(d)}, nil
+}
+
+func (s *Server) UpdateCard(ctx context.Context, req *pb.UpdateCardRequest) (*pb.UpdateCardResponse, error) {
+	deckID, err := uuid.Parse(req.DeckId)
+	if err != nil {
+		slog.Error("UpdateCard: failed to parse deck ID", "error", err, "deckId", req.DeckId, "stack", errors.ErrorStack(err))
+		return nil, errors.Trace(err)
+	}
+
+	cardID, err := uuid.Parse(req.CardId)
+	if err != nil {
+		slog.Error("UpdateCard: failed to parse card ID", "error", err, "cardId", req.CardId, "stack", errors.ErrorStack(err))
+		return nil, errors.Trace(err)
+	}
+
+	updates := deck.CardUpdates{
+		Title:       req.Title,
+		Explanation: req.Explanation,
+		Kind:        req.Kind,
+	}
+
+	if !updates.HasUpdates() {
+		err := errors.New("no fields to update")
+		slog.Error("UpdateCard: no fields provided", "error", err, "cardId", cardID.String())
+		return nil, errors.Trace(err)
+	}
+
+	// Validate kind if provided
+	if updates.Kind != nil && *updates.Kind != deck.CardKindSingleChoice && *updates.Kind != deck.CardKindFillInTheBlanks {
+		return nil, deck.ErrInvalidKind
+	}
+
+	c, err := s.Repository.UpdateCard(ctx, deckID, cardID, updates)
+	if err != nil {
+		if errors.Cause(err) == deck.ErrCardNotFound {
+			slog.Error("UpdateCard: card not found", "error", err, "cardId", cardID.String())
+			return nil, status.Error(codes.NotFound, errors.Trace(err).Error())
+		}
+		slog.Error("UpdateCard: failed to update card", "error", err, "cardId", cardID.String(), "stack", errors.ErrorStack(err))
+		return nil, errors.Trace(err)
+	}
+
+	return &pb.UpdateCardResponse{Card: toGRPCCard(c)}, nil
+}
+
+func (s *Server) UpdateAnswer(ctx context.Context, req *pb.UpdateAnswerRequest) (*pb.UpdateAnswerResponse, error) {
+	deckID, err := uuid.Parse(req.DeckId)
+	if err != nil {
+		slog.Error("UpdateAnswer: failed to parse deck ID", "error", err, "deckId", req.DeckId, "stack", errors.ErrorStack(err))
+		return nil, errors.Trace(err)
+	}
+
+	cardID, err := uuid.Parse(req.CardId)
+	if err != nil {
+		slog.Error("UpdateAnswer: failed to parse card ID", "error", err, "cardId", req.CardId, "stack", errors.ErrorStack(err))
+		return nil, errors.Trace(err)
+	}
+
+	answerID, err := uuid.Parse(req.AnswerId)
+	if err != nil {
+		slog.Error("UpdateAnswer: failed to parse answer ID", "error", err, "answerId", req.AnswerId, "stack", errors.ErrorStack(err))
+		return nil, errors.Trace(err)
+	}
+
+	updates := deck.AnswerUpdates{
+		Text:      req.Text,
+		IsCorrect: req.IsCorrect,
+	}
+
+	if !updates.HasUpdates() {
+		err := errors.New("no fields to update")
+		slog.Error("UpdateAnswer: no fields provided", "error", err, "answerId", answerID.String())
+		return nil, errors.Trace(err)
+	}
+
+	a, err := s.Repository.UpdateAnswer(ctx, deckID, cardID, answerID, updates)
+	if err != nil {
+		slog.Error("UpdateAnswer: failed to update answer", "error", err, "answerId", answerID.String(), "stack", errors.ErrorStack(err))
+		return nil, errors.Trace(err)
+	}
+
+	return &pb.UpdateAnswerResponse{Answer: &pb.Answer{
+		Id:        a.ID.String(),
+		Text:      a.Text,
+		IsCorrect: a.IsCorrect,
+	}}, nil
+}
+
 func toGRPCDecks(decks []deck.Deck) []*pb.Deck {
 	var out = make([]*pb.Deck, 0, len(decks))
 

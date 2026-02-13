@@ -908,6 +908,197 @@ paths:
               schema:
                 $ref: '#/components/schemas/Error'
 
+    patch:
+      tags:
+        - Decks
+      summary: Update a deck
+      description: |
+        Update an existing deck's properties. At least one field must be provided.
+        **Note:** This endpoint may require admin access (`X-Admin-Token` header) depending on server configuration.
+      operationId: updateDeck
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: Deck UUID
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DeckUpdate'
+      responses:
+        '200':
+          description: Deck updated successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Deck'
+        '400':
+          description: Invalid request body or no fields provided
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          description: Admin access required (when endpoint is admin-protected)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Deck not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /decks/{deckId}/cards/{cardId}:
+    patch:
+      tags:
+        - Decks
+      summary: Update a card
+      description: |
+        Update an existing card's properties. At least one field must be provided.
+        **Note:** This endpoint may require admin access (`X-Admin-Token` header) depending on server configuration.
+      operationId: updateCard
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: deckId
+          in: path
+          required: true
+          description: Deck UUID
+          schema:
+            type: string
+            format: uuid
+        - name: cardId
+          in: path
+          required: true
+          description: Card UUID
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CardUpdate'
+      responses:
+        '200':
+          description: Card updated successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Card'
+        '400':
+          description: Invalid request body, no fields provided, or invalid card kind
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          description: Admin access required (when endpoint is admin-protected)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Card not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /decks/{deckId}/cards/{cardId}/answers/{answerId}:
+    patch:
+      tags:
+        - Decks
+      summary: Update an answer
+      description: |
+        Update an existing answer's properties. At least one field must be provided.
+        **Note:** This endpoint may require admin access (`X-Admin-Token` header) depending on server configuration.
+      operationId: updateAnswer
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: deckId
+          in: path
+          required: true
+          description: Deck UUID
+          schema:
+            type: string
+            format: uuid
+        - name: cardId
+          in: path
+          required: true
+          description: Card UUID
+          schema:
+            type: string
+            format: uuid
+        - name: answerId
+          in: path
+          required: true
+          description: Answer UUID
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AnswerUpdate'
+      responses:
+        '200':
+          description: Answer updated successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Answer'
+        '400':
+          description: Invalid request body or no fields provided
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          description: Admin access required (when endpoint is admin-protected)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
   /decks:
     post:
       tags:
@@ -1551,6 +1742,52 @@ components:
           description: Whether this is the correct answer
       required:
         - text
+
+    DeckUpdate:
+      type: object
+      description: Update fields for a deck. At least one field must be provided.
+      properties:
+        title:
+          type: string
+          minLength: 1
+          description: Updated deck title
+        description:
+          type: string
+          minLength: 1
+          description: Updated deck description
+        is_public:
+          type: boolean
+          description: Updated visibility status
+
+    CardUpdate:
+      type: object
+      description: Update fields for a card. At least one field must be provided.
+      properties:
+        title:
+          type: string
+          minLength: 1
+          description: Updated question or prompt text
+        explanation:
+          type: string
+          description: Updated explanation text for the correct answer
+        kind:
+          type: string
+          description: Updated card kind/type
+          enum:
+            - single_choice
+            - fill_in_the_blanks
+
+    AnswerUpdate:
+      type: object
+      description: Update fields for an answer. At least one field must be provided.
+      properties:
+        text:
+          type: string
+          minLength: 1
+          description: Updated answer text
+        is_correct:
+          type: boolean
+          description: Updated correctness flag
 
     CardAnswer:
       type: object
