@@ -49,6 +49,41 @@ type Answer struct {
 	IsCorrect bool      `json:"isCorrect"`
 }
 
+// DeckUpdates contains optional fields for updating a deck
+type DeckUpdates struct {
+	Title       *string
+	Description *string
+	IsPublic    *bool
+}
+
+// HasUpdates returns true if at least one field is set
+func (u DeckUpdates) HasUpdates() bool {
+	return u.Title != nil || u.Description != nil || u.IsPublic != nil
+}
+
+// CardUpdates contains optional fields for updating a card
+type CardUpdates struct {
+	Title       *string
+	Explanation *string
+	Kind        *string
+}
+
+// HasUpdates returns true if at least one field is set
+func (u CardUpdates) HasUpdates() bool {
+	return u.Title != nil || u.Explanation != nil || u.Kind != nil
+}
+
+// AnswerUpdates contains optional fields for updating an answer
+type AnswerUpdates struct {
+	Text      *string
+	IsCorrect *bool
+}
+
+// HasUpdates returns true if at least one field is set
+func (u AnswerUpdates) HasUpdates() bool {
+	return u.Text != nil || u.IsCorrect != nil
+}
+
 type ErroredDeck struct {
 	D            Deck          `json:"deck"`
 	ErroredCards []ErroredCard `json:"erroredCards"`

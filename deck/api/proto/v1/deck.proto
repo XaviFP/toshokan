@@ -8,10 +8,13 @@ service DecksAPI {
   rpc GetDecks (GetDecksRequest) returns (GetDecksResponse) {}
   rpc CreateDeck (CreateDeckRequest) returns (CreateDeckResponse) {}
   rpc DeleteDeck (DeleteDeckRequest) returns (DeleteDeckResponse) {}
+  rpc UpdateDeck (UpdateDeckRequest) returns (UpdateDeckResponse) {}
 
   rpc GetPopularDecks (GetPopularDecksRequest) returns (GetPopularDecksResponse) {}
   rpc CreateCard (CreateCardRequest) returns (CreateCardResponse) {}
   rpc GetCards (GetCardsRequest) returns (GetCardsResponse) {}
+  rpc UpdateCard (UpdateCardRequest) returns (UpdateCardResponse) {}
+  rpc UpdateAnswer (UpdateAnswerRequest) returns (UpdateAnswerResponse) {}
 }
 
 // The request message containing the user's name.
@@ -69,6 +72,41 @@ message GetCardsRequest {
   
 message GetCardsResponse {
     map<string, Card> cards = 1;
+}
+
+message UpdateDeckRequest {
+    string id = 1;
+    optional string title = 2;
+    optional string description = 3;
+    optional bool is_public = 4;
+}
+
+message UpdateDeckResponse {
+    Deck deck = 1;
+}
+
+message UpdateCardRequest {
+    string deck_id = 1;
+    string card_id = 2;
+    optional string title = 3;
+    optional string explanation = 4;
+    optional string kind = 5;
+}
+
+message UpdateCardResponse {
+    Card card = 1;
+}
+
+message UpdateAnswerRequest {
+    string deck_id = 1;
+    string card_id = 2;
+    string answer_id = 3;
+    optional string text = 4;
+    optional bool is_correct = 5;
+}
+
+message UpdateAnswerResponse {
+    Answer answer = 1;
 }
 
 message PageInfo {

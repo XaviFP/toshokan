@@ -285,3 +285,227 @@ func TestServer_GetCards(t *testing.T) {
 
 	repoMock.AssertExpectations(t)
 }
+
+func TestServer_UpdateDeck(t *testing.T) {
+	validDeckID := uuid.MustParse("fb9ffe2c-ad66-4766-9b7b-46fd5d9acd72")
+
+	t.Run("success_update_title", func(t *testing.T) {
+		repoMock := &deck.RepositoryMock{}
+		srv := &Server{Repository: repoMock}
+
+		newTitle := "Updated Title"
+		repoMock.On("UpdateDeck", mock.Anything, validDeckID, deck.DeckUpdates{
+			Title: &newTitle,
+		}).Return(deck.Deck{
+			ID:          validDeckID,
+			Title:       newTitle,
+			Description: "Original description",
+		}, nil)
+
+		res, err := srv.UpdateDeck(context.Background(), &pb.UpdateDeckRequest{
+			Id:    validDeckID.String(),
+			Title: &newTitle,
+		})
+
+		assert.NoError(t, err)
+		assert.Equal(t, newTitle, res.Deck.Title)
+		assert.Equal(t, "Original description", res.Deck.Description)
+	})
+
+	t.Run("failure_no_fields_provided", func(t *testing.T) {
+		repoMock := &deck.RepositoryMock{}
+		srv := &Server{Repository: repoMock}
+
+		_, err := srv.UpdateDeck(context.Background(), &pb.UpdateDeckRequest{
+			Id: validDeckID.String(),
+		})
+
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "no fields to update")
+	})
+
+	t.Run("failure_deck_not_found", func(t *testing.T) {
+		repoMock := &deck.RepositoryMock{}
+		srv := &Server{Repository: repoMock}
+
+		newTitle := "Updated Title"
+		repoMock.On("UpdateDeck", mock.Anything, validDeckID, mock.Anything).Return(deck.Deck{}, deck.ErrDeckNotFound)
+
+		_, err := srv.UpdateDeck(context.Background(), &pb.UpdateDeckRequest{
+			Id:    validDeckID.String(),
+			Title: &newTitle,
+		})
+
+		assert.Error(t, err)
+	})
+
+	t.Run("failure_invalid_deck_ID", func(t *testing.T) {
+		repoMock := &deck.RepositoryMock{}
+		srv := &Server{Repository: repoMock}
+
+		newTitle := "Updated Title"
+		_, err := srv.UpdateDeck(context.Background(), &pb.UpdateDeckRequest{
+			Id:    "invalid-uuid",
+			Title: &newTitle,
+		})
+
+		assert.Error(t, err)
+	})
+}
+
+func TestServer_UpdateCard(t *testing.T) {
+	validDeckID := uuid.MustParse("fb9ffe2c-ad66-4766-9b7b-46fd5d9acd72")
+	validCardID := uuid.MustParse("1f30a72f-5d7a-48da-a5c2-42efece6972a")
+
+	t.Run("success_update_title", func(t *testing.T) {
+		repoMock := &deck.RepositoryMock{}
+		srv := &Server{Repository: repoMock}
+
+		newTitle := "Updated Card Title"
+		repoMock.On("UpdateCard", mock.Anything, validDeckID, validCardID, deck.CardUpdates{
+			Title: &newTitle,
+		}).Return(deck.Card{
+			ID:    validCardID,
+			Title: newTitle,
+			Kind:  "single_choice",
+		}, nil)
+
+		res, err := srv.UpdateCard(context.Background(), &pb.UpdateCardRequest{
+			DeckId: validDeckID.String(),
+			CardId: validCardID.String(),
+			Title:  &newTitle,
+		})
+
+		assert.NoError(t, err)
+		assert.Equal(t, newTitle, res.Card.Title)
+	})
+
+	t.Run("failure_no_fields_provided", func(t *testing.T) {
+		repoMock := &deck.RepositoryMock{}
+		srv := &Server{Repository: repoMock}
+
+		_, err := srv.UpdateCard(context.Background(), &pb.UpdateCardRequest{
+			DeckId: validDeckID.String(),
+			CardId: validCardID.String(),
+		})
+
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "no fields to update")
+	})
+
+	t.Run("failure_invalid_kind", func(t *testing.T) {
+		repoMock := &deck.RepositoryMock{}
+		srv := &Server{Repository: repoMock}
+
+		invalidKind := "invalid_kind"
+		_, err := srv.UpdateCard(context.Background(), &pb.UpdateCardRequest{
+			DeckId: validDeckID.String(),
+			CardId: validCardID.String(),
+			Kind:   &invalidKind,
+		})
+
+		assert.Error(t, err)
+		assert.ErrorIs(t, err, deck.ErrInvalidKind)
+	})
+
+	t.Run("failure_card_not_found", func(t *testing.T) {
+		repoMock := &deck.RepositoryMock{}
+		srv := &Server{Repository: repoMock}
+
+		newTitle := "Updated Card Title"
+		repoMock.On("UpdateCard", mock.Anything, validDeckID, validCardID, mock.Anything).Return(deck.Card{}, deck.ErrCardNotFound)
+
+		_, err := srv.UpdateCard(context.Background(), &pb.UpdateCardRequest{
+			DeckId: validDeckID.String(),
+			CardId: validCardID.String(),
+			Title:  &newTitle,
+		})
+
+		assert.Error(t, err)
+	})
+}
+
+func TestServer_UpdateAnswer(t *testing.T) {
+	validDeckID := uuid.MustParse("fb9ffe2c-ad66-4766-9b7b-46fd5d9acd72")
+	validCardID := uuid.MustParse("1f30a72f-5d7a-48da-a5c2-42efece6972a")
+	validAnswerID := uuid.MustParse("5ec790fb-3dcc-4ee4-8c6d-daa9e4e11598")
+
+	t.Run("success_update_text", func(t *testing.T) {
+		repoMock := &deck.RepositoryMock{}
+		srv := &Server{Repository: repoMock}
+
+		newText := "Updated Answer Text"
+		repoMock.On("UpdateAnswer", mock.Anything, validDeckID, validCardID, validAnswerID, deck.AnswerUpdates{
+			Text: &newText,
+		}).Return(deck.Answer{
+			ID:        validAnswerID,
+			Text:      newText,
+			IsCorrect: true,
+		}, nil)
+
+		res, err := srv.UpdateAnswer(context.Background(), &pb.UpdateAnswerRequest{
+			DeckId:   validDeckID.String(),
+			CardId:   validCardID.String(),
+			AnswerId: validAnswerID.String(),
+			Text:     &newText,
+		})
+
+		assert.NoError(t, err)
+		assert.Equal(t, newText, res.Answer.Text)
+		assert.True(t, res.Answer.IsCorrect)
+	})
+
+	t.Run("success_update_is_correct", func(t *testing.T) {
+		repoMock := &deck.RepositoryMock{}
+		srv := &Server{Repository: repoMock}
+
+		isCorrect := false
+		repoMock.On("UpdateAnswer", mock.Anything, validDeckID, validCardID, validAnswerID, deck.AnswerUpdates{
+			IsCorrect: &isCorrect,
+		}).Return(deck.Answer{
+			ID:        validAnswerID,
+			Text:      "Original text",
+			IsCorrect: isCorrect,
+		}, nil)
+
+		res, err := srv.UpdateAnswer(context.Background(), &pb.UpdateAnswerRequest{
+			DeckId:    validDeckID.String(),
+			CardId:    validCardID.String(),
+			AnswerId:  validAnswerID.String(),
+			IsCorrect: &isCorrect,
+		})
+
+		assert.NoError(t, err)
+		assert.Equal(t, "Original text", res.Answer.Text)
+		assert.False(t, res.Answer.IsCorrect)
+	})
+
+	t.Run("failure_no_fields_provided", func(t *testing.T) {
+		repoMock := &deck.RepositoryMock{}
+		srv := &Server{Repository: repoMock}
+
+		_, err := srv.UpdateAnswer(context.Background(), &pb.UpdateAnswerRequest{
+			DeckId:   validDeckID.String(),
+			CardId:   validCardID.String(),
+			AnswerId: validAnswerID.String(),
+		})
+
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "no fields to update")
+	})
+
+	t.Run("failure_invalid_answer_ID", func(t *testing.T) {
+		repoMock := &deck.RepositoryMock{}
+		srv := &Server{Repository: repoMock}
+
+		newText := "Updated Answer Text"
+		_, err := srv.UpdateAnswer(context.Background(), &pb.UpdateAnswerRequest{
+			DeckId:   validDeckID.String(),
+			CardId:   validCardID.String(),
+			AnswerId: "invalid-uuid",
+			Text:     &newText,
+		})
+
+		assert.Error(t, err)
+	})
+}
