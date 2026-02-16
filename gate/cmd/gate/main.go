@@ -187,6 +187,9 @@ func loadConfig() globalConfig {
 		CreateDeckAdminOnly:   parseBoolDefault(os.Getenv("ADMIN_ONLY_CREATE_DECK"), true),
 		UpdateCourseAdminOnly: parseBoolDefault(os.Getenv("ADMIN_ONLY_UPDATE_COURSE"), true),
 		UpdateLessonAdminOnly: parseBoolDefault(os.Getenv("ADMIN_ONLY_UPDATE_LESSON"), true),
+		UpdateDeckAdminOnly:   parseBoolDefault(os.Getenv("ADMIN_ONLY_UPDATE_DECK"), true),
+		UpdateCardAdminOnly:   parseBoolDefault(os.Getenv("ADMIN_ONLY_UPDATE_CARD"), true),
+		UpdateAnswerAdminOnly: parseBoolDefault(os.Getenv("ADMIN_ONLY_UPDATE_ANSWER"), true),
 	}
 
 	usersConfig := config{}
