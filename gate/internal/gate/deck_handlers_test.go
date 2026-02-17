@@ -91,7 +91,6 @@ func TestRouteNotFound(t *testing.T) {
 	})
 }
 
-
 func TestUpdateDeck(t *testing.T) {
 	t.Run("success_update_title", func(t *testing.T) {
 		decksClient := &mockDecksClient{}
@@ -352,8 +351,6 @@ func TestUpdateAnswer(t *testing.T) {
 		assert.Contains(t, w.Body.String(), "at least one field must be provided")
 	})
 }
-
-
 
 type mockDecksClient struct {
 	mock.Mock
