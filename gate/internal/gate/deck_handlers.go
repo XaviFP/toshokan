@@ -158,7 +158,7 @@ func UpdateDeck(ctx *gin.Context, usersClient pbUser.UserAPIClient, decksClient 
 }
 
 func UpdateCard(ctx *gin.Context, usersClient pbUser.UserAPIClient, decksClient pbDeck.DecksAPIClient) {
-	deckID := ctx.Param("deckId")
+	deckID := ctx.Param("id")
 	cardID := ctx.Param("cardId")
 
 	if deckID == "" {
@@ -209,7 +209,7 @@ func UpdateCard(ctx *gin.Context, usersClient pbUser.UserAPIClient, decksClient 
 			ctx.JSON(http.StatusNotFound, gin.H{"error": "card not found"})
 			return
 		}
-		if strings.Contains(err.Error(), "deck: invalid kind") {
+		if strings.Contains(err.Error(), "deck: kind must be") {
 			ctx.JSON(http.StatusBadRequest, gin.H{"error": "invalid card kind"})
 			return
 		}
@@ -222,7 +222,7 @@ func UpdateCard(ctx *gin.Context, usersClient pbUser.UserAPIClient, decksClient 
 }
 
 func UpdateAnswer(ctx *gin.Context, usersClient pbUser.UserAPIClient, decksClient pbDeck.DecksAPIClient) {
-	deckID := ctx.Param("deckId")
+	deckID := ctx.Param("id")
 	cardID := ctx.Param("cardId")
 	answerID := ctx.Param("answerId")
 
@@ -303,11 +303,11 @@ func RegisterDeckRoutes(r *gin.RouterGroup, usersClient pbUser.UserAPIClient, de
 		UpdateDeck(ctx, usersClient, decksClient)
 	})
 
-	r.PATCH("/decks/:deckId/cards/:cardId", RequireAdmin(adminCfg, adminCfg.UpdateCardAdminOnly), func(ctx *gin.Context) {
+	r.PATCH("/decks/:id/cards/:cardId", RequireAdmin(adminCfg, adminCfg.UpdateCardAdminOnly), func(ctx *gin.Context) {
 		UpdateCard(ctx, usersClient, decksClient)
 	})
 
-	r.PATCH("/decks/:deckId/cards/:cardId/answers/:answerId", RequireAdmin(adminCfg, adminCfg.UpdateAnswerAdminOnly), func(ctx *gin.Context) {
+	r.PATCH("/decks/:id/cards/:cardId/answers/:answerId", RequireAdmin(adminCfg, adminCfg.UpdateAnswerAdminOnly), func(ctx *gin.Context) {
 		UpdateAnswer(ctx, usersClient, decksClient)
 	})
 }
