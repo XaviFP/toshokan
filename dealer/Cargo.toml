@@ -36,6 +36,9 @@ version = "0.19.4"
 [dependencies.async-trait]
 version = "0.1.60"
 
+[dependencies.home]
+version = ">=0.5.4, <0.5.12"
+
 [build-dependencies]
 tonic-build = {version = "0.8.4"}
 
