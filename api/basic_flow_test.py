@@ -962,7 +962,7 @@ def update_answer(base_url: str, token: str, deck_id: str, card_id: str, answer_
 
 
 def get_deck_response(base_url: str, token: str, deck_id: str) -> requests.Response:
-    """Fetch a deck by ID and return the raw response."""
+    """Fetch a deck by ID (returns raw Response for testing)."""
     response = requests.get(
         f"{base_url}/decks/{deck_id}",
         headers=auth_headers(token),

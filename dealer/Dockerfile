@@ -1,3 +1,13 @@
+# Build stage
+FROM rust:1.83-bookworm AS builder
+
+WORKDIR /app
+COPY Cargo.toml build.rs ./
+COPY src ./src
+
+RUN cargo build --release
+
+# Runtime stage
 FROM debian:bookworm-slim
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
@@ -5,8 +15,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/* \
     && useradd -r -u 1001 appuser
 
-# Use release build for production
-COPY --chmod=755 target/release/dealer /dealer
+COPY --from=builder --chmod=755 /app/target/release/dealer /dealer
 
 USER appuser
 

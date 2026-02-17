@@ -914,6 +914,7 @@ paths:
       summary: Update a deck
       description: |
         Update an existing deck's properties. At least one field must be provided.
+        
         **Note:** This endpoint may require admin access (`X-Admin-Token` header) depending on server configuration.
       operationId: updateDeck
       security:
@@ -966,19 +967,20 @@ paths:
               schema:
                 $ref: '#/components/schemas/Error'
 
-  /decks/{deckId}/cards/{cardId}:
+  /decks/{id}/cards/{cardId}:
     patch:
       tags:
         - Decks
       summary: Update a card
       description: |
         Update an existing card's properties. At least one field must be provided.
+
         **Note:** This endpoint may require admin access (`X-Admin-Token` header) depending on server configuration.
       operationId: updateCard
       security:
         - BearerAuth: []
       parameters:
-        - name: deckId
+        - name: id
           in: path
           required: true
           description: Deck UUID
@@ -1032,19 +1034,20 @@ paths:
               schema:
                 $ref: '#/components/schemas/Error'
 
-  /decks/{deckId}/cards/{cardId}/answers/{answerId}:
+  /decks/{id}/cards/{cardId}/answers/{answerId}:
     patch:
       tags:
         - Decks
       summary: Update an answer
       description: |
         Update an existing answer's properties. At least one field must be provided.
+
         **Note:** This endpoint may require admin access (`X-Admin-Token` header) depending on server configuration.
       operationId: updateAnswer
       security:
         - BearerAuth: []
       parameters:
-        - name: deckId
+        - name: id
           in: path
           required: true
           description: Deck UUID

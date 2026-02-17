@@ -21,6 +21,76 @@ func init() {
 	gin.SetMode(gin.TestMode)
 }
 
+// setupTestRouter creates a router with real route registration
+func setupTestRouter(usersClient pbUser.UserAPIClient, decksClient pbDeck.DecksAPIClient) *gin.Engine {
+	router := gin.New()
+	adminCfg := AdminConfig{} // No admin required for tests
+	RegisterDeckRoutes(router.Group("/"), usersClient, decksClient, adminCfg)
+	return router
+}
+
+func TestRouteNotFound(t *testing.T) {
+	decksClient := &mockDecksClient{}
+	usersClient := &mockUsersClient{}
+	router := setupTestRouter(usersClient, decksClient)
+
+	// Trailing empty segments return 404 (route not matched)
+	// This covers "missing" last segment params (cardId in UpdateCard, answerId in UpdateAnswer)
+	t.Run("missing_card_id_trailing_slash", func(t *testing.T) {
+		body, _ := json.Marshal(map[string]interface{}{"title": "Test"})
+		req := httptest.NewRequest(http.MethodPatch, "/decks/fb9ffe2c-ad66-4766-9b7b-46fd5d9acd72/cards/", bytes.NewReader(body))
+		req.Header.Set("Content-Type", "application/json")
+		w := httptest.NewRecorder()
+		router.ServeHTTP(w, req)
+
+		assert.Equal(t, http.StatusNotFound, w.Code)
+	})
+
+	t.Run("missing_answer_id_trailing_slash", func(t *testing.T) {
+		body, _ := json.Marshal(map[string]interface{}{"text": "Test"})
+		req := httptest.NewRequest(http.MethodPatch, "/decks/fb9ffe2c-ad66-4766-9b7b-46fd5d9acd72/cards/72bdff92-5bc8-4e1d-9217-d0b23e22ff33/answers/", bytes.NewReader(body))
+		req.Header.Set("Content-Type", "application/json")
+		w := httptest.NewRecorder()
+		router.ServeHTTP(w, req)
+
+		assert.Equal(t, http.StatusNotFound, w.Code)
+	})
+
+	// Empty segments in middle (double slash) match route with empty param, handler validates
+	t.Run("missing_deck_id_update_card", func(t *testing.T) {
+		body, _ := json.Marshal(map[string]interface{}{"title": "Test"})
+		req := httptest.NewRequest(http.MethodPatch, "/decks//cards/72bdff92-5bc8-4e1d-9217-d0b23e22ff33", bytes.NewReader(body))
+		req.Header.Set("Content-Type", "application/json")
+		w := httptest.NewRecorder()
+		router.ServeHTTP(w, req)
+
+		assert.Equal(t, http.StatusBadRequest, w.Code)
+		assert.Contains(t, w.Body.String(), "missing deck id")
+	})
+
+	t.Run("missing_deck_id_update_answer", func(t *testing.T) {
+		body, _ := json.Marshal(map[string]interface{}{"text": "Test"})
+		req := httptest.NewRequest(http.MethodPatch, "/decks//cards/72bdff92-5bc8-4e1d-9217-d0b23e22ff33/answers/7e6926da-82b2-4ae8-99b4-1b803ebf1877", bytes.NewReader(body))
+		req.Header.Set("Content-Type", "application/json")
+		w := httptest.NewRecorder()
+		router.ServeHTTP(w, req)
+
+		assert.Equal(t, http.StatusBadRequest, w.Code)
+		assert.Contains(t, w.Body.String(), "missing deck id")
+	})
+
+	t.Run("missing_card_id_update_answer", func(t *testing.T) {
+		body, _ := json.Marshal(map[string]interface{}{"text": "Test"})
+		req := httptest.NewRequest(http.MethodPatch, "/decks/fb9ffe2c-ad66-4766-9b7b-46fd5d9acd72/cards//answers/7e6926da-82b2-4ae8-99b4-1b803ebf1877", bytes.NewReader(body))
+		req.Header.Set("Content-Type", "application/json")
+		w := httptest.NewRecorder()
+		router.ServeHTTP(w, req)
+
+		assert.Equal(t, http.StatusBadRequest, w.Code)
+		assert.Contains(t, w.Body.String(), "missing card id")
+	})
+}
+
 
 func TestUpdateDeck(t *testing.T) {
 	t.Run("success_update_title", func(t *testing.T) {
@@ -38,10 +108,7 @@ func TestUpdateDeck(t *testing.T) {
 			},
 		}, nil)
 
-		router := gin.New()
-		router.PATCH("/decks/:id", func(ctx *gin.Context) {
-			UpdateDeck(ctx, usersClient, decksClient)
-		})
+		router := setupTestRouter(usersClient, decksClient)
 
 		body, _ := json.Marshal(map[string]interface{}{"title": title})
 		req := httptest.NewRequest(http.MethodPatch, "/decks/fb9ffe2c-ad66-4766-9b7b-46fd5d9acd72", bytes.NewReader(body))
@@ -56,34 +123,11 @@ func TestUpdateDeck(t *testing.T) {
 		assert.Equal(t, title, resp.Title)
 	})
 
-	t.Run("failure_missing_id", func(t *testing.T) {
-		decksClient := &mockDecksClient{}
-		usersClient := &mockUsersClient{}
-
-		router := gin.New()
-		router.PATCH("/decks/:id", func(ctx *gin.Context) {
-			ctx.Params = gin.Params{} // Clear params to simulate missing id
-			UpdateDeck(ctx, usersClient, decksClient)
-		})
-
-		body, _ := json.Marshal(map[string]interface{}{"title": "New Title"})
-		req := httptest.NewRequest(http.MethodPatch, "/decks/test", bytes.NewReader(body))
-		req.Header.Set("Content-Type", "application/json")
-		w := httptest.NewRecorder()
-		router.ServeHTTP(w, req)
-
-		assert.Equal(t, http.StatusBadRequest, w.Code)
-		assert.Contains(t, w.Body.String(), "missing deck id")
-	})
-
 	t.Run("failure_invalid_uuid", func(t *testing.T) {
 		decksClient := &mockDecksClient{}
 		usersClient := &mockUsersClient{}
 
-		router := gin.New()
-		router.PATCH("/decks/:id", func(ctx *gin.Context) {
-			UpdateDeck(ctx, usersClient, decksClient)
-		})
+		router := setupTestRouter(usersClient, decksClient)
 
 		body, _ := json.Marshal(map[string]interface{}{"title": "New Title"})
 		req := httptest.NewRequest(http.MethodPatch, "/decks/invalid-uuid", bytes.NewReader(body))
@@ -99,10 +143,7 @@ func TestUpdateDeck(t *testing.T) {
 		decksClient := &mockDecksClient{}
 		usersClient := &mockUsersClient{}
 
-		router := gin.New()
-		router.PATCH("/decks/:id", func(ctx *gin.Context) {
-			UpdateDeck(ctx, usersClient, decksClient)
-		})
+		router := setupTestRouter(usersClient, decksClient)
 
 		body, _ := json.Marshal(map[string]interface{}{})
 		req := httptest.NewRequest(http.MethodPatch, "/decks/fb9ffe2c-ad66-4766-9b7b-46fd5d9acd72", bytes.NewReader(body))
@@ -121,10 +162,7 @@ func TestUpdateDeck(t *testing.T) {
 		title := "New Title"
 		decksClient.On("UpdateDeck", mock.Anything, mock.Anything).Return(nil, assert.AnError)
 
-		router := gin.New()
-		router.PATCH("/decks/:id", func(ctx *gin.Context) {
-			UpdateDeck(ctx, usersClient, decksClient)
-		})
+		router := setupTestRouter(usersClient, decksClient)
 
 		body, _ := json.Marshal(map[string]interface{}{"title": title})
 		req := httptest.NewRequest(http.MethodPatch, "/decks/00000000-0000-0000-0000-000000000000", bytes.NewReader(body))
@@ -154,10 +192,7 @@ func TestUpdateCard(t *testing.T) {
 			},
 		}, nil)
 
-		router := gin.New()
-		router.PATCH("/decks/:deckId/cards/:cardId", func(ctx *gin.Context) {
-			UpdateCard(ctx, usersClient, decksClient)
-		})
+		router := setupTestRouter(usersClient, decksClient)
 
 		body, _ := json.Marshal(map[string]interface{}{"title": title})
 		req := httptest.NewRequest(http.MethodPatch, "/decks/fb9ffe2c-ad66-4766-9b7b-46fd5d9acd72/cards/72bdff92-5bc8-4e1d-9217-d0b23e22ff33", bytes.NewReader(body))
@@ -172,54 +207,11 @@ func TestUpdateCard(t *testing.T) {
 		assert.Equal(t, title, resp.Title)
 	})
 
-	t.Run("failure_missing_deck_id", func(t *testing.T) {
-		decksClient := &mockDecksClient{}
-		usersClient := &mockUsersClient{}
-
-		router := gin.New()
-		router.PATCH("/decks/:deckId/cards/:cardId", func(ctx *gin.Context) {
-			ctx.Params = gin.Params{{Key: "cardId", Value: "72bdff92-5bc8-4e1d-9217-d0b23e22ff33"}}
-			UpdateCard(ctx, usersClient, decksClient)
-		})
-
-		body, _ := json.Marshal(map[string]interface{}{"title": "New Title"})
-		req := httptest.NewRequest(http.MethodPatch, "/decks/test/cards/72bdff92-5bc8-4e1d-9217-d0b23e22ff33", bytes.NewReader(body))
-		req.Header.Set("Content-Type", "application/json")
-		w := httptest.NewRecorder()
-		router.ServeHTTP(w, req)
-
-		assert.Equal(t, http.StatusBadRequest, w.Code)
-		assert.Contains(t, w.Body.String(), "missing deck id")
-	})
-
-	t.Run("failure_missing_card_id", func(t *testing.T) {
-		decksClient := &mockDecksClient{}
-		usersClient := &mockUsersClient{}
-
-		router := gin.New()
-		router.PATCH("/decks/:deckId/cards/:cardId", func(ctx *gin.Context) {
-			ctx.Params = gin.Params{{Key: "deckId", Value: "fb9ffe2c-ad66-4766-9b7b-46fd5d9acd72"}}
-			UpdateCard(ctx, usersClient, decksClient)
-		})
-
-		body, _ := json.Marshal(map[string]interface{}{"title": "New Title"})
-		req := httptest.NewRequest(http.MethodPatch, "/decks/fb9ffe2c-ad66-4766-9b7b-46fd5d9acd72/cards/test", bytes.NewReader(body))
-		req.Header.Set("Content-Type", "application/json")
-		w := httptest.NewRecorder()
-		router.ServeHTTP(w, req)
-
-		assert.Equal(t, http.StatusBadRequest, w.Code)
-		assert.Contains(t, w.Body.String(), "missing card id")
-	})
-
 	t.Run("failure_invalid_deck_uuid", func(t *testing.T) {
 		decksClient := &mockDecksClient{}
 		usersClient := &mockUsersClient{}
 
-		router := gin.New()
-		router.PATCH("/decks/:deckId/cards/:cardId", func(ctx *gin.Context) {
-			UpdateCard(ctx, usersClient, decksClient)
-		})
+		router := setupTestRouter(usersClient, decksClient)
 
 		body, _ := json.Marshal(map[string]interface{}{"title": "New Title"})
 		req := httptest.NewRequest(http.MethodPatch, "/decks/invalid-uuid/cards/72bdff92-5bc8-4e1d-9217-d0b23e22ff33", bytes.NewReader(body))
@@ -235,10 +227,7 @@ func TestUpdateCard(t *testing.T) {
 		decksClient := &mockDecksClient{}
 		usersClient := &mockUsersClient{}
 
-		router := gin.New()
-		router.PATCH("/decks/:deckId/cards/:cardId", func(ctx *gin.Context) {
-			UpdateCard(ctx, usersClient, decksClient)
-		})
+		router := setupTestRouter(usersClient, decksClient)
 
 		body, _ := json.Marshal(map[string]interface{}{"title": "New Title"})
 		req := httptest.NewRequest(http.MethodPatch, "/decks/fb9ffe2c-ad66-4766-9b7b-46fd5d9acd72/cards/invalid-uuid", bytes.NewReader(body))
@@ -254,10 +243,7 @@ func TestUpdateCard(t *testing.T) {
 		decksClient := &mockDecksClient{}
 		usersClient := &mockUsersClient{}
 
-		router := gin.New()
-		router.PATCH("/decks/:deckId/cards/:cardId", func(ctx *gin.Context) {
-			UpdateCard(ctx, usersClient, decksClient)
-		})
+		router := setupTestRouter(usersClient, decksClient)
 
 		body, _ := json.Marshal(map[string]interface{}{})
 		req := httptest.NewRequest(http.MethodPatch, "/decks/fb9ffe2c-ad66-4766-9b7b-46fd5d9acd72/cards/72bdff92-5bc8-4e1d-9217-d0b23e22ff33", bytes.NewReader(body))
@@ -289,10 +275,7 @@ func TestUpdateAnswer(t *testing.T) {
 			},
 		}, nil)
 
-		router := gin.New()
-		router.PATCH("/decks/:deckId/cards/:cardId/answers/:answerId", func(ctx *gin.Context) {
-			UpdateAnswer(ctx, usersClient, decksClient)
-		})
+		router := setupTestRouter(usersClient, decksClient)
 
 		body, _ := json.Marshal(map[string]interface{}{"text": text})
 		req := httptest.NewRequest(http.MethodPatch, "/decks/fb9ffe2c-ad66-4766-9b7b-46fd5d9acd72/cards/72bdff92-5bc8-4e1d-9217-d0b23e22ff33/answers/7e6926da-82b2-4ae8-99b4-1b803ebf1877", bytes.NewReader(body))
@@ -322,10 +305,7 @@ func TestUpdateAnswer(t *testing.T) {
 			},
 		}, nil)
 
-		router := gin.New()
-		router.PATCH("/decks/:deckId/cards/:cardId/answers/:answerId", func(ctx *gin.Context) {
-			UpdateAnswer(ctx, usersClient, decksClient)
-		})
+		router := setupTestRouter(usersClient, decksClient)
 
 		body, _ := json.Marshal(map[string]interface{}{"is_correct": isCorrect})
 		req := httptest.NewRequest(http.MethodPatch, "/decks/fb9ffe2c-ad66-4766-9b7b-46fd5d9acd72/cards/72bdff92-5bc8-4e1d-9217-d0b23e22ff33/answers/7e6926da-82b2-4ae8-99b4-1b803ebf1877", bytes.NewReader(body))
@@ -340,37 +320,11 @@ func TestUpdateAnswer(t *testing.T) {
 		assert.False(t, resp.IsCorrect)
 	})
 
-	t.Run("failure_missing_deck_id", func(t *testing.T) {
-		decksClient := &mockDecksClient{}
-		usersClient := &mockUsersClient{}
-
-		router := gin.New()
-		router.PATCH("/decks/:deckId/cards/:cardId/answers/:answerId", func(ctx *gin.Context) {
-			ctx.Params = gin.Params{
-				{Key: "cardId", Value: "72bdff92-5bc8-4e1d-9217-d0b23e22ff33"},
-				{Key: "answerId", Value: "7e6926da-82b2-4ae8-99b4-1b803ebf1877"},
-			}
-			UpdateAnswer(ctx, usersClient, decksClient)
-		})
-
-		body, _ := json.Marshal(map[string]interface{}{"text": "New Text"})
-		req := httptest.NewRequest(http.MethodPatch, "/decks/test/cards/72bdff92-5bc8-4e1d-9217-d0b23e22ff33/answers/7e6926da-82b2-4ae8-99b4-1b803ebf1877", bytes.NewReader(body))
-		req.Header.Set("Content-Type", "application/json")
-		w := httptest.NewRecorder()
-		router.ServeHTTP(w, req)
-
-		assert.Equal(t, http.StatusBadRequest, w.Code)
-		assert.Contains(t, w.Body.String(), "missing deck id")
-	})
-
 	t.Run("failure_invalid_answer_uuid", func(t *testing.T) {
 		decksClient := &mockDecksClient{}
 		usersClient := &mockUsersClient{}
 
-		router := gin.New()
-		router.PATCH("/decks/:deckId/cards/:cardId/answers/:answerId", func(ctx *gin.Context) {
-			UpdateAnswer(ctx, usersClient, decksClient)
-		})
+		router := setupTestRouter(usersClient, decksClient)
 
 		body, _ := json.Marshal(map[string]interface{}{"text": "New Text"})
 		req := httptest.NewRequest(http.MethodPatch, "/decks/fb9ffe2c-ad66-4766-9b7b-46fd5d9acd72/cards/72bdff92-5bc8-4e1d-9217-d0b23e22ff33/answers/invalid-uuid", bytes.NewReader(body))
@@ -386,10 +340,7 @@ func TestUpdateAnswer(t *testing.T) {
 		decksClient := &mockDecksClient{}
 		usersClient := &mockUsersClient{}
 
-		router := gin.New()
-		router.PATCH("/decks/:deckId/cards/:cardId/answers/:answerId", func(ctx *gin.Context) {
-			UpdateAnswer(ctx, usersClient, decksClient)
-		})
+		router := setupTestRouter(usersClient, decksClient)
 
 		body, _ := json.Marshal(map[string]interface{}{})
 		req := httptest.NewRequest(http.MethodPatch, "/decks/fb9ffe2c-ad66-4766-9b7b-46fd5d9acd72/cards/72bdff92-5bc8-4e1d-9217-d0b23e22ff33/answers/7e6926da-82b2-4ae8-99b4-1b803ebf1877", bytes.NewReader(body))
