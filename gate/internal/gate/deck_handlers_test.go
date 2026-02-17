@@ -29,6 +29,68 @@ func setupTestRouter(usersClient pbUser.UserAPIClient, decksClient pbDeck.DecksA
 	return router
 }
 
+func TestRouteNotFound(t *testing.T) {
+	decksClient := &mockDecksClient{}
+	usersClient := &mockUsersClient{}
+	router := setupTestRouter(usersClient, decksClient)
+
+	// Trailing empty segments return 404 (route not matched)
+	// This covers "missing" last segment params (cardId in UpdateCard, answerId in UpdateAnswer)
+	t.Run("missing_card_id_trailing_slash", func(t *testing.T) {
+		body, _ := json.Marshal(map[string]interface{}{"title": "Test"})
+		req := httptest.NewRequest(http.MethodPatch, "/decks/fb9ffe2c-ad66-4766-9b7b-46fd5d9acd72/cards/", bytes.NewReader(body))
+		req.Header.Set("Content-Type", "application/json")
+		w := httptest.NewRecorder()
+		router.ServeHTTP(w, req)
+
+		assert.Equal(t, http.StatusNotFound, w.Code)
+	})
+
+	t.Run("missing_answer_id_trailing_slash", func(t *testing.T) {
+		body, _ := json.Marshal(map[string]interface{}{"text": "Test"})
+		req := httptest.NewRequest(http.MethodPatch, "/decks/fb9ffe2c-ad66-4766-9b7b-46fd5d9acd72/cards/72bdff92-5bc8-4e1d-9217-d0b23e22ff33/answers/", bytes.NewReader(body))
+		req.Header.Set("Content-Type", "application/json")
+		w := httptest.NewRecorder()
+		router.ServeHTTP(w, req)
+
+		assert.Equal(t, http.StatusNotFound, w.Code)
+	})
+
+	// Empty segments in middle (double slash) match route with empty param, handler validates
+	t.Run("missing_deck_id_update_card", func(t *testing.T) {
+		body, _ := json.Marshal(map[string]interface{}{"title": "Test"})
+		req := httptest.NewRequest(http.MethodPatch, "/decks//cards/72bdff92-5bc8-4e1d-9217-d0b23e22ff33", bytes.NewReader(body))
+		req.Header.Set("Content-Type", "application/json")
+		w := httptest.NewRecorder()
+		router.ServeHTTP(w, req)
+
+		assert.Equal(t, http.StatusBadRequest, w.Code)
+		assert.Contains(t, w.Body.String(), "missing deck id")
+	})
+
+	t.Run("missing_deck_id_update_answer", func(t *testing.T) {
+		body, _ := json.Marshal(map[string]interface{}{"text": "Test"})
+		req := httptest.NewRequest(http.MethodPatch, "/decks//cards/72bdff92-5bc8-4e1d-9217-d0b23e22ff33/answers/7e6926da-82b2-4ae8-99b4-1b803ebf1877", bytes.NewReader(body))
+		req.Header.Set("Content-Type", "application/json")
+		w := httptest.NewRecorder()
+		router.ServeHTTP(w, req)
+
+		assert.Equal(t, http.StatusBadRequest, w.Code)
+		assert.Contains(t, w.Body.String(), "missing deck id")
+	})
+
+	t.Run("missing_card_id_update_answer", func(t *testing.T) {
+		body, _ := json.Marshal(map[string]interface{}{"text": "Test"})
+		req := httptest.NewRequest(http.MethodPatch, "/decks/fb9ffe2c-ad66-4766-9b7b-46fd5d9acd72/cards//answers/7e6926da-82b2-4ae8-99b4-1b803ebf1877", bytes.NewReader(body))
+		req.Header.Set("Content-Type", "application/json")
+		w := httptest.NewRecorder()
+		router.ServeHTTP(w, req)
+
+		assert.Equal(t, http.StatusBadRequest, w.Code)
+		assert.Contains(t, w.Body.String(), "missing card id")
+	})
+}
+
 
 func TestUpdateDeck(t *testing.T) {
 	t.Run("success_update_title", func(t *testing.T) {
