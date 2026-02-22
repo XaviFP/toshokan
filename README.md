@@ -10,26 +10,19 @@ Config files can be found under `env`. There are several configurable parameters
 
 ## Building & Setting Up
 
-First build all services
-```
-$ make proto
-$ make services
-```
+**No local dependencies required!** Everything is built inside Docker containers.
 
-Then build and spin up the database
-```
-$ docker-compose up db
-```
+### Quick Start
 
-Run migrations
-```
-$ make migrations
-```
+```bash
+# Start database first
+docker compose up -d db cache
 
-And finally bring all the project up
-```
-$ docker-compose stop
-$ docker-compose up
+# Wait for database to be healthy, then run migrations
+make migrations
+
+# Start all services
+make dev
 ```
 
 ## Testing & Coverage
@@ -37,24 +30,24 @@ $ docker-compose up
 
 ### Unit and postgresql + redis integration tests
 ```
-$ make test
+make test
 ```
 
 ### Check test coverage
 ```
-$ make coverage
+make coverage
 ```
 
 ### API tests
 
 Run schemathesis
 ```
-$ make test-api-schema
+make test-api-schema
 ```
 
 Run a course-based flow, creating and completing a course, lessons, etc.
 ```
-$ make test-api-basic-flow
+make test-api-basic-flow
 ```
 
 

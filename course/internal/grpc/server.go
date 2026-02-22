@@ -2,7 +2,6 @@ package grpc
 
 import (
 	"context"
-	"log"
 	"log/slog"
 	"net"
 	"time"
@@ -38,7 +37,7 @@ type Server struct {
 
 // Start starts the gRPC server
 func (s *Server) Start() error {
-	log.Printf("Starting Course gRPC server on: %s", s.GRPCAddr)
+	slog.Info("Starting Course gRPC server", "address", s.GRPCAddr)
 
 	// lets print all operations
 	s.grpcServer = grpc.NewServer()

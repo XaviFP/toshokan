@@ -1,7 +1,9 @@
 package main
 
 import (
-	"log"
+	"errors"
+	"log/slog"
+	"os"
 
 	"github.com/golang-migrate/migrate/v4"
 	"github.com/golang-migrate/migrate/v4/database/postgres"
@@ -13,23 +15,40 @@ import (
 )
 
 func main() {
-	db, err := db.InitDB(config.DBConfig{User: "toshokan", Password: "t.o.s.h.o.k.a.n.", Name: "deck", Host: "localhost", Port: "5432"})
+	dbConfig := config.LoadDBConfig()
+	if dbConfig.Name == "" {
+		dbConfig.Name = "deck" // default for local development
+	}
+
+	db, err := db.InitDB(dbConfig)
 	if err != nil {
-		log.Fatalf("failed to connect to database: %v", err)
+		slog.Error("failed to connect to database", "error", err)
+		os.Exit(1)
 	}
 
 	driver, err := postgres.WithInstance(db, &postgres.Config{})
 	if err != nil {
-		log.Fatalf(" %v", err)
+		slog.Error("failed to create driver", "error", err)
+		os.Exit(1)
 	}
 
-	m, err := migrate.NewWithDatabaseInstance("file://cmd/migrate/migrations", "deck", driver)
+	// Use MIGRATIONS_PATH env var if set, otherwise use local path
+	migrationsPath := os.Getenv("MIGRATIONS_PATH")
+	if migrationsPath == "" {
+		migrationsPath = "file://cmd/migrate/migrations"
+	}
+
+	m, err := migrate.NewWithDatabaseInstance(migrationsPath, dbConfig.Name, driver)
 	if err != nil {
-		log.Fatalf(" %v", err)
+		slog.Error("failed to create migrate instance", "error", err)
+		os.Exit(1)
 	}
 
 	err = m.Up()
-	if err != nil && err != migrate.ErrNoChange {
-		log.Fatalf(" %v", err)
+	if err != nil && !errors.Is(err, migrate.ErrNoChange) {
+		slog.Error("migration failed", "error", err)
+		os.Exit(1)
 	}
+
+	slog.Info("migrations completed successfully", "database", dbConfig.Name)
 }
