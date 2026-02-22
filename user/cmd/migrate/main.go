@@ -2,7 +2,7 @@ package main
 
 import (
 	"errors"
-	"log"
+	"log/slog"
 	"os"
 
 	"github.com/golang-migrate/migrate/v4"
@@ -22,12 +22,14 @@ func main() {
 
 	db, err := db.InitDB(dbConfig)
 	if err != nil {
-		log.Fatalf("failed to connect to database: %v", err)
+		slog.Error("failed to connect to database", "error", err)
+		os.Exit(1)
 	}
 
 	driver, err := postgres.WithInstance(db, &postgres.Config{})
 	if err != nil {
-		log.Fatalf("failed to create driver: %v", err)
+		slog.Error("failed to create driver", "error", err)
+		os.Exit(1)
 	}
 
 	// Use MIGRATIONS_PATH env var if set, otherwise use local path
@@ -38,13 +40,15 @@ func main() {
 
 	m, err := migrate.NewWithDatabaseInstance(migrationsPath, dbConfig.Name, driver)
 	if err != nil {
-		log.Fatalf("failed to create migrate instance: %v", err)
+		slog.Error("failed to create migrate instance", "error", err)
+		os.Exit(1)
 	}
 
 	err = m.Up()
 	if err != nil && !errors.Is(err, migrate.ErrNoChange) {
-		log.Fatalf("migration failed: %v", err)
+		slog.Error("migration failed", "error", err)
+		os.Exit(1)
 	}
 
-	log.Printf("migrations completed successfully for database: %s", dbConfig.Name)
+	slog.Info("migrations completed successfully", "database", dbConfig.Name)
 }
