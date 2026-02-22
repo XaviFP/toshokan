@@ -26,6 +26,8 @@ type Server struct {
 }
 
 func (s *Server) Start() error {
+	slog.Info("Starting Deck gRPC server", "address", s.GRPCAddr)
+
 	s.grpcServer = grpc.NewServer()
 	pb.RegisterDecksAPIServer(s.grpcServer, s)
 

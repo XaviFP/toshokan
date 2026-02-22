@@ -1,5 +1,7 @@
 # Production Deployment Guide
 
+**No local dependencies required!** Everything is built inside Docker containers.
+
 ## Prerequisites
 
 - Docker and Docker Compose installed
@@ -34,5 +36,38 @@ rm private.pem public.pem
 ### 3. Deploy
 
 ```bash
+# Build and start the database first
+docker compose --env-file .env.prod -f docker-compose.prod.yaml up -d db cache
+
+# Wait for database to be healthy
+docker compose --env-file .env.prod -f docker-compose.prod.yaml ps
+
+# Run migrations
+docker build -f migrations.Dockerfile -t toshokan-migrations .
+docker run --rm --network toshokan_internal \
+  -e DB_HOST=db \
+  -e DB_PORT=5432 \
+  -e DB_USER=${DB_USER} \
+  -e DB_PASSWORD=${DB_PASSWORD} \
+  -e SERVICE=all \
+  toshokan-migrations
+
+# Start all services
 docker compose --env-file .env.prod -f docker-compose.prod.yaml up -d
+```
+
+Or use the Makefile shortcut:
+
+```bash
+make prod
+```
+
+### 4. Verify Deployment
+
+```bash
+# Check all services are healthy
+docker compose --env-file .env.prod -f docker-compose.prod.yaml ps
+
+# Check logs
+docker compose --env-file .env.prod -f docker-compose.prod.yaml logs -f gate
 ```
