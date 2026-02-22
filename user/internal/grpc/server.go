@@ -29,6 +29,8 @@ type Server struct {
 }
 
 func (s *Server) Start() error {
+	slog.Info("Starting User gRPC server", "address", s.GRPCAddr)
+
 	grpcServer := grpc.NewServer()
 	pb.RegisterUserAPIServer(grpcServer, s)
 

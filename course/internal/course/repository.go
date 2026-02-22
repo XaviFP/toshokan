@@ -5,7 +5,6 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
-	"log"
 	"log/slog"
 	"strings"
 	"time"
@@ -155,7 +154,7 @@ func (r *redisRepository) StoreCourse(ctx context.Context, course Course) error 
 
 	// Invalidate cache
 	if err := r.cache.Delete(ctx, r.courseKey(course.ID)); err != nil {
-		log.Printf("cache delete failed for course %s: %v", course.ID, err)
+		slog.Warn("cache delete failed for course", "courseID", course.ID, "error", err)
 	}
 
 	return nil
@@ -170,7 +169,7 @@ func (r *redisRepository) UpdateCourse(ctx context.Context, id uuid.UUID, update
 
 	// Invalidate cache
 	if err := r.cache.Delete(ctx, r.courseKey(id)); err != nil {
-		log.Printf("cache delete failed for course %s: %v", id, err)
+		slog.Warn("cache delete failed for course", "courseID", id, "error", err)
 	}
 
 	return course, nil
@@ -201,7 +200,7 @@ func (r *redisRepository) GetLesson(ctx context.Context, id uuid.UUID) (Lesson, 
 	data, err := json.Marshal(lesson)
 	if err == nil {
 		if err := r.cache.SetEx(ctx, key, string(data), 3600); err != nil {
-			log.Printf("cache set failed for lesson %s: %v", lesson.ID, err)
+			slog.Warn("cache set failed for lesson", "lessonID", lesson.ID, "error", err)
 		}
 	}
 
@@ -230,7 +229,7 @@ func (r *redisRepository) StoreLesson(ctx context.Context, lesson Lesson) error 
 
 	// Invalidate cache
 	if err := r.cache.Delete(ctx, r.lessonKey(lesson.ID)); err != nil {
-		log.Printf("cache delete failed for lesson %s: %v", lesson.ID, err)
+		slog.Warn("cache delete failed for lesson", "lessonID", lesson.ID, "error", err)
 	}
 
 	return nil
@@ -245,7 +244,7 @@ func (r *redisRepository) UpdateLesson(ctx context.Context, id uuid.UUID, update
 
 	// Invalidate cache
 	if err := r.cache.Delete(ctx, r.lessonKey(id)); err != nil {
-		log.Printf("cache delete failed for lesson %s: %v", id, err)
+		slog.Warn("cache delete failed for lesson", "lessonID", id, "error", err)
 	}
 
 	return lesson, nil
@@ -276,7 +275,7 @@ func (r *redisRepository) GetUserCourseProgress(ctx context.Context, userID uuid
 	data, err := json.Marshal(progress)
 	if err == nil {
 		if err := r.cache.SetEx(ctx, key, string(data), 1800); err != nil {
-			log.Printf("cache set failed for user_progress %s:%s: %v", userID, courseID, err)
+			slog.Warn("cache set failed for user progress", "userID", userID, "courseID", courseID, "error", err)
 		}
 	}
 
@@ -292,7 +291,7 @@ func (r *redisRepository) EnrollUserInCourse(ctx context.Context, userID uuid.UU
 
 	// Invalidate cache
 	if err := r.cache.Delete(ctx, r.userProgressKey(userID, courseID)); err != nil {
-		log.Printf("cache delete failed for user_progress %s:%s: %v", userID, courseID, err)
+		slog.Warn("cache delete failed for user progress", "userID", userID, "courseID", courseID, "error", err)
 	}
 
 	return nil
@@ -307,7 +306,7 @@ func (r *redisRepository) UpdateUserProgress(ctx context.Context, progress UserC
 
 	// Invalidate cache
 	if err := r.cache.Delete(ctx, r.userProgressKey(progress.UserID, progress.CourseID)); err != nil {
-		log.Printf("cache delete failed for user_progress %s:%s: %v", progress.UserID, progress.CourseID, err)
+		slog.Warn("cache delete failed for user progress", "userID", progress.UserID, "courseID", progress.CourseID, "error", err)
 	}
 
 	return nil

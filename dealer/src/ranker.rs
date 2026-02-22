@@ -1,6 +1,8 @@
 use chrono::Local;
 use std::{env, time};
 use tokio::time::{sleep, Duration};
+use tokio_util::sync::CancellationToken;
+
 pub struct Ranker {
     client: tokio_postgres::Client,
 }
@@ -10,7 +12,7 @@ impl Ranker {
         Self { client }
     }
 
-    pub async fn start(&self) -> Result<(), String> {
+    pub async fn start(&self, cancel_token: CancellationToken) -> Result<(), String> {
         let r_config = load_ranker_config();
         if r_config.is_err() {
             eprintln!(
@@ -47,7 +49,14 @@ impl Ranker {
             if result.is_err() {
                 println!("{}", result.err().unwrap().to_string());
             }
-            sleep(Duration::from_secs(frequency)).await;
+
+            tokio::select! {
+                _ = sleep(Duration::from_secs(frequency)) => {},
+                _ = cancel_token.cancelled() => {
+                    println!("Ranker received shutdown signal, stopping...");
+                    return Ok(());
+                }
+            }
         }
     }
 }

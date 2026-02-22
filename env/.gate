@@ -1,22 +1,23 @@
-HTTP_HOST = gate
-HTTP_PORT = 8080
-SIGNUP_ENABLED = true
-CERTIFICATE_PATH = ""
-PRIVATE_KEY_PATH = ""
-ALLOWED_ORIGINS = "http://localhost:8000,http://localhost:8080"
+# Gate Service Configuration
+HTTP_HOST=gate
+HTTP_PORT=8080
+SIGNUP_ENABLED=true
+CERTIFICATE_PATH=""
+PRIVATE_KEY_PATH=""
+ALLOWED_ORIGINS=http://localhost:8000,http://localhost:8080
 
 # Admin access configuration
-ADMIN_HEADER_NAME = X-Admin-Token
-ADMIN_HEADER_SECRET = change-me-in-production
+ADMIN_HEADER_NAME=X-Admin-Token
+ADMIN_HEADER_SECRET=change-me-in-production
 
-# Feature flags: when true, endpoint requires admin header (default: true)
-ADMIN_ONLY_SIGNUP = true
-ADMIN_ONLY_ENROLL = true
-ADMIN_ONLY_CREATE_COURSE = true
-ADMIN_ONLY_CREATE_LESSON = true
-ADMIN_ONLY_CREATE_DECK = true
-ADMIN_ONLY_UPDATE_COURSE = true
-ADMIN_ONLY_UPDATE_LESSON = true
-ADMIN_ONLY_UPDATE_DECK = true
-ADMIN_ONLY_UPDATE_CARD = true
-ADMIN_ONLY_UPDATE_ANSWER = true
+# Feature flags: when true, endpoint requires admin header
+ADMIN_ONLY_SIGNUP=true
+ADMIN_ONLY_ENROLL=true
+ADMIN_ONLY_CREATE_COURSE=true
+ADMIN_ONLY_CREATE_LESSON=true
+ADMIN_ONLY_CREATE_DECK=true
+ADMIN_ONLY_UPDATE_COURSE=true
+ADMIN_ONLY_UPDATE_LESSON=true
+ADMIN_ONLY_UPDATE_DECK=true
+ADMIN_ONLY_UPDATE_CARD=true
+ADMIN_ONLY_UPDATE_ANSWER=true
