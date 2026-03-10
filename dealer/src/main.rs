@@ -3,6 +3,8 @@ use std::fmt::Write;
 
 use postgres::types::ToSql;
 use postgres::NoTls;
+use tokio::signal::unix::{signal, SignalKind};
+use tokio_util::sync::CancellationToken;
 use tonic::Code;
 use tonic::{transport::Server, Request, Response, Status};
 use uuid::Uuid;
@@ -272,8 +274,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let ranker = Ranker::new(ranker_client);
 
+    // Create cancellation token for graceful shutdown
+    let cancel_token = CancellationToken::new();
+    let ranker_token = cancel_token.clone();
+
     tokio::spawn(async move {
-        if let Err(error) = ranker.start().await {
+        if let Err(error) = ranker.start(ranker_token).await {
             eprintln!("Ranker error: {}", error);
         }
     });
@@ -290,13 +296,23 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Start GRPC Server
     let addr = grpc_config.unwrap().to_string().parse()?;
+    println!("Starting Dealer gRPC server on: {}", addr);
+
     let dealer = Dealer {
         repo: Repository { client },
     };
 
     Server::builder()
         .add_service(DealerServer::new(dealer))
-        .serve(addr)
+        .serve_with_shutdown(addr, async move {
+            let mut sigterm = signal(SignalKind::terminate()).expect("Failed to register SIGTERM handler");
+            let mut sigint = signal(SignalKind::interrupt()).expect("Failed to register SIGINT handler");
+            tokio::select! {
+                _ = sigterm.recv() => println!("Received SIGTERM, stopping server..."),
+                _ = sigint.recv() => println!("Received SIGINT, stopping server..."),
+            }
+            cancel_token.cancel();
+        })
         .await?;
 
     Ok(())

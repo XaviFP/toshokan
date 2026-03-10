@@ -1,7 +1,7 @@
 package config
 
 import (
-	"log"
+	"log/slog"
 	"os"
 )
 
@@ -44,39 +44,44 @@ var (
 )
 
 func LoadDBConfig() DBConfig {
-	var config = DBConfig{}
+	config := DBConfig{}
 
 	host := os.Getenv(dbHost)
 	if host == "" {
-		log.Fatalf("missing environment variable: %s", dbHost)
+		slog.Error("missing environment variable", "name", dbHost)
+		os.Exit(1)
 	}
 
 	config.Host = host
 
 	port := os.Getenv(dbPort)
 	if port == "" {
-		log.Fatalf("missing environment variable: %s", dbPort)
+		slog.Error("missing environment variable", "name", dbPort)
+		os.Exit(1)
 	}
 
 	config.Port = port
 
 	name := os.Getenv(dbName)
 	if name == "" {
-		log.Fatalf("missing environment variable: %s", dbName)
+		slog.Error("missing environment variable", "name", dbName)
+		os.Exit(1)
 	}
 
 	config.Name = name
 
 	user := os.Getenv(dbUser)
 	if user == "" {
-		log.Fatalf("missing environment variable: %s", dbUser)
+		slog.Error("missing environment variable", "name", dbUser)
+		os.Exit(1)
 	}
 
 	config.User = user
 
 	password := os.Getenv(dbPassword)
 	if password == "" {
-		log.Fatalf("missing environment variable: %s", dbPassword)
+		slog.Error("missing environment variable", "name", dbPassword)
+		os.Exit(1)
 	}
 
 	config.Password = password
@@ -91,25 +96,28 @@ var (
 )
 
 func LoadCacheConfig() CacheConfig {
-	var config = CacheConfig{}
+	config := CacheConfig{}
 
 	host := os.Getenv(cacheHost)
 	if host == "" {
-		log.Fatalf("missing environment variable: %s", cacheHost)
+		slog.Error("missing environment variable", "name", cacheHost)
+		os.Exit(1)
 	}
 
 	config.Host = host
 
 	port := os.Getenv(cachePort)
 	if port == "" {
-		log.Fatalf("missing environment variable: %s", cachePort)
+		slog.Error("missing environment variable", "name", cachePort)
+		os.Exit(1)
 	}
 
 	config.Port = port
 
 	transportProtocol := os.Getenv(cacheTransportProtocol)
 	if transportProtocol == "" {
-		log.Fatalf("missing environment variable: %s", cacheTransportProtocol)
+		slog.Error("missing environment variable", "name", cacheTransportProtocol)
+		os.Exit(1)
 	}
 
 	config.TransportProtocol = transportProtocol
@@ -124,25 +132,28 @@ var (
 )
 
 func LoadGRPCServerConfig() GRPCServerConfig {
-	var config = GRPCServerConfig{}
+	config := GRPCServerConfig{}
 
 	host := os.Getenv(gRPCServerHost)
 	if host == "" {
-		log.Fatalf("missing environment variable: %s", gRPCServerHost)
+		slog.Error("missing environment variable", "name", gRPCServerHost)
+		os.Exit(1)
 	}
 
 	config.Host = host
 
 	port := os.Getenv(gRPCServerPort)
 	if port == "" {
-		log.Fatalf("missing environment variable: %s", gRPCServerPort)
+		slog.Error("missing environment variable", "name", gRPCServerPort)
+		os.Exit(1)
 	}
 
 	config.Port = port
 
 	transportProtocol := os.Getenv(gRPCServerTransportProtocol)
 	if transportProtocol == "" {
-		log.Fatalf("missing environment variable: %s", gRPCServerTransportProtocol)
+		slog.Error("missing environment variable", "name", gRPCServerTransportProtocol)
+		os.Exit(1)
 	}
 
 	config.TransportProtocol = transportProtocol

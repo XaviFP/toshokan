@@ -39,6 +39,9 @@ version = "0.1.60"
 [dependencies.home]
 version = ">=0.5.4, <0.5.12"
 
+[dependencies.tokio-util]
+version = "0.7"
+
 [build-dependencies]
 tonic-build = {version = "0.8.4"}
 

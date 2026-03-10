@@ -19,16 +19,18 @@ services:
       timeout: 5s
       retries: 5
       start_period: 10s
-    restart: always
+    restart: unless-stopped
   cache:
     image: redis
     ports:
       - "6379:6379"
     expose:
       - "6379"
-    restart: always
+    restart: unless-stopped
   user:
-    build: user/
+    build:
+      context: .
+      dockerfile: user/Dockerfile
     depends_on:
       db:
         condition: service_healthy
@@ -37,12 +39,14 @@ services:
     env_file: 
       - env/.common
       - env/.user
-    restart: always
+    restart: unless-stopped
     labels:
       - "logging=promtail"
       - "service=user"
   deck:
-    build: deck/
+    build:
+      context: .
+      dockerfile: deck/Dockerfile
     depends_on:
       db:
         condition: service_healthy
@@ -51,21 +55,24 @@ services:
     env_file: 
       - env/.common
       - env/.deck
-    restart: always
+    restart: unless-stopped
     labels:
       - "logging=promtail"
       - "service=deck"
   dealer:
-    build: dealer/
+    build:
+      context: dealer/
     depends_on:
       db:
         condition: service_healthy
     env_file:
       - env/.common
       - env/.dealer
-    restart: always
+    restart: unless-stopped
   course:
-    build: course/
+    build:
+      context: .
+      dockerfile: course/Dockerfile
     depends_on:
       db:
         condition: service_healthy
@@ -74,12 +81,14 @@ services:
     env_file:
       - env/.common
       - env/.course
-    restart: always
+    restart: unless-stopped
     labels:
       - "logging=promtail"
       - "service=course"
   gate:
-    build: gate/
+    build:
+      context: .
+      dockerfile: gate/Dockerfile
     depends_on:
       - user
       - deck
@@ -93,7 +102,7 @@ services:
     env_file: 
       - env/.common
       - env/.gate
-    restart: always
+    restart: unless-stopped
     labels:
       - "logging=promtail"
       - "service=gate"
@@ -107,7 +116,7 @@ services:
     command: -config.file=/etc/loki/local-config.yaml
     ports:
       - "3100:3100"
-    restart: always
+    restart: unless-stopped
 
   promtail:
     image: grafana/promtail:2.9.0
@@ -118,7 +127,7 @@ services:
     command: -config.file=/etc/promtail/config.yaml
     depends_on:
       - loki
-    restart: always
+    restart: unless-stopped
 
   grafana:
     image: grafana/grafana:10.2.0
@@ -133,8 +142,12 @@ services:
       - "3000:3000"
     depends_on:
       - loki
-    restart: always
+    restart: unless-stopped
 
 volumes:
   loki-data:
   grafana-data:
+
+networks:
+  default:
+    name: toshokan

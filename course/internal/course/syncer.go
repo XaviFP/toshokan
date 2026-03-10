@@ -2,7 +2,7 @@ package course
 
 import (
 	"context"
-	"log"
+	"log/slog"
 
 	"github.com/google/uuid"
 	"github.com/juju/errors"
@@ -65,7 +65,7 @@ func (s *stateSyncer) Sync(ctx context.Context, userID, courseID uuid.UUID) erro
 		// Lesson exists in progress state, check for new decks
 		parsedDeckIDs := ParseDeckReferences(lesson.Body)
 		if len(parsedDeckIDs) == 0 {
-			log.Printf("course: no decks found for lesson %s during sync", lesson.ID.String())
+			slog.Warn("no decks found for lesson during sync", "lessonID", lesson.ID.String())
 			continue
 		}
 
@@ -103,7 +103,7 @@ func (s *stateSyncer) Sync(ctx context.Context, userID, courseID uuid.UUID) erro
 		stateLesson, exists := state.Lessons[lesson.ID.String()]
 		if !exists {
 			// This should not happen as we initialized missing lessons above
-			log.Printf("course: lesson %s not found in user progress state during sync", lesson.ID.String())
+			slog.Warn("lesson not found in user progress state during sync", "lessonID", lesson.ID.String())
 			continue
 		}
 
@@ -189,7 +189,7 @@ func (s *stateSyncer) ensureDeckInState(stateLesson *LessonProgress, deck *pbDec
 func (s *stateSyncer) ensureCardInState(stateLesson *LessonProgress, deckID string, card *pbDeck.Card) {
 	stateDeck, ok := stateLesson.Decks[deckID]
 	if !ok {
-		log.Printf("course: deck %s not found in lesson during ensureCardInState", deckID)
+		slog.Warn("deck not found in lesson during ensureCardInState", "deckID", deckID)
 		return
 	}
 
@@ -222,7 +222,7 @@ func (s *stateSyncer) pruneState(ctx context.Context, courseLessons []Lesson, st
 	for _, courseLesson := range courseLessons {
 		stateLesson, ok := state.Lessons[courseLesson.ID.String()]
 		if !ok {
-			log.Printf("course: lesson %s not found in user progress state during prune", courseLesson.ID.String())
+			slog.Warn("lesson not found in user progress state during prune", "lessonID", courseLesson.ID.String())
 			continue
 		}
 
@@ -230,7 +230,7 @@ func (s *stateSyncer) pruneState(ctx context.Context, courseLessons []Lesson, st
 		s.pruneRemovedDecks(stateLesson, courseDeckIDs)
 
 		if len(courseDeckIDs) == 0 {
-			log.Printf("course: no decks found for lesson %s during prune", courseLesson.ID.String())
+			slog.Warn("no decks found for lesson during prune", "lessonID", courseLesson.ID.String())
 			continue
 		}
 
@@ -242,7 +242,7 @@ func (s *stateSyncer) pruneState(ctx context.Context, courseLessons []Lesson, st
 
 			stateDeck, ok := stateLesson.Decks[res.Deck.Id]
 			if !ok {
-				log.Printf("course: deck %s not found in lesson %s during prune", res.Deck.Id, courseLesson.ID.String())
+				slog.Warn("deck not found in lesson during prune", "deckID", res.Deck.Id, "lessonID", courseLesson.ID.String())
 				continue
 			}
 
