@@ -19,14 +19,14 @@ services:
       timeout: 5s
       retries: 5
       start_period: 10s
-    restart: unless-stopped
+    restart: "no"
   cache:
     image: redis
     ports:
       - "6379:6379"
     expose:
       - "6379"
-    restart: unless-stopped
+    restart: "no"
   user:
     build:
       context: .
@@ -39,7 +39,7 @@ services:
     env_file: 
       - env/.common
       - env/.user
-    restart: unless-stopped
+    restart: "no"
     labels:
       - "logging=promtail"
       - "service=user"
@@ -55,7 +55,7 @@ services:
     env_file: 
       - env/.common
       - env/.deck
-    restart: unless-stopped
+    restart: "no"
     labels:
       - "logging=promtail"
       - "service=deck"
@@ -68,7 +68,7 @@ services:
     env_file:
       - env/.common
       - env/.dealer
-    restart: unless-stopped
+    restart: "no"
   course:
     build:
       context: .
@@ -81,7 +81,7 @@ services:
     env_file:
       - env/.common
       - env/.course
-    restart: unless-stopped
+    restart: "no"
     labels:
       - "logging=promtail"
       - "service=course"
@@ -102,7 +102,7 @@ services:
     env_file: 
       - env/.common
       - env/.gate
-    restart: unless-stopped
+    restart: "no"
     labels:
       - "logging=promtail"
       - "service=gate"
@@ -116,7 +116,7 @@ services:
     command: -config.file=/etc/loki/local-config.yaml
     ports:
       - "3100:3100"
-    restart: unless-stopped
+    restart: "no"
 
   promtail:
     image: grafana/promtail:2.9.0
@@ -127,7 +127,7 @@ services:
     command: -config.file=/etc/promtail/config.yaml
     depends_on:
       - loki
-    restart: unless-stopped
+    restart: "no"
 
   grafana:
     image: grafana/grafana:10.2.0
@@ -142,7 +142,7 @@ services:
       - "3000:3000"
     depends_on:
       - loki
-    restart: unless-stopped
+    restart: "no"
 
 volumes:
   loki-data:

@@ -118,3 +118,55 @@ func (s *Server) SignUp(ctx context.Context, req *pb.SignUpRequest) (*pb.SignUpR
 
 	return &pb.SignUpResponse{Token: token}, nil
 }
+
+func (s *Server) GetUsersByIDs(ctx context.Context, req *pb.GetUsersByIDsRequest) (*pb.GetUsersByIDsResponse, error) {
+	if len(req.UserIds) == 0 {
+		return &pb.GetUsersByIDsResponse{Users: []*pb.UserInfo{}}, nil
+	}
+
+	ids := make([]uuid.UUID, 0, len(req.UserIds))
+	for _, idStr := range req.UserIds {
+		id, err := uuid.Parse(idStr)
+		if err != nil {
+			slog.Error("GetUsersByIDs: invalid user ID", "error", err, "userId", idStr)
+			continue // Skip invalid UUIDs instead of failing
+		}
+		ids = append(ids, id)
+	}
+
+	if len(ids) == 0 {
+		return &pb.GetUsersByIDsResponse{Users: []*pb.UserInfo{}}, nil
+	}
+
+	users, err := s.Repository.GetUsersByIDs(ctx, ids)
+	if err != nil {
+		slog.Error("GetUsersByIDs: failed to get users", "error", err, "stack", errors.ErrorStack(err))
+		return nil, errors.Trace(err)
+	}
+
+	// Check which fields to include (empty means all)
+	includeAll := len(req.Fields) == 0
+	fieldsMap := make(map[string]bool)
+	for _, f := range req.Fields {
+		fieldsMap[f] = true
+	}
+
+	result := make([]*pb.UserInfo, 0, len(users))
+	for _, u := range users {
+		info := &pb.UserInfo{
+			Id: u.ID.String(),
+		}
+		if includeAll || fieldsMap["username"] {
+			info.Username = u.Username
+		}
+		if includeAll || fieldsMap["nick"] {
+			info.Nick = u.Nick
+		}
+		if includeAll || fieldsMap["bio"] {
+			info.Bio = u.Bio
+		}
+		result = append(result, info)
+	}
+
+	return &pb.GetUsersByIDsResponse{Users: result}, nil
+}

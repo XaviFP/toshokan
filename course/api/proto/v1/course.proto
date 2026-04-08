@@ -20,6 +20,11 @@ service CourseAPI {
   rpc UpdateCourse (UpdateCourseRequest) returns (UpdateCourseResponse) {}
   rpc UpdateLesson (UpdateLessonRequest) returns (UpdateLessonResponse) {}
   rpc SyncState (SyncStateRequest) returns (SyncStateResponse) {}
+  
+  // Backoffice endpoints
+  rpc GetStudentsProgress (GetStudentsProgressRequest) returns (GetStudentsProgressResponse) {}
+  rpc GetUserState (GetUserStateRequest) returns (GetUserStateResponse) {}
+  rpc SetUserState (SetUserStateRequest) returns (SetUserStateResponse) {}
 }
 
 message Course {
@@ -270,4 +275,85 @@ message UpdateLessonRequest {
 
 message UpdateLessonResponse {
   Lesson lesson = 1;
+}
+
+// ============================================
+// Backoffice: Student Progress Tracking
+// ============================================
+
+message StudentProgressSummary {
+  string user_id = 1;
+  string current_lesson_id = 2;
+  int32 lessons_completed = 3;
+  int32 total_lessons = 4;
+  int32 total_correct_answers = 5;
+  int32 total_incorrect_answers = 6;
+  google.protobuf.Timestamp enrolled_at = 7;
+  google.protobuf.Timestamp last_activity_at = 8;
+  // Optional detailed breakdown per lesson (when detailed=true)
+  repeated LessonProgressDetail lesson_details = 9;
+}
+
+message LessonProgressDetail {
+  string lesson_id = 1;
+  bool is_completed = 2;
+  google.protobuf.Timestamp completed_at = 3;
+  int32 correct_answers = 4;
+  int32 incorrect_answers = 5;
+}
+
+message StudentsProgressConnection {
+  message Edge {
+    StudentProgressSummary node = 1;
+    string cursor = 2;
+  }
+
+  repeated Edge edges = 1;
+  PageInfo page_info = 2;
+}
+
+message GetStudentsProgressRequest {
+  string course_id = 1;
+  Pagination pagination = 2;
+  bool detailed = 3;  // If true, include per-lesson breakdown
+}
+
+message GetStudentsProgressResponse {
+  StudentsProgressConnection students = 1;
+  int32 total_enrolled = 2;  // Total number of enrolled students (for UI)
+}
+
+// ============================================
+// Backoffice: Debug User State
+// ============================================
+
+message FullUserState {
+  string id = 1;
+  string user_id = 2;
+  string course_id = 3;
+  string current_lesson_id = 4;
+  string state_json = 5;  // Full ProgressState as JSON
+  google.protobuf.Timestamp created_at = 6;
+  google.protobuf.Timestamp updated_at = 7;
+}
+
+message GetUserStateRequest {
+  string course_id = 1;
+  string user_id = 2;
+}
+
+message GetUserStateResponse {
+  FullUserState user_state = 1;
+}
+
+message SetUserStateRequest {
+  string course_id = 1;
+  string user_id = 2;
+  string current_lesson_id = 3;  // Optional: update current lesson
+  string state_json = 4;         // Full ProgressState as JSON
+  bool sync_after = 5;           // If true, run sync after setting state
+}
+
+message SetUserStateResponse {
+  FullUserState user_state = 1;  // Return the updated state
 }

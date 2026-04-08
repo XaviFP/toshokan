@@ -69,6 +69,16 @@ func (m *RepositoryMock) UpdateUserProgress(ctx context.Context, progress UserCo
 	return m.Called(ctx, progress).Error(0)
 }
 
+func (m *RepositoryMock) GetEnrolledUsersProgress(ctx context.Context, courseID uuid.UUID, p pagination.Pagination) (StudentsProgressConnection, error) {
+	args := m.Called(ctx, courseID, p)
+	return args.Get(0).(StudentsProgressConnection), args.Error(1)
+}
+
+func (m *RepositoryMock) CountEnrolledUsers(ctx context.Context, courseID uuid.UUID) (int, error) {
+	args := m.Called(ctx, courseID)
+	return args.Get(0).(int), args.Error(1)
+}
+
 type EnrollerMock struct {
 	mock.Mock
 }

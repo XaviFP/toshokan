@@ -1,6 +1,10 @@
 package course
 
 import (
+	"time"
+
+	"github.com/google/uuid"
+
 	"github.com/XaviFP/toshokan/common/pagination"
 )
 
@@ -61,5 +65,41 @@ type CourseWithProgressEdge struct {
 
 type CoursesWithProgressConnection struct {
 	Edges    []CourseWithProgressEdge
+	PageInfo pagination.PageInfo
+}
+
+// Student progress pagination types (for backoffice)
+type StudentProgressCursor struct {
+	CreatedAt time.Time `json:"created_at"`
+	UserID    string    `json:"user_id"`
+}
+
+type StudentProgressSummary struct {
+	UserID                uuid.UUID
+	CurrentLessonID       uuid.UUID
+	LessonsCompleted      int
+	TotalLessons          int
+	TotalCorrectAnswers   int
+	TotalIncorrectAnswers int
+	EnrolledAt            time.Time
+	LastActivityAt        time.Time
+	LessonDetails         []LessonProgressDetail
+}
+
+type LessonProgressDetail struct {
+	LessonID         uuid.UUID
+	IsCompleted      bool
+	CompletedAt      *time.Time
+	CorrectAnswers   int
+	IncorrectAnswers int
+}
+
+type StudentProgressEdge struct {
+	Student StudentProgressSummary
+	Cursor  pagination.Cursor
+}
+
+type StudentsProgressConnection struct {
+	Edges    []StudentProgressEdge
 	PageInfo pagination.PageInfo
 }

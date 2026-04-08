@@ -939,3 +939,404 @@ func (m *DeckClientMock) UpdateAnswer(ctx context.Context, in *pbDeck.UpdateAnsw
 	}
 	return args.Get(0).(*pbDeck.UpdateAnswerResponse), args.Error(1)
 }
+
+// ============================================
+// Backoffice Endpoint Tests
+// ============================================
+
+func TestServer_GetStudentsProgress(t *testing.T) {
+	t.Run("success", func(t *testing.T) {
+		repoMock := &course.RepositoryMock{}
+		srv := &Server{Repository: repoMock}
+
+		courseID := uuid.MustParse("fb9ffe2c-ad66-4766-9b7b-46fd5d9acd72")
+		userID1 := uuid.MustParse("4e37a600-c29e-4d0f-af44-66f2cd8cc1c9")
+		userID2 := uuid.MustParse("5f48b711-d3ae-5e1a-ba55-77f3de9dd2da")
+		lessonID := uuid.MustParse("334ddbf8-1acc-405b-86d8-49f0d1ca636c")
+
+		studentsConn := course.StudentsProgressConnection{
+			Edges: []course.StudentProgressEdge{
+				{
+					Student: course.StudentProgressSummary{
+						UserID:                userID1,
+						CurrentLessonID:       lessonID,
+						LessonsCompleted:      3,
+						TotalLessons:          5,
+						TotalCorrectAnswers:   15,
+						TotalIncorrectAnswers: 2,
+						EnrolledAt:            time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC),
+						LastActivityAt:        time.Date(2024, 1, 15, 0, 0, 0, 0, time.UTC),
+					},
+					Cursor: "cursor1",
+				},
+				{
+					Student: course.StudentProgressSummary{
+						UserID:                userID2,
+						CurrentLessonID:       lessonID,
+						LessonsCompleted:      1,
+						TotalLessons:          5,
+						TotalCorrectAnswers:   5,
+						TotalIncorrectAnswers: 3,
+						EnrolledAt:            time.Date(2024, 1, 5, 0, 0, 0, 0, time.UTC),
+						LastActivityAt:        time.Date(2024, 1, 10, 0, 0, 0, 0, time.UTC),
+					},
+					Cursor: "cursor2",
+				},
+			},
+			PageInfo: pagination.PageInfo{
+				HasNextPage:     true,
+				HasPreviousPage: false,
+				StartCursor:     "cursor1",
+				EndCursor:       "cursor2",
+			},
+		}
+
+		repoMock.On("GetEnrolledUsersProgress", mock.Anything, courseID, mock.Anything).Return(studentsConn, nil)
+		repoMock.On("CountEnrolledUsers", mock.Anything, courseID).Return(50, nil)
+
+		req := &pb.GetStudentsProgressRequest{
+			CourseId:   courseID.String(),
+			Pagination: &pb.Pagination{First: 20},
+			Detailed:   false,
+		}
+
+		res, err := srv.GetStudentsProgress(context.Background(), req)
+		assert.NoError(t, err)
+		assert.NotNil(t, res)
+		assert.Len(t, res.Students.Edges, 2)
+		assert.Equal(t, int32(50), res.TotalEnrolled)
+		assert.Equal(t, userID1.String(), res.Students.Edges[0].Node.UserId)
+		assert.Equal(t, int32(3), res.Students.Edges[0].Node.LessonsCompleted)
+		assert.Equal(t, int32(15), res.Students.Edges[0].Node.TotalCorrectAnswers)
+		assert.True(t, res.Students.PageInfo.HasNextPage)
+		assert.False(t, res.Students.PageInfo.HasPreviousPage)
+	})
+
+	t.Run("success_with_detailed", func(t *testing.T) {
+		repoMock := &course.RepositoryMock{}
+		srv := &Server{Repository: repoMock}
+
+		courseID := uuid.MustParse("fb9ffe2c-ad66-4766-9b7b-46fd5d9acd72")
+		userID := uuid.MustParse("4e37a600-c29e-4d0f-af44-66f2cd8cc1c9")
+		lessonID := uuid.MustParse("334ddbf8-1acc-405b-86d8-49f0d1ca636c")
+		completedAt := time.Date(2024, 1, 10, 0, 0, 0, 0, time.UTC)
+
+		studentsConn := course.StudentsProgressConnection{
+			Edges: []course.StudentProgressEdge{
+				{
+					Student: course.StudentProgressSummary{
+						UserID:           userID,
+						CurrentLessonID:  lessonID,
+						LessonsCompleted: 1,
+						TotalLessons:     5,
+						EnrolledAt:       time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC),
+						LastActivityAt:   time.Date(2024, 1, 15, 0, 0, 0, 0, time.UTC),
+						LessonDetails: []course.LessonProgressDetail{
+							{
+								LessonID:         lessonID,
+								IsCompleted:      true,
+								CompletedAt:      &completedAt,
+								CorrectAnswers:   10,
+								IncorrectAnswers: 2,
+							},
+						},
+					},
+					Cursor: "cursor1",
+				},
+			},
+		}
+
+		repoMock.On("GetEnrolledUsersProgress", mock.Anything, courseID, mock.Anything).Return(studentsConn, nil)
+		repoMock.On("CountEnrolledUsers", mock.Anything, courseID).Return(1, nil)
+
+		req := &pb.GetStudentsProgressRequest{
+			CourseId:   courseID.String(),
+			Pagination: &pb.Pagination{First: 20},
+			Detailed:   true,
+		}
+
+		res, err := srv.GetStudentsProgress(context.Background(), req)
+		assert.NoError(t, err)
+		assert.NotNil(t, res)
+		assert.Len(t, res.Students.Edges, 1)
+		assert.Len(t, res.Students.Edges[0].Node.LessonDetails, 1)
+		assert.Equal(t, lessonID.String(), res.Students.Edges[0].Node.LessonDetails[0].LessonId)
+		assert.True(t, res.Students.Edges[0].Node.LessonDetails[0].IsCompleted)
+		assert.Equal(t, int32(10), res.Students.Edges[0].Node.LessonDetails[0].CorrectAnswers)
+	})
+
+	t.Run("failure_invalid_course_id", func(t *testing.T) {
+		repoMock := &course.RepositoryMock{}
+		srv := &Server{Repository: repoMock}
+
+		req := &pb.GetStudentsProgressRequest{
+			CourseId:   "invalid-uuid",
+			Pagination: &pb.Pagination{First: 20},
+		}
+
+		res, err := srv.GetStudentsProgress(context.Background(), req)
+		assert.Error(t, err)
+		assert.Nil(t, res)
+	})
+
+	t.Run("failure_repo_error", func(t *testing.T) {
+		repoMock := &course.RepositoryMock{}
+		srv := &Server{Repository: repoMock}
+
+		courseID := uuid.MustParse("fb9ffe2c-ad66-4766-9b7b-46fd5d9acd72")
+		repoMock.On("GetEnrolledUsersProgress", mock.Anything, courseID, mock.Anything).Return(course.StudentsProgressConnection{}, assert.AnError)
+
+		req := &pb.GetStudentsProgressRequest{
+			CourseId:   courseID.String(),
+			Pagination: &pb.Pagination{First: 20},
+		}
+
+		res, err := srv.GetStudentsProgress(context.Background(), req)
+		assert.Error(t, err)
+		assert.Nil(t, res)
+	})
+}
+
+func TestServer_GetUserState(t *testing.T) {
+	t.Run("success", func(t *testing.T) {
+		repoMock := &course.RepositoryMock{}
+		srv := &Server{Repository: repoMock}
+
+		userID := uuid.MustParse("4e37a600-c29e-4d0f-af44-66f2cd8cc1c9")
+		courseID := uuid.MustParse("fb9ffe2c-ad66-4766-9b7b-46fd5d9acd72")
+		lessonID := uuid.MustParse("334ddbf8-1acc-405b-86d8-49f0d1ca636c")
+		progressID := uuid.MustParse("8a5bc922-3def-4567-8901-2345abcdef67")
+
+		progressState := course.NewProgressState()
+		progressState.Lessons["lesson1"] = &course.LessonProgress{
+			IsCompleted: true,
+			Decks:       make(map[string]*course.DeckProgress),
+		}
+
+		progress := course.UserCourseProgress{
+			ID:              progressID,
+			UserID:          userID,
+			CourseID:        courseID,
+			CurrentLessonID: lessonID,
+			State:           progressState,
+			CreatedAt:       time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC),
+			UpdatedAt:       time.Date(2024, 1, 15, 0, 0, 0, 0, time.UTC),
+		}
+
+		repoMock.On("GetUserCourseProgress", mock.Anything, userID, courseID).Return(progress, nil)
+
+		req := &pb.GetUserStateRequest{
+			CourseId: courseID.String(),
+			UserId:   userID.String(),
+		}
+
+		res, err := srv.GetUserState(context.Background(), req)
+		assert.NoError(t, err)
+		assert.NotNil(t, res)
+		assert.Equal(t, progressID.String(), res.UserState.Id)
+		assert.Equal(t, userID.String(), res.UserState.UserId)
+		assert.Equal(t, courseID.String(), res.UserState.CourseId)
+		assert.Equal(t, lessonID.String(), res.UserState.CurrentLessonId)
+		assert.Contains(t, res.UserState.StateJson, "lesson1")
+	})
+
+	t.Run("failure_invalid_user_id", func(t *testing.T) {
+		repoMock := &course.RepositoryMock{}
+		srv := &Server{Repository: repoMock}
+
+		req := &pb.GetUserStateRequest{
+			CourseId: "fb9ffe2c-ad66-4766-9b7b-46fd5d9acd72",
+			UserId:   "invalid-uuid",
+		}
+
+		res, err := srv.GetUserState(context.Background(), req)
+		assert.Error(t, err)
+		assert.Nil(t, res)
+	})
+
+	t.Run("failure_invalid_course_id", func(t *testing.T) {
+		repoMock := &course.RepositoryMock{}
+		srv := &Server{Repository: repoMock}
+
+		req := &pb.GetUserStateRequest{
+			CourseId: "invalid-uuid",
+			UserId:   "4e37a600-c29e-4d0f-af44-66f2cd8cc1c9",
+		}
+
+		res, err := srv.GetUserState(context.Background(), req)
+		assert.Error(t, err)
+		assert.Nil(t, res)
+	})
+
+	t.Run("failure_user_not_enrolled", func(t *testing.T) {
+		repoMock := &course.RepositoryMock{}
+		srv := &Server{Repository: repoMock}
+
+		userID := uuid.MustParse("4e37a600-c29e-4d0f-af44-66f2cd8cc1c9")
+		courseID := uuid.MustParse("fb9ffe2c-ad66-4766-9b7b-46fd5d9acd72")
+
+		repoMock.On("GetUserCourseProgress", mock.Anything, userID, courseID).Return(course.UserCourseProgress{}, course.ErrUserProgressNotFound)
+
+		req := &pb.GetUserStateRequest{
+			CourseId: courseID.String(),
+			UserId:   userID.String(),
+		}
+
+		res, err := srv.GetUserState(context.Background(), req)
+		assert.Error(t, err)
+		assert.Nil(t, res)
+	})
+}
+
+func TestServer_SetUserState(t *testing.T) {
+	t.Run("success", func(t *testing.T) {
+		repoMock := &course.RepositoryMock{}
+		srv := &Server{Repository: repoMock}
+
+		userID := uuid.MustParse("4e37a600-c29e-4d0f-af44-66f2cd8cc1c9")
+		courseID := uuid.MustParse("fb9ffe2c-ad66-4766-9b7b-46fd5d9acd72")
+		lessonID := uuid.MustParse("334ddbf8-1acc-405b-86d8-49f0d1ca636c")
+		newLessonID := uuid.MustParse("445ecf09-2bdd-516c-9012-3456cdefab78")
+		progressID := uuid.MustParse("8a5bc922-3def-4567-8901-2345abcdef67")
+
+		existingProgress := course.UserCourseProgress{
+			ID:              progressID,
+			UserID:          userID,
+			CourseID:        courseID,
+			CurrentLessonID: lessonID,
+			State:           course.NewProgressState(),
+			CreatedAt:       time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC),
+			UpdatedAt:       time.Date(2024, 1, 15, 0, 0, 0, 0, time.UTC),
+		}
+
+		repoMock.On("GetUserCourseProgress", mock.Anything, userID, courseID).Return(existingProgress, nil)
+		repoMock.On("UpdateUserProgress", mock.Anything, mock.MatchedBy(func(p course.UserCourseProgress) bool {
+			return p.UserID == userID && p.CourseID == courseID && p.CurrentLessonID == newLessonID
+		})).Return(nil)
+
+		newStateJSON := `{"lessons":{"lesson1":{"decks":{},"is_completed":true}}}`
+		req := &pb.SetUserStateRequest{
+			CourseId:        courseID.String(),
+			UserId:          userID.String(),
+			CurrentLessonId: newLessonID.String(),
+			StateJson:       newStateJSON,
+			SyncAfter:       false,
+		}
+
+		res, err := srv.SetUserState(context.Background(), req)
+		assert.NoError(t, err)
+		assert.NotNil(t, res)
+		assert.Equal(t, userID.String(), res.UserState.UserId)
+		assert.Equal(t, newLessonID.String(), res.UserState.CurrentLessonId)
+	})
+
+	t.Run("success_with_sync", func(t *testing.T) {
+		repoMock := &course.RepositoryMock{}
+		syncerMock := &course.StateSyncerMock{}
+		srv := &Server{Repository: repoMock, StateSyncer: syncerMock}
+
+		userID := uuid.MustParse("4e37a600-c29e-4d0f-af44-66f2cd8cc1c9")
+		courseID := uuid.MustParse("fb9ffe2c-ad66-4766-9b7b-46fd5d9acd72")
+		progressID := uuid.MustParse("8a5bc922-3def-4567-8901-2345abcdef67")
+
+		existingProgress := course.UserCourseProgress{
+			ID:       progressID,
+			UserID:   userID,
+			CourseID: courseID,
+			State:    course.NewProgressState(),
+		}
+
+		repoMock.On("GetUserCourseProgress", mock.Anything, userID, courseID).Return(existingProgress, nil)
+		repoMock.On("UpdateUserProgress", mock.Anything, mock.Anything).Return(nil)
+		syncerMock.On("Sync", mock.Anything, userID, courseID).Return(nil)
+
+		newStateJSON := `{"lessons":{}}`
+		req := &pb.SetUserStateRequest{
+			CourseId:  courseID.String(),
+			UserId:    userID.String(),
+			StateJson: newStateJSON,
+			SyncAfter: true,
+		}
+
+		res, err := srv.SetUserState(context.Background(), req)
+		assert.NoError(t, err)
+		assert.NotNil(t, res)
+		syncerMock.AssertCalled(t, "Sync", mock.Anything, userID, courseID)
+	})
+
+	t.Run("failure_invalid_state_json", func(t *testing.T) {
+		repoMock := &course.RepositoryMock{}
+		srv := &Server{Repository: repoMock}
+
+		userID := uuid.MustParse("4e37a600-c29e-4d0f-af44-66f2cd8cc1c9")
+		courseID := uuid.MustParse("fb9ffe2c-ad66-4766-9b7b-46fd5d9acd72")
+
+		existingProgress := course.UserCourseProgress{
+			ID:       uuid.New(),
+			UserID:   userID,
+			CourseID: courseID,
+			State:    course.NewProgressState(),
+		}
+
+		repoMock.On("GetUserCourseProgress", mock.Anything, userID, courseID).Return(existingProgress, nil)
+
+		req := &pb.SetUserStateRequest{
+			CourseId:  courseID.String(),
+			UserId:    userID.String(),
+			StateJson: "invalid json {{{",
+		}
+
+		res, err := srv.SetUserState(context.Background(), req)
+		assert.Error(t, err)
+		assert.Nil(t, res)
+		assert.Contains(t, err.Error(), "invalid state JSON")
+	})
+
+	t.Run("failure_invalid_current_lesson_id", func(t *testing.T) {
+		repoMock := &course.RepositoryMock{}
+		srv := &Server{Repository: repoMock}
+
+		userID := uuid.MustParse("4e37a600-c29e-4d0f-af44-66f2cd8cc1c9")
+		courseID := uuid.MustParse("fb9ffe2c-ad66-4766-9b7b-46fd5d9acd72")
+
+		existingProgress := course.UserCourseProgress{
+			ID:       uuid.New(),
+			UserID:   userID,
+			CourseID: courseID,
+			State:    course.NewProgressState(),
+		}
+
+		repoMock.On("GetUserCourseProgress", mock.Anything, userID, courseID).Return(existingProgress, nil)
+
+		req := &pb.SetUserStateRequest{
+			CourseId:        courseID.String(),
+			UserId:          userID.String(),
+			CurrentLessonId: "invalid-uuid",
+			StateJson:       `{"lessons":{}}`,
+		}
+
+		res, err := srv.SetUserState(context.Background(), req)
+		assert.Error(t, err)
+		assert.Nil(t, res)
+	})
+
+	t.Run("failure_user_not_enrolled", func(t *testing.T) {
+		repoMock := &course.RepositoryMock{}
+		srv := &Server{Repository: repoMock}
+
+		userID := uuid.MustParse("4e37a600-c29e-4d0f-af44-66f2cd8cc1c9")
+		courseID := uuid.MustParse("fb9ffe2c-ad66-4766-9b7b-46fd5d9acd72")
+
+		repoMock.On("GetUserCourseProgress", mock.Anything, userID, courseID).Return(course.UserCourseProgress{}, course.ErrUserProgressNotFound)
+
+		req := &pb.SetUserStateRequest{
+			CourseId:  courseID.String(),
+			UserId:    userID.String(),
+			StateJson: `{"lessons":{}}`,
+		}
+
+		res, err := srv.SetUserState(context.Background(), req)
+		assert.Error(t, err)
+		assert.Nil(t, res)
+	})
+}

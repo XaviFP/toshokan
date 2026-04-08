@@ -1,6 +1,7 @@
 package gate
 
 import (
+	"context"
 	"log/slog"
 	"net/http"
 	"strconv"
@@ -13,6 +14,7 @@ import (
 	"google.golang.org/protobuf/types/known/timestamppb"
 
 	pb "github.com/XaviFP/toshokan/course/api/proto/v1"
+	userPb "github.com/XaviFP/toshokan/user/api/proto/v1"
 )
 
 func GetCourse(ctx *gin.Context, client pb.CourseAPIClient) {
@@ -499,7 +501,164 @@ func SyncState(ctx *gin.Context, client pb.CourseAPIClient) {
 	ctx.JSON(http.StatusOK, gin.H{})
 }
 
-func RegisterCoursesRoutes(r *gin.RouterGroup, client pb.CourseAPIClient, adminCfg AdminConfig) {
+// ============================================
+// Backoffice Handlers
+// ============================================
+
+// GetStudentsProgress retrieves paginated student progress for a course (admin-only)
+func GetStudentsProgress(ctx *gin.Context, client pb.CourseAPIClient, userClient userPb.UserAPIClient) {
+	courseID := ctx.Param("courseId")
+	if courseID == "" {
+		ctx.JSON(http.StatusBadRequest, gin.H{"error": "missing course id"})
+		return
+	}
+
+	pagination, err := parsePagination(ctx)
+	if err != nil {
+		slog.Error("GetStudentsProgress: failed to parse pagination", "error", err, "courseId", courseID, "stack", errors.ErrorStack(err))
+		ctx.JSON(http.StatusBadRequest, gin.H{"error": "invalid pagination parameters"})
+		return
+	}
+
+	detailed := ctx.Query("detailed") == "true"
+
+	req := &pb.GetStudentsProgressRequest{
+		CourseId:   courseID,
+		Pagination: pagination,
+		Detailed:   detailed,
+	}
+
+	res, err := client.GetStudentsProgress(ctx, req)
+	if err != nil {
+		if isHandledError(ctx, err) {
+			return
+		}
+		slog.Error("GetStudentsProgress: gRPC call failed", "error", err, "courseId", courseID, "stack", errors.ErrorStack(err))
+		ctx.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	// Fetch user info to enrich the response with usernames/nicks
+	edges := convertStudentProgressEdges(res.Students.Edges)
+	if len(edges) > 0 {
+		userIDs := make([]string, 0, len(edges))
+		for _, edge := range edges {
+			userIDs = append(userIDs, edge.Node.UserID)
+		}
+
+		usersReq := &userPb.GetUsersByIDsRequest{
+			UserIds: userIDs,
+			Fields:  []string{"username", "nick"},
+		}
+
+		usersRes, err := userClient.GetUsersByIDs(context.Background(), usersReq)
+		if err != nil {
+			// Log but don't fail - user info is supplementary
+			slog.Warn("GetStudentsProgress: failed to fetch user info", "error", err, "courseId", courseID)
+		} else {
+			// Build a map for quick lookup
+			userMap := make(map[string]*userPb.UserInfo, len(usersRes.Users))
+			for _, user := range usersRes.Users {
+				userMap[user.Id] = user
+			}
+
+			// Enrich edges with user info
+			var missingUsers []string
+			for i := range edges {
+				if user, ok := userMap[edges[i].Node.UserID]; ok {
+					edges[i].Node.Username = user.Username
+					edges[i].Node.Nick = user.Nick
+				} else {
+					missingUsers = append(missingUsers, edges[i].Node.UserID)
+				}
+			}
+
+			if len(missingUsers) > 0 {
+				slog.Warn("GetStudentsProgress: some users not found in user service", "courseId", courseID, "missingUsers", missingUsers)
+			}
+		}
+	}
+
+	ctx.JSON(http.StatusOK, gin.H{
+		"edges":          edges,
+		"page_info":      toPageInfoJSON(res.Students.PageInfo),
+		"total_enrolled": res.TotalEnrolled,
+	})
+}
+
+// GetUserState retrieves the full user state for debugging (admin-only)
+func GetUserState(ctx *gin.Context, client pb.CourseAPIClient) {
+	courseID := ctx.Param("courseId")
+	userID := ctx.Param("userId")
+
+	if courseID == "" || userID == "" {
+		ctx.JSON(http.StatusBadRequest, gin.H{"error": "missing course id or user id"})
+		return
+	}
+
+	req := &pb.GetUserStateRequest{
+		CourseId: courseID,
+		UserId:   userID,
+	}
+
+	res, err := client.GetUserState(ctx, req)
+	if err != nil {
+		if isHandledError(ctx, err) {
+			return
+		}
+		slog.Error("GetUserState: gRPC call failed", "error", err, "courseId", courseID, "userId", userID, "stack", errors.ErrorStack(err))
+		ctx.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	ctx.JSON(http.StatusOK, toFullUserStateJSON(res.UserState))
+}
+
+// SetUserState updates the full user state for debugging (admin-only)
+func SetUserState(ctx *gin.Context, client pb.CourseAPIClient) {
+	courseID := ctx.Param("courseId")
+	userID := ctx.Param("userId")
+
+	if courseID == "" || userID == "" {
+		ctx.JSON(http.StatusBadRequest, gin.H{"error": "missing course id or user id"})
+		return
+	}
+
+	var reqBody struct {
+		CurrentLessonID string `json:"current_lesson_id"`
+		StateJSON       string `json:"state_json"`
+	}
+
+	if err := ctx.ShouldBindJSON(&reqBody); err != nil {
+		slog.Error("SetUserState: failed to bind JSON", "error", err, "courseId", courseID, "userId", userID, "stack", errors.ErrorStack(err))
+		ctx.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	syncAfter := ctx.Query("sync") == "true"
+
+	req := &pb.SetUserStateRequest{
+		CourseId:        courseID,
+		UserId:          userID,
+		CurrentLessonId: reqBody.CurrentLessonID,
+		StateJson:       reqBody.StateJSON,
+		SyncAfter:       syncAfter,
+	}
+
+	res, err := client.SetUserState(ctx, req)
+	if err != nil {
+		if isHandledError(ctx, err) {
+			return
+		}
+		slog.Error("SetUserState: gRPC call failed", "error", err, "courseId", courseID, "userId", userID, "stack", errors.ErrorStack(err))
+		ctx.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	ctx.JSON(http.StatusOK, toFullUserStateJSON(res.UserState))
+}
+
+func RegisterCoursesRoutes(r *gin.RouterGroup, client pb.CourseAPIClient, userClient userPb.UserAPIClient, adminCfg AdminConfig) {
 	course := r.Group("/courses")
 	{
 		course.POST("", RequireAdmin(adminCfg, adminCfg.CreateCourseAdminOnly), func(ctx *gin.Context) {
@@ -540,6 +699,17 @@ func RegisterCoursesRoutes(r *gin.RouterGroup, client pb.CourseAPIClient, adminC
 		})
 		course.POST("/:courseId/sync", func(ctx *gin.Context) {
 			SyncState(ctx, client)
+		})
+
+		// Backoffice endpoints (always admin-only)
+		course.GET("/:courseId/students/progress", RequireAdmin(adminCfg, true), func(ctx *gin.Context) {
+			GetStudentsProgress(ctx, client, userClient)
+		})
+		course.GET("/:courseId/users/:userId/state", RequireAdmin(adminCfg, true), func(ctx *gin.Context) {
+			GetUserState(ctx, client)
+		})
+		course.PUT("/:courseId/users/:userId/state", RequireAdmin(adminCfg, true), func(ctx *gin.Context) {
+			SetUserState(ctx, client)
 		})
 	}
 }
@@ -763,6 +933,100 @@ func toBodylessLessonJSON(lesson *pb.Lesson) BodylessLessonJSON {
 		CreatedAt:   convertProtoTimestamp(lesson.CreatedAt),
 		UpdatedAt:   protoToJSON(lesson.UpdatedAt),
 		DeletedAt:   protoToJSON(lesson.DeletedAt),
+	}
+}
+
+// ============================================
+// Backoffice JSON types and converters
+// ============================================
+
+// StudentProgressJSON represents a student's progress summary for JSON response
+type StudentProgressJSON struct {
+	UserID                string                     `json:"user_id"`
+	Username              string                     `json:"username,omitempty"`
+	Nick                  string                     `json:"nick,omitempty"`
+	CurrentLessonID       string                     `json:"current_lesson_id"`
+	LessonsCompleted      int32                      `json:"lessons_completed"`
+	TotalLessons          int32                      `json:"total_lessons"`
+	TotalCorrectAnswers   int32                      `json:"total_correct_answers"`
+	TotalIncorrectAnswers int32                      `json:"total_incorrect_answers"`
+	EnrolledAt            string                     `json:"enrolled_at"`
+	LastActivityAt        string                     `json:"last_activity_at"`
+	LessonDetails         []LessonProgressDetailJSON `json:"lesson_details,omitempty"`
+}
+
+// LessonProgressDetailJSON represents per-lesson progress detail
+type LessonProgressDetailJSON struct {
+	LessonID         string  `json:"lesson_id"`
+	IsCompleted      bool    `json:"is_completed"`
+	CompletedAt      *string `json:"completed_at,omitempty"`
+	CorrectAnswers   int32   `json:"correct_answers"`
+	IncorrectAnswers int32   `json:"incorrect_answers"`
+}
+
+// StudentProgressEdgeJSON represents a student progress edge for JSON response
+type StudentProgressEdgeJSON struct {
+	Node   StudentProgressJSON `json:"node"`
+	Cursor string              `json:"cursor"`
+}
+
+// FullUserStateJSON represents the full user state for debugging
+type FullUserStateJSON struct {
+	ID              string `json:"id"`
+	UserID          string `json:"user_id"`
+	CourseID        string `json:"course_id"`
+	CurrentLessonID string `json:"current_lesson_id"`
+	StateJSON       string `json:"state_json"`
+	CreatedAt       string `json:"created_at"`
+	UpdatedAt       string `json:"updated_at"`
+}
+
+func convertStudentProgressEdges(edges []*pb.StudentsProgressConnection_Edge) []StudentProgressEdgeJSON {
+	result := make([]StudentProgressEdgeJSON, 0, len(edges))
+	for _, edge := range edges {
+		summary := StudentProgressJSON{
+			UserID:                edge.Node.UserId,
+			CurrentLessonID:       edge.Node.CurrentLessonId,
+			LessonsCompleted:      edge.Node.LessonsCompleted,
+			TotalLessons:          edge.Node.TotalLessons,
+			TotalCorrectAnswers:   edge.Node.TotalCorrectAnswers,
+			TotalIncorrectAnswers: edge.Node.TotalIncorrectAnswers,
+			EnrolledAt:            convertProtoTimestamp(edge.Node.EnrolledAt),
+			LastActivityAt:        convertProtoTimestamp(edge.Node.LastActivityAt),
+		}
+
+		// Convert lesson details if present
+		if len(edge.Node.LessonDetails) > 0 {
+			summary.LessonDetails = make([]LessonProgressDetailJSON, 0, len(edge.Node.LessonDetails))
+			for _, detail := range edge.Node.LessonDetails {
+				detailJSON := LessonProgressDetailJSON{
+					LessonID:         detail.LessonId,
+					IsCompleted:      detail.IsCompleted,
+					CompletedAt:      protoToJSON(detail.CompletedAt),
+					CorrectAnswers:   detail.CorrectAnswers,
+					IncorrectAnswers: detail.IncorrectAnswers,
+				}
+				summary.LessonDetails = append(summary.LessonDetails, detailJSON)
+			}
+		}
+
+		result = append(result, StudentProgressEdgeJSON{
+			Node:   summary,
+			Cursor: edge.Cursor,
+		})
+	}
+	return result
+}
+
+func toFullUserStateJSON(state *pb.FullUserState) FullUserStateJSON {
+	return FullUserStateJSON{
+		ID:              state.Id,
+		UserID:          state.UserId,
+		CourseID:        state.CourseId,
+		CurrentLessonID: state.CurrentLessonId,
+		StateJSON:       state.StateJson,
+		CreatedAt:       convertProtoTimestamp(state.CreatedAt),
+		UpdatedAt:       convertProtoTimestamp(state.UpdatedAt),
 	}
 }
 
