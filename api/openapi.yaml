@@ -339,7 +339,7 @@ paths:
       operationId: getStudentsProgress
       security:
         - BearerAuth: []
-        - AdminAuth: []
+          AdminAuth: []
       parameters:
         - name: courseId
           in: path
@@ -416,7 +416,7 @@ paths:
       operationId: getUserState
       security:
         - BearerAuth: []
-        - AdminAuth: []
+          AdminAuth: []
       parameters:
         - name: courseId
           in: path
@@ -479,7 +479,7 @@ paths:
       operationId: setUserState
       security:
         - BearerAuth: []
-        - AdminAuth: []
+          AdminAuth: []
       parameters:
         - name: courseId
           in: path
