@@ -83,8 +83,8 @@ COPY --from=proto-builder /proto/user/api/proto/v1/*.pb.go user/api/proto/v1/
 COPY --from=proto-builder /proto/course/api/proto/v1/*.pb.go course/api/proto/v1/
 COPY --from=proto-builder /proto/dealer/api/proto/v1/*.pb.go dealer/api/proto/v1/
 
-# Build the binary
-RUN CGO_ENABLED=0 GOOS=linux go build -o /gate ./gate/cmd/gate/
+# Build the binary (-p 1 limits parallel compilation to reduce memory usage)
+RUN CGO_ENABLED=0 GOOS=linux go build -p 1 -o /gate ./gate/cmd/gate/
 
 # =============================================================================
 # Stage 3: Runtime
