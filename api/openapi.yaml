@@ -495,7 +495,7 @@ paths:
           schema:
             type: string
             format: uuid
-        - name: sync_after
+        - name: sync
           in: query
           required: false
           description: Trigger sync after updating state
@@ -2155,19 +2155,31 @@ components:
       type: object
       description: Paginated response of student progress for a course
       properties:
-        students:
+        edges:
           type: array
           items:
-            $ref: '#/components/schemas/StudentProgressSummary'
+            $ref: '#/components/schemas/StudentProgressSummaryEdge'
         page_info:
           $ref: '#/components/schemas/PageInfo'
         total_enrolled:
           type: integer
           description: Total number of enrolled students in the course
       required:
-        - students
+        - edges
         - page_info
         - total_enrolled
+
+    StudentProgressSummaryEdge:
+      type: object
+      properties:
+        node:
+          $ref: '#/components/schemas/StudentProgressSummary'
+        cursor:
+          type: string
+          description: Pagination cursor for this edge
+      required:
+        - node
+        - cursor
 
     StudentProgressSummary:
       type: object
@@ -2249,6 +2261,10 @@ components:
       type: object
       description: Full user state for debugging
       properties:
+        id:
+          type: string
+          format: uuid
+          description: Progress record UUID
         user_id:
           type: string
           format: uuid
@@ -2261,19 +2277,20 @@ components:
         state_json:
           type: string
           description: The full progress state as a JSON string
-        enrolled_at:
+        created_at:
           type: string
           format: date-time
-        last_updated_at:
+        updated_at:
           type: string
           format: date-time
       required:
+        - id
         - user_id
         - course_id
         - current_lesson_id
         - state_json
-        - enrolled_at
-        - last_updated_at
+        - created_at
+        - updated_at
 
     SetUserStateRequest:
       type: object
@@ -2285,7 +2302,6 @@ components:
         current_lesson_id:
           type: string
           format: uuid
-          description: The current lesson ID to set
+          description: The current lesson ID to set. If omitted, the current lesson remains unchanged.
       required:
         - state_json
-        - current_lesson_id
