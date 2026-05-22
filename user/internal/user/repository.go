@@ -238,7 +238,8 @@ func (r *pgRepository) GetUsersByIDs(ctx context.Context, ids []uuid.UUID) ([]Us
 			nick,
 			bio
 		FROM users
-		WHERE id = ANY($1::uuid[])`
+		WHERE id = ANY($1::uuid[])
+		ORDER BY array_position($1::uuid[], id)`
 
 	rows, err := r.db.QueryContext(ctx, query, pq.Array(ids))
 	if err != nil {
