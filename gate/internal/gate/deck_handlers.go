@@ -9,6 +9,8 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	"github.com/juju/errors"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 
 	pbDeck "github.com/XaviFP/toshokan/deck/api/proto/v1"
 	pbUser "github.com/XaviFP/toshokan/user/api/proto/v1"
@@ -32,10 +34,9 @@ func GetDeck(ctx *gin.Context, usersClient pbUser.UserAPIClient, decksClient pbD
 
 	res, err := decksClient.GetDeck(ctx, req)
 	if err != nil {
-		// TODO: Handle these errors properly
-		if strings.Contains(err.Error(), "deck: deck not found") {
+		if status.Code(err) == codes.NotFound {
 			slog.Error("GetDeck: deck not found", "error", err, "deckId", deckID)
-			ctx.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
+			ctx.JSON(http.StatusNotFound, gin.H{"error": "deck not found"})
 			return
 		}
 		slog.Error("GetDeck: gRPC call failed", "error", err, "deckId", deckID, "stack", errors.ErrorStack(err))
@@ -101,11 +102,11 @@ func DeleteDeck(ctx *gin.Context, usersClient pbUser.UserAPIClient, decksClient 
 
 	_, err := decksClient.DeleteDeck(ctx, &pbDeck.DeleteDeckRequest{Id: deckID})
 	if err != nil {
-		slog.Error("DeleteDeck: gRPC call failed", "error", err, "deckId", deckID, "stack", errors.ErrorStack(err))
-		if strings.Contains(err.Error(), "deck: deck not found") {
-			ctx.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
+		if status.Code(err) == codes.NotFound {
+			ctx.JSON(http.StatusNotFound, gin.H{"error": "deck not found"})
 			return
 		}
+		slog.Error("DeleteDeck: gRPC call failed", "error", err, "deckId", deckID, "stack", errors.ErrorStack(err))
 		ctx.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
@@ -149,7 +150,7 @@ func UpdateDeck(ctx *gin.Context, usersClient pbUser.UserAPIClient, decksClient 
 		IsPublic:    req.IsPublic,
 	})
 	if err != nil {
-		if strings.Contains(err.Error(), "deck: deck not found") {
+		if status.Code(err) == codes.NotFound {
 			ctx.JSON(http.StatusNotFound, gin.H{"error": "deck not found"})
 			return
 		}
@@ -209,11 +210,11 @@ func UpdateCard(ctx *gin.Context, usersClient pbUser.UserAPIClient, decksClient 
 		Kind:        req.Kind,
 	})
 	if err != nil {
-		if strings.Contains(err.Error(), "deck: card not found") {
+		if status.Code(err) == codes.NotFound {
 			ctx.JSON(http.StatusNotFound, gin.H{"error": "card not found"})
 			return
 		}
-		if strings.Contains(err.Error(), "deck: kind must be") {
+		if status.Code(err) == codes.InvalidArgument {
 			ctx.JSON(http.StatusBadRequest, gin.H{"error": "invalid card kind"})
 			return
 		}

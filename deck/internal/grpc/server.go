@@ -319,7 +319,7 @@ func (s *Server) UpdateCard(ctx context.Context, req *pb.UpdateCardRequest) (*pb
 
 	// Validate kind if provided
 	if updates.Kind != nil && *updates.Kind != deck.CardKindSingleChoice && *updates.Kind != deck.CardKindFillInTheBlanks {
-		return nil, deck.ErrInvalidKind
+		return nil, status.Error(codes.InvalidArgument, deck.ErrInvalidKind.Error())
 	}
 
 	c, err := s.Repository.UpdateCard(ctx, deckID, cardID, updates)

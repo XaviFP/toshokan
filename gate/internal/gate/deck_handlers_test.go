@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
-	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -13,6 +12,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 
 	pbDeck "github.com/XaviFP/toshokan/deck/api/proto/v1"
 	pbUser "github.com/XaviFP/toshokan/user/api/proto/v1"
@@ -82,7 +83,9 @@ func TestDeleteDeck(t *testing.T) {
 		decksClient := &mockDecksClient{}
 		usersClient := &mockUsersClient{}
 
-		decksClient.On("DeleteDeck", mock.Anything, mock.Anything).Return(nil, assert.AnError)
+		decksClient.On("DeleteDeck", mock.Anything, mock.MatchedBy(func(req *pbDeck.DeleteDeckRequest) bool {
+			return req.Id == "fb9ffe2c-ad66-4766-9b7b-46fd5d9acd72"
+		})).Return(nil, assert.AnError)
 
 		router := gin.New()
 		router.DELETE("/decks/:deckId", func(ctx *gin.Context) {
@@ -100,8 +103,10 @@ func TestDeleteDeck(t *testing.T) {
 		decksClient := &mockDecksClient{}
 		usersClient := &mockUsersClient{}
 
-		notFoundErr := fmt.Errorf("rpc error: code = NotFound desc = deck: deck not found")
-		decksClient.On("DeleteDeck", mock.Anything, mock.Anything).Return(nil, notFoundErr)
+		notFoundErr := status.Error(codes.NotFound, "deck: deck not found")
+		decksClient.On("DeleteDeck", mock.Anything, mock.MatchedBy(func(req *pbDeck.DeleteDeckRequest) bool {
+			return req.Id == "00000000-0000-0000-0000-000000000000"
+		})).Return(nil, notFoundErr)
 
 		router := gin.New()
 		router.DELETE("/decks/:deckId", func(ctx *gin.Context) {
@@ -213,7 +218,10 @@ func TestUpdateDeck(t *testing.T) {
 		usersClient := &mockUsersClient{}
 
 		title := "New Title"
-		decksClient.On("UpdateDeck", mock.Anything, mock.Anything).Return(nil, assert.AnError)
+		notFoundErr := status.Error(codes.NotFound, "deck: deck not found")
+		decksClient.On("UpdateDeck", mock.Anything, mock.MatchedBy(func(req *pbDeck.UpdateDeckRequest) bool {
+			return req.Id == "00000000-0000-0000-0000-000000000000" && *req.Title == title
+		})).Return(nil, notFoundErr)
 
 		router := gin.New()
 		router.PATCH("/decks/:deckId", func(ctx *gin.Context) {
@@ -226,7 +234,7 @@ func TestUpdateDeck(t *testing.T) {
 		w := httptest.NewRecorder()
 		router.ServeHTTP(w, req)
 
-		assert.Equal(t, http.StatusInternalServerError, w.Code)
+		assert.Equal(t, http.StatusNotFound, w.Code)
 	})
 }
 
