@@ -1095,6 +1095,54 @@ func TestServer_GetStudentsProgress(t *testing.T) {
 		assert.Error(t, err)
 		assert.Nil(t, res)
 	})
+
+	t.Run("success_with_nil_pagination", func(t *testing.T) {
+		repoMock := &course.RepositoryMock{}
+		srv := &Server{Repository: repoMock}
+
+		courseID := uuid.MustParse("fb9ffe2c-ad66-4766-9b7b-46fd5d9acd72")
+		userID := uuid.MustParse("4e37a600-c29e-4d0f-af44-66f2cd8cc1c9")
+		lessonID := uuid.MustParse("334ddbf8-1acc-405b-86d8-49f0d1ca636c")
+
+		studentsConn := course.StudentsProgressConnection{
+			Edges: []course.StudentProgressEdge{
+				{
+					Student: course.StudentProgressSummary{
+						UserID:           userID,
+						CurrentLessonID:  lessonID,
+						LessonsCompleted: 2,
+						TotalLessons:     5,
+						EnrolledAt:       time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC),
+						LastActivityAt:   time.Date(2024, 1, 10, 0, 0, 0, 0, time.UTC),
+					},
+					Cursor: "cursor1",
+				},
+			},
+			PageInfo: pagination.PageInfo{
+				HasNextPage:     false,
+				HasPreviousPage: false,
+				StartCursor:     "cursor1",
+				EndCursor:       "cursor1",
+			},
+		}
+
+		repoMock.On("GetEnrolledUsersProgress", mock.Anything, courseID, mock.MatchedBy(func(p pagination.Pagination) bool {
+			// Verify default pagination is applied: first=20
+			return p.First == 20
+		})).Return(studentsConn, nil)
+		repoMock.On("CountEnrolledUsers", mock.Anything, courseID).Return(1, nil)
+
+		req := &pb.GetStudentsProgressRequest{
+			CourseId:   courseID.String(),
+			Pagination: nil, // nil pagination should default to first=20
+		}
+
+		res, err := srv.GetStudentsProgress(context.Background(), req)
+		assert.NoError(t, err)
+		assert.NotNil(t, res)
+		assert.Len(t, res.Students.Edges, 1)
+		assert.Equal(t, int32(1), res.TotalEnrolled)
+	})
 }
 
 func TestServer_GetUserState(t *testing.T) {

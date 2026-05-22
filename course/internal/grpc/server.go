@@ -740,12 +740,19 @@ func (s *Server) GetStudentsProgress(ctx context.Context, req *pb.GetStudentsPro
 		return nil, errors.Trace(err)
 	}
 
-	p := pagination.NewOldestFirstPagination(
-		pagination.WithFirst(int(req.Pagination.First)),
-		pagination.WithLast(int(req.Pagination.Last)),
-		pagination.WithAfter(pagination.Cursor(req.Pagination.After)),
-		pagination.WithBefore(pagination.Cursor(req.Pagination.Before)),
-	)
+	var p pagination.Pagination
+	if req.Pagination == nil {
+		p = pagination.NewOldestFirstPagination(
+			pagination.WithFirst(20),
+		)
+	} else {
+		p = pagination.NewOldestFirstPagination(
+			pagination.WithFirst(int(req.Pagination.First)),
+			pagination.WithLast(int(req.Pagination.Last)),
+			pagination.WithAfter(pagination.Cursor(req.Pagination.After)),
+			pagination.WithBefore(pagination.Cursor(req.Pagination.Before)),
+		)
+	}
 
 	studentsConn, err := s.Repository.GetEnrolledUsersProgress(ctx, courseID, p)
 	if err != nil {

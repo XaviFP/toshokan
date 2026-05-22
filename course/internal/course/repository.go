@@ -870,7 +870,7 @@ func (r *pgRepository) GetEnrolledUsersProgress(ctx context.Context, courseID uu
 			return StudentsProgressConnection{}, errors.Trace(err)
 		}
 		whereClauses = append(whereClauses,
-			fmt.Sprintf("(created_at, user_id::text) %s (%s, %s)",
+			fmt.Sprintf("(created_at, user_id) %s (%s, %s)",
 				p.Comparator(), arger.Add(cursor.CreatedAt), arger.Add(cursor.UserID)))
 	}
 
@@ -977,12 +977,19 @@ func computeStudentSummary(progress UserCourseProgress, state *ProgressState, to
 	}
 
 	for lessonID, lesson := range state.Lessons {
+		parsedLessonID, err := uuid.Parse(lessonID)
+		if err != nil {
+			slog.Warn("skipping invalid lesson ID in progress state", "lesson_id", lessonID, "error", err)
+			continue
+		}
+
+
 		if lesson.IsCompleted {
 			summary.LessonsCompleted++
 		}
 
 		detail := LessonProgressDetail{
-			LessonID:    uuid.MustParse(lessonID),
+			LessonID:    parsedLessonID,
 			IsCompleted: lesson.IsCompleted,
 			CompletedAt: lesson.CompletedAt,
 		}
