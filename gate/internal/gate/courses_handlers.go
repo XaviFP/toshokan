@@ -551,7 +551,7 @@ func GetStudentsProgress(ctx *gin.Context, client pb.CourseAPIClient, userClient
 			Fields:  []string{"username", "nick"},
 		}
 
-		usersRes, err := userClient.GetUsersByIDs(context.Background(), usersReq)
+		usersRes, err := userClient.GetUsersByIDs(ctx, usersReq)
 		if err != nil {
 			// Log but don't fail - user info is supplementary
 			slog.Warn("GetStudentsProgress: failed to fetch user info", "error", err, "courseId", courseID)
