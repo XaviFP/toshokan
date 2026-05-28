@@ -1,7 +1,6 @@
 package gate
 
 import (
-	"context"
 	"log/slog"
 	"net/http"
 	"strconv"

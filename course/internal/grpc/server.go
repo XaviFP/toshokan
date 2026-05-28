@@ -11,6 +11,8 @@ import (
 	"github.com/juju/errors"
 	"github.com/tilinna/clock"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/types/known/timestamppb"
 
 	"github.com/XaviFP/toshokan/common/pagination"
@@ -863,13 +865,13 @@ func (s *Server) SetUserState(ctx context.Context, req *pb.SetUserStateRequest) 
 	userID, err := uuid.Parse(req.UserId)
 	if err != nil {
 		slog.Error("SetUserState: failed to parse user ID", "error", err, "userId", req.UserId, "stack", errors.ErrorStack(err))
-		return nil, errors.Trace(err)
+		return nil, status.Errorf(codes.InvalidArgument, "invalid user_id: %s", req.UserId)
 	}
 
 	courseID, err := uuid.Parse(req.CourseId)
 	if err != nil {
 		slog.Error("SetUserState: failed to parse course ID", "error", err, "courseId", req.CourseId, "stack", errors.ErrorStack(err))
-		return nil, errors.Trace(err)
+		return nil, status.Errorf(codes.InvalidArgument, "invalid course_id: %s", req.CourseId)
 	}
 
 	// Get existing progress to preserve ID and timestamps
@@ -883,7 +885,7 @@ func (s *Server) SetUserState(ctx context.Context, req *pb.SetUserStateRequest) 
 	var newState course.ProgressState
 	if err := json.Unmarshal([]byte(req.StateJson), &newState); err != nil {
 		slog.Error("SetUserState: failed to unmarshal state JSON", "error", err, "userId", userID.String(), "courseId", courseID.String(), "stack", errors.ErrorStack(err))
-		return nil, errors.Annotate(err, "invalid state JSON")
+		return nil, status.Errorf(codes.InvalidArgument, "invalid state_json: %v", err)
 	}
 
 	// Update current lesson ID if provided
@@ -891,7 +893,7 @@ func (s *Server) SetUserState(ctx context.Context, req *pb.SetUserStateRequest) 
 		lessonID, err := uuid.Parse(req.CurrentLessonId)
 		if err != nil {
 			slog.Error("SetUserState: failed to parse current lesson ID", "error", err, "currentLessonId", req.CurrentLessonId, "stack", errors.ErrorStack(err))
-			return nil, errors.Trace(err)
+			return nil, status.Errorf(codes.InvalidArgument, "invalid current_lesson_id: %s", req.CurrentLessonId)
 		}
 		progress.CurrentLessonID = lessonID
 	}
