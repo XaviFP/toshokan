@@ -3,6 +3,7 @@ package course
 import (
 	"context"
 	"database/sql"
+	"fmt"
 	"log/slog"
 	"testing"
 	"time"
@@ -581,6 +582,217 @@ func TestRepository_GetEnrolledCourses(t *testing.T) {
 		assert.NoError(t, err)
 		require.Len(t, page2.Edges, 1)
 		assert.False(t, page2.PageInfo.HasNextPage)
+	})
+}
+
+// ============================================
+// Backoffice Integration Tests
+// ============================================
+
+func TestRepository_CountEnrolledUsers(t *testing.T) {
+	h := newTestHarness(t)
+	repo := NewPGRepository(slog.Default(), h.db)
+
+	// Create a dedicated course for this test
+	courseID := uuid.MustParse("11110000-0000-0000-0000-000000000001")
+	course := Course{
+		ID:          courseID,
+		Order:       200,
+		Title:       "Count Test Course",
+		Description: "For testing CountEnrolledUsers",
+		CreatedAt:   time.Now(),
+	}
+	err := repo.StoreCourse(context.Background(), course)
+	require.NoError(t, err)
+
+	t.Run("empty_course", func(t *testing.T) {
+		count, err := repo.CountEnrolledUsers(context.Background(), courseID)
+		assert.NoError(t, err)
+		assert.Equal(t, 0, count)
+	})
+
+	t.Run("with_enrolled_users", func(t *testing.T) {
+		// Enroll 3 users
+		userID1 := uuid.MustParse("11111111-aaaa-aaaa-aaaa-aaaaaaaaaaaa")
+		userID2 := uuid.MustParse("22222222-aaaa-aaaa-aaaa-aaaaaaaaaaaa")
+		userID3 := uuid.MustParse("33333333-aaaa-aaaa-aaaa-aaaaaaaaaaaa")
+
+		err := repo.EnrollUserInCourse(context.Background(), userID1, courseID, *newTestProgressState())
+		require.NoError(t, err)
+		err = repo.EnrollUserInCourse(context.Background(), userID2, courseID, *newTestProgressState())
+		require.NoError(t, err)
+		err = repo.EnrollUserInCourse(context.Background(), userID3, courseID, *newTestProgressState())
+		require.NoError(t, err)
+
+		count, err := repo.CountEnrolledUsers(context.Background(), courseID)
+		assert.NoError(t, err)
+		assert.Equal(t, 3, count)
+	})
+}
+
+func TestRepository_GetEnrolledUsersProgress(t *testing.T) {
+	h := newTestHarness(t)
+	repo := NewPGRepository(slog.Default(), h.db)
+
+	// Create a dedicated course for this test
+	courseID := uuid.MustParse("22220000-0000-0000-0000-000000000002")
+	course := Course{
+		ID:          courseID,
+		Order:       201,
+		Title:       "Progress Test Course",
+		Description: "For testing GetEnrolledUsersProgress",
+		CreatedAt:   time.Now(),
+	}
+	err := repo.StoreCourse(context.Background(), course)
+	require.NoError(t, err)
+
+	// Create lessons for the course
+	lesson1ID := uuid.MustParse("22220000-1111-1111-1111-111111111111")
+	lesson2ID := uuid.MustParse("22220000-2222-2222-2222-222222222222")
+	lesson1 := Lesson{
+		ID:          lesson1ID,
+		CourseID:    courseID,
+		Order:       1,
+		Title:       "Lesson 1",
+		Description: "First lesson",
+		Body:        "Body 1",
+		CreatedAt:   time.Now(),
+	}
+	lesson2 := Lesson{
+		ID:          lesson2ID,
+		CourseID:    courseID,
+		Order:       2,
+		Title:       "Lesson 2",
+		Description: "Second lesson",
+		Body:        "Body 2",
+		CreatedAt:   time.Now(),
+	}
+	err = repo.StoreLesson(context.Background(), lesson1)
+	require.NoError(t, err)
+	err = repo.StoreLesson(context.Background(), lesson2)
+	require.NoError(t, err)
+
+	t.Run("empty_course", func(t *testing.T) {
+		pag := pagination.NewOldestFirstPagination(pagination.WithFirst(10))
+		conn, err := repo.GetEnrolledUsersProgress(context.Background(), courseID, pag)
+		assert.NoError(t, err)
+		assert.Empty(t, conn.Edges)
+	})
+
+	t.Run("with_enrolled_users_progress", func(t *testing.T) {
+		// Enroll user with completed first lesson
+		userID := uuid.MustParse("22220000-aaaa-aaaa-aaaa-aaaaaaaaaaaa")
+		state := NewProgressState()
+		state.CurrentLessonID = lesson2ID
+
+		// Mark lesson 1 as completed
+		state.Lessons[lesson1ID.String()] = &LessonProgress{
+			IsCompleted: true,
+			Decks:       make(map[string]*DeckProgress),
+		}
+		// Lesson 2 in progress
+		state.Lessons[lesson2ID.String()] = &LessonProgress{
+			IsCompleted: false,
+			Decks:       make(map[string]*DeckProgress),
+		}
+
+		// Add some deck/card progress
+		deckID := "22220000-dddd-dddd-dddd-dddddddddddd"
+		cardID := "22220000-cccc-cccc-cccc-cccccccccccc"
+		state.Lessons[lesson2ID.String()].Decks[deckID] = &DeckProgress{
+			IsCompleted: false,
+			Cards: map[string]*CardProgress{
+				cardID: {
+					CorrectAnswers:   3,
+					IncorrectAnswers: 1,
+					IsCompleted:      false,
+				},
+			},
+		}
+
+		err := repo.EnrollUserInCourse(context.Background(), userID, courseID, *state)
+		require.NoError(t, err)
+
+		// Get progress
+		pag := pagination.NewOldestFirstPagination(pagination.WithFirst(10))
+		conn, err := repo.GetEnrolledUsersProgress(context.Background(), courseID, pag)
+		assert.NoError(t, err)
+		require.Len(t, conn.Edges, 1)
+
+		student := conn.Edges[0].Student
+		assert.Equal(t, userID, student.UserID)
+		assert.Equal(t, 1, student.LessonsCompleted)
+		assert.Equal(t, 2, student.TotalLessons)
+		assert.Equal(t, lesson2ID, student.CurrentLessonID)
+		assert.Equal(t, 3, student.TotalCorrectAnswers)
+		assert.Equal(t, 1, student.TotalIncorrectAnswers)
+		assert.Len(t, student.LessonDetails, 2)
+	})
+
+	t.Run("pagination_forward", func(t *testing.T) {
+		// Create a new course for pagination test
+		pagCourseID := uuid.MustParse("33330000-0000-0000-0000-000000000003")
+		pagCourse := Course{
+			ID:          pagCourseID,
+			Order:       202,
+			Title:       "Pagination Test Course",
+			Description: "For testing pagination",
+			CreatedAt:   time.Now(),
+		}
+		err := repo.StoreCourse(context.Background(), pagCourse)
+		require.NoError(t, err)
+
+		// Create a lesson for the course (required for foreign key)
+		pagLessonID := uuid.MustParse("33330000-1111-1111-1111-111111111111")
+		pagLesson := Lesson{
+			ID:          pagLessonID,
+			CourseID:    pagCourseID,
+			Order:       1,
+			Title:       "Pagination Lesson",
+			Description: "For testing pagination",
+			Body:        "Body",
+			CreatedAt:   time.Now(),
+		}
+		err = repo.StoreLesson(context.Background(), pagLesson)
+		require.NoError(t, err)
+
+		// Enroll 5 users
+		for i := 1; i <= 5; i++ {
+			userID := uuid.MustParse(fmt.Sprintf("33330000-aaaa-aaaa-aaaa-%012d", i))
+			state := NewProgressState()
+			state.CurrentLessonID = pagLessonID
+			err := repo.EnrollUserInCourse(context.Background(), userID, pagCourseID, *state)
+			require.NoError(t, err)
+			time.Sleep(10 * time.Millisecond) // Ensure different created_at
+		}
+
+		// Get first page (2 items)
+		pag := pagination.NewOldestFirstPagination(pagination.WithFirst(2))
+		page1, err := repo.GetEnrolledUsersProgress(context.Background(), pagCourseID, pag)
+		assert.NoError(t, err)
+		assert.Len(t, page1.Edges, 2)
+		assert.True(t, page1.PageInfo.HasNextPage)
+		assert.False(t, page1.PageInfo.HasPreviousPage)
+
+		// Get second page
+		pag2 := pagination.NewOldestFirstPagination(
+			pagination.WithFirst(2),
+			pagination.WithAfter(page1.PageInfo.EndCursor),
+		)
+		page2, err := repo.GetEnrolledUsersProgress(context.Background(), pagCourseID, pag2)
+		assert.NoError(t, err)
+		assert.Len(t, page2.Edges, 2)
+		assert.True(t, page2.PageInfo.HasNextPage)
+
+		// Get third page (only 1 left)
+		pag3 := pagination.NewOldestFirstPagination(
+			pagination.WithFirst(2),
+			pagination.WithAfter(page2.PageInfo.EndCursor),
+		)
+		page3, err := repo.GetEnrolledUsersProgress(context.Background(), pagCourseID, pag3)
+		assert.NoError(t, err)
+		assert.Len(t, page3.Edges, 1)
+		assert.False(t, page3.PageInfo.HasNextPage)
 	})
 }
 

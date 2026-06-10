@@ -2,6 +2,7 @@ package grpc
 
 import (
 	"context"
+	"encoding/json"
 	"log/slog"
 	"net"
 	"time"
@@ -10,6 +11,8 @@ import (
 	"github.com/juju/errors"
 	"github.com/tilinna/clock"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/types/known/timestamppb"
 
 	"github.com/XaviFP/toshokan/common/pagination"
@@ -725,4 +728,221 @@ func (s *Server) SyncState(ctx context.Context, req *pb.SyncStateRequest) (*pb.S
 	}
 
 	return &pb.SyncStateResponse{}, nil
+}
+
+// ============================================
+// Backoffice Endpoints
+// ============================================
+
+// GetStudentsProgress retrieves paginated student progress for a course (backoffice)
+func (s *Server) GetStudentsProgress(ctx context.Context, req *pb.GetStudentsProgressRequest) (*pb.GetStudentsProgressResponse, error) {
+	courseID, err := uuid.Parse(req.CourseId)
+	if err != nil {
+		slog.Error("GetStudentsProgress: failed to parse course ID", "error", err, "courseId", req.CourseId, "stack", errors.ErrorStack(err))
+		return nil, errors.Trace(err)
+	}
+
+	var p pagination.Pagination
+	if req.Pagination == nil {
+		p = pagination.NewOldestFirstPagination(
+			pagination.WithFirst(20),
+		)
+	} else {
+		p = pagination.NewOldestFirstPagination(
+			pagination.WithFirst(int(req.Pagination.First)),
+			pagination.WithLast(int(req.Pagination.Last)),
+			pagination.WithAfter(pagination.Cursor(req.Pagination.After)),
+			pagination.WithBefore(pagination.Cursor(req.Pagination.Before)),
+		)
+	}
+
+	studentsConn, err := s.Repository.GetEnrolledUsersProgress(ctx, courseID, p)
+	if err != nil {
+		slog.Error("GetStudentsProgress: failed to get enrolled users progress", "error", err, "courseId", courseID.String(), "stack", errors.ErrorStack(err))
+		return nil, errors.Trace(err)
+	}
+
+	totalEnrolled, err := s.Repository.CountEnrolledUsers(ctx, courseID)
+	if err != nil {
+		slog.Error("GetStudentsProgress: failed to count enrolled users", "error", err, "courseId", courseID.String(), "stack", errors.ErrorStack(err))
+		return nil, errors.Trace(err)
+	}
+
+	// Convert to proto
+	protoEdges := make([]*pb.StudentsProgressConnection_Edge, 0, len(studentsConn.Edges))
+	for _, edge := range studentsConn.Edges {
+		protoSummary := &pb.StudentProgressSummary{
+			UserId:                edge.Student.UserID.String(),
+			CurrentLessonId:       edge.Student.CurrentLessonID.String(),
+			LessonsCompleted:      int32(edge.Student.LessonsCompleted),
+			TotalLessons:          int32(edge.Student.TotalLessons),
+			TotalCorrectAnswers:   int32(edge.Student.TotalCorrectAnswers),
+			TotalIncorrectAnswers: int32(edge.Student.TotalIncorrectAnswers),
+			EnrolledAt:            toProtoTimestamp(edge.Student.EnrolledAt),
+			LastActivityAt:        toProtoTimestamp(edge.Student.LastActivityAt),
+		}
+
+		// Include detailed breakdown if requested
+		if req.Detailed {
+			for _, detail := range edge.Student.LessonDetails {
+				protoDetail := &pb.LessonProgressDetail{
+					LessonId:         detail.LessonID.String(),
+					IsCompleted:      detail.IsCompleted,
+					CompletedAt:      toProtoTimestampPtr(detail.CompletedAt),
+					CorrectAnswers:   int32(detail.CorrectAnswers),
+					IncorrectAnswers: int32(detail.IncorrectAnswers),
+				}
+				protoSummary.LessonDetails = append(protoSummary.LessonDetails, protoDetail)
+			}
+		}
+
+		protoEdges = append(protoEdges, &pb.StudentsProgressConnection_Edge{
+			Node:   protoSummary,
+			Cursor: edge.Cursor.String(),
+		})
+	}
+
+	return &pb.GetStudentsProgressResponse{
+		Students: &pb.StudentsProgressConnection{
+			Edges: protoEdges,
+			PageInfo: &pb.PageInfo{
+				HasPreviousPage: studentsConn.PageInfo.HasPreviousPage,
+				HasNextPage:     studentsConn.PageInfo.HasNextPage,
+				StartCursor:     studentsConn.PageInfo.StartCursor.String(),
+				EndCursor:       studentsConn.PageInfo.EndCursor.String(),
+			},
+		},
+		TotalEnrolled: int32(totalEnrolled),
+	}, nil
+}
+
+// GetUserState retrieves the full user state for debugging (backoffice)
+func (s *Server) GetUserState(ctx context.Context, req *pb.GetUserStateRequest) (*pb.GetUserStateResponse, error) {
+	userID, err := uuid.Parse(req.UserId)
+	if err != nil {
+		slog.Error("GetUserState: failed to parse user ID", "error", err, "userId", req.UserId, "stack", errors.ErrorStack(err))
+		return nil, errors.Trace(err)
+	}
+
+	courseID, err := uuid.Parse(req.CourseId)
+	if err != nil {
+		slog.Error("GetUserState: failed to parse course ID", "error", err, "courseId", req.CourseId, "stack", errors.ErrorStack(err))
+		return nil, errors.Trace(err)
+	}
+
+	progress, err := s.Repository.GetUserCourseProgress(ctx, userID, courseID)
+	if err != nil {
+		slog.Error("GetUserState: failed to get user course progress", "error", err, "userId", userID.String(), "courseId", courseID.String(), "stack", errors.ErrorStack(err))
+		return nil, errors.Trace(err)
+	}
+
+	stateJSON, err := json.Marshal(progress.State)
+	if err != nil {
+		slog.Error("GetUserState: failed to marshal state", "error", err, "userId", userID.String(), "courseId", courseID.String(), "stack", errors.ErrorStack(err))
+		return nil, errors.Trace(err)
+	}
+
+	currentLessonID := ""
+	if progress.CurrentLessonID != uuid.Nil {
+		currentLessonID = progress.CurrentLessonID.String()
+	}
+
+	return &pb.GetUserStateResponse{
+		UserState: &pb.FullUserState{
+			Id:              progress.ID.String(),
+			UserId:          progress.UserID.String(),
+			CourseId:        progress.CourseID.String(),
+			CurrentLessonId: currentLessonID,
+			StateJson:       string(stateJSON),
+			CreatedAt:       toProtoTimestamp(progress.CreatedAt),
+			UpdatedAt:       toProtoTimestamp(progress.UpdatedAt),
+		},
+	}, nil
+}
+
+// SetUserState updates the full user state for debugging (backoffice)
+func (s *Server) SetUserState(ctx context.Context, req *pb.SetUserStateRequest) (*pb.SetUserStateResponse, error) {
+	userID, err := uuid.Parse(req.UserId)
+	if err != nil {
+		slog.Error("SetUserState: failed to parse user ID", "error", err, "userId", req.UserId, "stack", errors.ErrorStack(err))
+		return nil, status.Errorf(codes.InvalidArgument, "invalid user_id: %s", req.UserId)
+	}
+
+	courseID, err := uuid.Parse(req.CourseId)
+	if err != nil {
+		slog.Error("SetUserState: failed to parse course ID", "error", err, "courseId", req.CourseId, "stack", errors.ErrorStack(err))
+		return nil, status.Errorf(codes.InvalidArgument, "invalid course_id: %s", req.CourseId)
+	}
+
+	// Get existing progress to preserve ID and timestamps
+	progress, err := s.Repository.GetUserCourseProgress(ctx, userID, courseID)
+	if err != nil {
+		slog.Error("SetUserState: failed to get existing user course progress", "error", err, "userId", userID.String(), "courseId", courseID.String(), "stack", errors.ErrorStack(err))
+		return nil, errors.Trace(err)
+	}
+
+	// Parse the new state JSON
+	var newState course.ProgressState
+	if err := json.Unmarshal([]byte(req.StateJson), &newState); err != nil {
+		slog.Error("SetUserState: failed to unmarshal state JSON", "error", err, "userId", userID.String(), "courseId", courseID.String(), "stack", errors.ErrorStack(err))
+		return nil, status.Errorf(codes.InvalidArgument, "invalid state_json: %v", err)
+	}
+
+	// Update current lesson ID if provided
+	if req.CurrentLessonId != "" {
+		lessonID, err := uuid.Parse(req.CurrentLessonId)
+		if err != nil {
+			slog.Error("SetUserState: failed to parse current lesson ID", "error", err, "currentLessonId", req.CurrentLessonId, "stack", errors.ErrorStack(err))
+			return nil, status.Errorf(codes.InvalidArgument, "invalid current_lesson_id: %s", req.CurrentLessonId)
+		}
+		progress.CurrentLessonID = lessonID
+	}
+
+	progress.State = &newState
+
+	// Update in repository
+	if err := s.Repository.UpdateUserProgress(ctx, progress); err != nil {
+		slog.Error("SetUserState: failed to update user progress", "error", err, "userId", userID.String(), "courseId", courseID.String(), "stack", errors.ErrorStack(err))
+		return nil, errors.Trace(err)
+	}
+
+	// Optionally sync after setting state
+	if req.SyncAfter {
+		if err := s.StateSyncer.Sync(ctx, userID, courseID); err != nil {
+			slog.Error("SetUserState: failed to sync after update", "error", err, "userId", userID.String(), "courseId", courseID.String(), "stack", errors.ErrorStack(err))
+			return nil, errors.Trace(err)
+		}
+
+		// Re-fetch to get synced state
+		progress, err = s.Repository.GetUserCourseProgress(ctx, userID, courseID)
+		if err != nil {
+			slog.Error("SetUserState: failed to get updated progress after sync", "error", err, "userId", userID.String(), "courseId", courseID.String(), "stack", errors.ErrorStack(err))
+			return nil, errors.Trace(err)
+		}
+	}
+
+	stateJSON, err := json.Marshal(progress.State)
+	if err != nil {
+		slog.Error("SetUserState: failed to marshal updated state", "error", err, "userId", userID.String(), "courseId", courseID.String(), "stack", errors.ErrorStack(err))
+		return nil, errors.Trace(err)
+	}
+
+	currentLessonID := ""
+	if progress.CurrentLessonID != uuid.Nil {
+		currentLessonID = progress.CurrentLessonID.String()
+	}
+
+	slog.Info("SetUserState: user state updated successfully", "userId", userID.String(), "courseId", courseID.String(), "syncAfter", req.SyncAfter)
+
+	return &pb.SetUserStateResponse{
+		UserState: &pb.FullUserState{
+			Id:              progress.ID.String(),
+			UserId:          progress.UserID.String(),
+			CourseId:        progress.CourseID.String(),
+			CurrentLessonId: currentLessonID,
+			StateJson:       string(stateJSON),
+			CreatedAt:       toProtoTimestamp(progress.CreatedAt),
+			UpdatedAt:       toProtoTimestamp(progress.UpdatedAt),
+		},
+	}, nil
 }

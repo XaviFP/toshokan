@@ -127,3 +127,114 @@ func TestSignUp(t *testing.T) {
 	})
 
 }
+
+func TestServer_GetUsersByIDs(t *testing.T) {
+	t.Run("success", func(t *testing.T) {
+		repo := &user.RepositoryMock{}
+		srv := &Server{Repository: repo}
+
+		user1ID := uuid.MustParse("45a733e7-bcb0-4100-b495-c03c119927be")
+		user2ID := uuid.MustParse("55a733e7-bcb0-4100-b495-c03c119927bf")
+
+		repo.On("GetUsersByIDs", mock.Anything, []uuid.UUID{user1ID, user2ID}).Return([]user.User{
+			{ID: user1ID, Username: "user1", Nick: "User One", Bio: "Bio 1"},
+			{ID: user2ID, Username: "user2", Nick: "User Two", Bio: "Bio 2"},
+		}, nil)
+
+		res, err := srv.GetUsersByIDs(context.Background(), &pb.GetUsersByIDsRequest{
+			UserIds: []string{user1ID.String(), user2ID.String()},
+		})
+
+		assert.NoError(t, err)
+		assert.Len(t, res.Users, 2)
+		assert.Equal(t, user1ID.String(), res.Users[0].Id)
+		assert.Equal(t, "user1", res.Users[0].Username)
+		assert.Equal(t, "User One", res.Users[0].Nick)
+		assert.Equal(t, "Bio 1", res.Users[0].Bio)
+	})
+
+	t.Run("success_with_field_filter", func(t *testing.T) {
+		repo := &user.RepositoryMock{}
+		srv := &Server{Repository: repo}
+
+		userID := uuid.MustParse("45a733e7-bcb0-4100-b495-c03c119927be")
+
+		repo.On("GetUsersByIDs", mock.Anything, []uuid.UUID{userID}).Return([]user.User{
+			{ID: userID, Username: "user1", Nick: "User One", Bio: "Bio 1"},
+		}, nil)
+
+		res, err := srv.GetUsersByIDs(context.Background(), &pb.GetUsersByIDsRequest{
+			UserIds: []string{userID.String()},
+			Fields:  []string{"username"},
+		})
+
+		assert.NoError(t, err)
+		assert.Len(t, res.Users, 1)
+		assert.Equal(t, userID.String(), res.Users[0].Id)
+		assert.Equal(t, "user1", res.Users[0].Username)
+		// Fields not in the filter should be empty
+		assert.Equal(t, "", res.Users[0].Nick)
+		assert.Equal(t, "", res.Users[0].Bio)
+	})
+
+	t.Run("empty_user_ids", func(t *testing.T) {
+		repo := &user.RepositoryMock{}
+		srv := &Server{Repository: repo}
+
+		res, err := srv.GetUsersByIDs(context.Background(), &pb.GetUsersByIDsRequest{
+			UserIds: []string{},
+		})
+
+		assert.NoError(t, err)
+		assert.Len(t, res.Users, 0)
+	})
+
+	t.Run("invalid_uuid_skipped", func(t *testing.T) {
+		repo := &user.RepositoryMock{}
+		srv := &Server{Repository: repo}
+
+		validID := uuid.MustParse("45a733e7-bcb0-4100-b495-c03c119927be")
+
+		// Only the valid UUID should be passed to the repository
+		repo.On("GetUsersByIDs", mock.Anything, []uuid.UUID{validID}).Return([]user.User{
+			{ID: validID, Username: "user1", Nick: "User One"},
+		}, nil)
+
+		res, err := srv.GetUsersByIDs(context.Background(), &pb.GetUsersByIDsRequest{
+			UserIds: []string{"invalid-uuid", validID.String()},
+		})
+
+		// Invalid UUIDs are skipped, not an error
+		assert.NoError(t, err)
+		assert.Len(t, res.Users, 1)
+		assert.Equal(t, validID.String(), res.Users[0].Id)
+	})
+
+	t.Run("all_invalid_uuids_returns_empty", func(t *testing.T) {
+		repo := &user.RepositoryMock{}
+		srv := &Server{Repository: repo}
+
+		res, err := srv.GetUsersByIDs(context.Background(), &pb.GetUsersByIDsRequest{
+			UserIds: []string{"invalid-uuid", "also-invalid"},
+		})
+
+		// All invalid UUIDs should return empty result, not an error
+		assert.NoError(t, err)
+		assert.Len(t, res.Users, 0)
+	})
+
+	t.Run("repository_error", func(t *testing.T) {
+		repo := &user.RepositoryMock{}
+		srv := &Server{Repository: repo}
+
+		userID := uuid.MustParse("45a733e7-bcb0-4100-b495-c03c119927be")
+
+		repo.On("GetUsersByIDs", mock.Anything, []uuid.UUID{userID}).Return([]user.User{}, assert.AnError)
+
+		_, err := srv.GetUsersByIDs(context.Background(), &pb.GetUsersByIDsRequest{
+			UserIds: []string{userID.String()},
+		})
+
+		assert.Error(t, err)
+	})
+}

@@ -201,11 +201,25 @@ func TestRepository_DeleteDeck(t *testing.T) {
 		return exists
 	}
 
-	assert.True(t, deckExists(deckID))
+	t.Run("success", func(t *testing.T) {
+		assert.True(t, deckExists(deckID))
 
-	err := repo.DeleteDeck(context.Background(), deckID)
-	assert.NoError(t, err)
-	assert.False(t, deckExists(deckID))
+		err := repo.DeleteDeck(context.Background(), deckID)
+		assert.NoError(t, err)
+		assert.False(t, deckExists(deckID))
+	})
+
+	t.Run("not_found", func(t *testing.T) {
+		nonExistentID := uuid.MustParse("00000000-0000-0000-0000-000000000000")
+		err := repo.DeleteDeck(context.Background(), nonExistentID)
+		assert.ErrorIs(t, err, ErrDeckNotFound)
+	})
+
+	t.Run("already_deleted", func(t *testing.T) {
+		// Try to delete the same deck again - should return not found
+		err := repo.DeleteDeck(context.Background(), deckID)
+		assert.ErrorIs(t, err, ErrDeckNotFound)
+	})
 }
 
 func TestRepository_GetDeckCards(t *testing.T) {

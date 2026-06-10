@@ -42,6 +42,10 @@ type Repository interface {
 	GetUserCourseProgress(ctx context.Context, userID uuid.UUID, courseID uuid.UUID) (UserCourseProgress, error)
 	EnrollUserInCourse(ctx context.Context, userID uuid.UUID, courseID uuid.UUID, progressState ProgressState) error
 	UpdateUserProgress(ctx context.Context, progress UserCourseProgress) error
+
+	// Backoffice
+	GetEnrolledUsersProgress(ctx context.Context, courseID uuid.UUID, p pagination.Pagination) (StudentsProgressConnection, error)
+	CountEnrolledUsers(ctx context.Context, courseID uuid.UUID) (int, error)
 }
 
 // CourseUpdates contains optional fields for updating a course
@@ -310,6 +314,16 @@ func (r *redisRepository) UpdateUserProgress(ctx context.Context, progress UserC
 	}
 
 	return nil
+}
+
+// GetEnrolledUsersProgress passes through to DB (backoffice, no caching)
+func (r *redisRepository) GetEnrolledUsersProgress(ctx context.Context, courseID uuid.UUID, p pagination.Pagination) (StudentsProgressConnection, error) {
+	return r.db.GetEnrolledUsersProgress(ctx, courseID, p)
+}
+
+// CountEnrolledUsers passes through to DB (backoffice, no caching)
+func (r *redisRepository) CountEnrolledUsers(ctx context.Context, courseID uuid.UUID) (int, error) {
+	return r.db.CountEnrolledUsers(ctx, courseID)
 }
 
 type pgRepository struct {
@@ -821,4 +835,176 @@ func (r *pgRepository) UpdateUserProgress(ctx context.Context, progress UserCour
 	)
 
 	return errors.Trace(err)
+}
+
+// CountEnrolledUsers returns the total number of enrolled users for a course
+func (r *pgRepository) CountEnrolledUsers(ctx context.Context, courseID uuid.UUID) (int, error) {
+	var count int
+	err := r.db.QueryRowContext(ctx,
+		`SELECT COUNT(*) FROM user_course_progress WHERE course_id = $1`,
+		courseID,
+	).Scan(&count)
+	if err != nil {
+		return 0, errors.Trace(err)
+	}
+	return count, nil
+}
+
+// GetEnrolledUsersProgress retrieves paginated student progress for a course
+func (r *pgRepository) GetEnrolledUsersProgress(ctx context.Context, courseID uuid.UUID, p pagination.Pagination) (StudentsProgressConnection, error) {
+	var totalLessons int
+	err := r.db.QueryRowContext(ctx,
+		`SELECT COUNT(*) FROM lessons WHERE course_id = $1 AND deleted_at IS NULL`,
+		courseID,
+	).Scan(&totalLessons)
+	if err != nil {
+		return StudentsProgressConnection{}, errors.Trace(err)
+	}
+
+	var arger db.Argumenter
+	whereClauses := []string{fmt.Sprintf("course_id = %s", arger.Add(courseID))}
+
+	if !p.Cursor().IsEmpty() {
+		var cursor StudentProgressCursor
+		if err := pagination.FromCursor(p.Cursor(), &cursor); err != nil {
+			return StudentsProgressConnection{}, errors.Trace(err)
+		}
+		whereClauses = append(whereClauses,
+			fmt.Sprintf("(created_at, user_id) %s (%s, %s)",
+				p.Comparator(), arger.Add(cursor.CreatedAt), arger.Add(cursor.UserID)))
+	}
+
+	query := fmt.Sprintf(
+		`SELECT id, user_id, course_id, current_lesson, state, created_at, updated_at 
+		 FROM user_course_progress 
+		 WHERE %s
+		 ORDER BY created_at %s, user_id %s
+		 LIMIT %s`,
+		strings.Join(whereClauses, " AND "),
+		p.OrderBy(), p.OrderBy(),
+		arger.Add(p.Limit()+1),
+	)
+
+	rows, err := r.db.QueryContext(ctx, query, arger.Values()...)
+	if err != nil {
+		return StudentsProgressConnection{}, errors.Trace(err)
+	}
+	defer rows.Close()
+
+	var results []struct {
+		progress  UserCourseProgress
+		stateJSON []byte
+	}
+
+	for rows.Next() {
+		var prog UserCourseProgress
+		var stateJSON []byte
+		if err := rows.Scan(&prog.ID, &prog.UserID, &prog.CourseID, &prog.CurrentLessonID, &stateJSON, &prog.CreatedAt, &prog.UpdatedAt); err != nil {
+			return StudentsProgressConnection{}, errors.Trace(err)
+		}
+		results = append(results, struct {
+			progress  UserCourseProgress
+			stateJSON []byte
+		}{prog, stateJSON})
+	}
+
+	if err := rows.Err(); err != nil {
+		return StudentsProgressConnection{}, errors.Trace(err)
+	}
+
+	hasMore := len(results) > p.Limit()
+	if hasMore {
+		results = results[:p.Limit()]
+	}
+
+	// Reverse if backward pagination
+	if !p.IsForward() {
+		for i, j := 0, len(results)-1; i < j; i, j = i+1, j-1 {
+			results[i], results[j] = results[j], results[i]
+		}
+	}
+
+	conn := StudentsProgressConnection{
+		PageInfo: pagination.PageInfo{
+			HasNextPage:     hasMore && p.IsForward(),
+			HasPreviousPage: hasMore && !p.IsForward(),
+		},
+	}
+
+	for _, r := range results {
+		var state ProgressState
+		if err := json.Unmarshal(r.stateJSON, &state); err != nil {
+			slog.Warn("failed to unmarshal progress state", "error", err, "userID", r.progress.UserID)
+			state = ProgressState{}
+		}
+
+		summary := computeStudentSummary(r.progress, &state, totalLessons)
+
+		cursor, err := pagination.ToCursor(StudentProgressCursor{
+			CreatedAt: r.progress.CreatedAt,
+			UserID:    r.progress.UserID.String(),
+		})
+		if err != nil {
+			return StudentsProgressConnection{}, errors.Trace(err)
+		}
+
+		conn.Edges = append(conn.Edges, StudentProgressEdge{
+			Student: summary,
+			Cursor:  cursor,
+		})
+	}
+
+	if len(conn.Edges) > 0 {
+		conn.PageInfo.StartCursor = conn.Edges[0].Cursor
+		conn.PageInfo.EndCursor = conn.Edges[len(conn.Edges)-1].Cursor
+	}
+
+	return conn, nil
+}
+
+// computeStudentSummary calculates progress statistics from the state
+func computeStudentSummary(progress UserCourseProgress, state *ProgressState, totalLessons int) StudentProgressSummary {
+	summary := StudentProgressSummary{
+		UserID:          progress.UserID,
+		CurrentLessonID: progress.CurrentLessonID,
+		TotalLessons:    totalLessons,
+		EnrolledAt:      progress.CreatedAt,
+		LastActivityAt:  progress.UpdatedAt,
+	}
+
+	if state == nil || state.Lessons == nil {
+		return summary
+	}
+
+	for lessonID, lesson := range state.Lessons {
+		parsedLessonID, err := uuid.Parse(lessonID)
+		if err != nil {
+			slog.Warn("skipping invalid lesson ID in progress state", "lesson_id", lessonID, "error", err)
+			continue
+		}
+
+
+		if lesson.IsCompleted {
+			summary.LessonsCompleted++
+		}
+
+		detail := LessonProgressDetail{
+			LessonID:    parsedLessonID,
+			IsCompleted: lesson.IsCompleted,
+			CompletedAt: lesson.CompletedAt,
+		}
+
+		for _, deck := range lesson.Decks {
+			for _, card := range deck.Cards {
+				summary.TotalCorrectAnswers += card.CorrectAnswers
+				summary.TotalIncorrectAnswers += card.IncorrectAnswers
+				detail.CorrectAnswers += card.CorrectAnswers
+				detail.IncorrectAnswers += card.IncorrectAnswers
+			}
+		}
+
+		summary.LessonDetails = append(summary.LessonDetails, detail)
+	}
+
+	return summary
 }

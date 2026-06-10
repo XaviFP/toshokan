@@ -33,3 +33,9 @@ func (m *RepositoryMock) GetUserPassword(ctx context.Context, username string) (
 
 	return args.Get(0).([]byte), args.Error(1)
 }
+
+func (m *RepositoryMock) GetUsersByIDs(ctx context.Context, ids []uuid.UUID) ([]User, error) {
+	args := m.Called(ctx, ids)
+
+	return args.Get(0).([]User), args.Error(1)
+}

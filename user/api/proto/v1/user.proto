@@ -5,6 +5,7 @@ option go_package = "github.com/XaviFP/toshokan/api/user/proto/v1";
 
 service UserAPI {
   rpc GetUserID (GetUserIDRequest) returns (GetUserIDResponse);
+  rpc GetUsersByIDs (GetUsersByIDsRequest) returns (GetUsersByIDsResponse);
   rpc SignUp (SignUpRequest) returns (SignUpResponse);
   rpc LogIn (LogInRequest) returns (LogInResponse);
 }
@@ -18,6 +19,23 @@ message GetUserIDRequest {
 
 message GetUserIDResponse {
   string id = 1;
+}
+
+message GetUsersByIDsRequest {
+  repeated string user_ids = 1;
+  // Optional: specify which fields to include (empty means all)
+  repeated string fields = 2;
+}
+
+message GetUsersByIDsResponse {
+  repeated UserInfo users = 1;
+}
+
+message UserInfo {
+  string id = 1;
+  string username = 2;
+  string nick = 3;
+  string bio = 4;
 }
 
 message LogInRequest {

@@ -244,9 +244,18 @@ func NewPGRepository(db *sql.DB) Repository {
 }
 
 func (r *pgRepository) DeleteDeck(ctx context.Context, id uuid.UUID) error {
-	_, err := r.db.Exec(`UPDATE decks SET deleted_at = NOW() WHERE id = $1 AND deleted_at IS NULL`, id)
+	result, err := r.db.Exec(`UPDATE decks SET deleted_at = NOW() WHERE id = $1 AND deleted_at IS NULL`, id)
 	if err != nil {
 		return errors.Trace(err)
+	}
+
+	rowsAffected, err := result.RowsAffected()
+	if err != nil {
+		return errors.Trace(err)
+	}
+
+	if rowsAffected == 0 {
+		return ErrDeckNotFound
 	}
 
 	return nil

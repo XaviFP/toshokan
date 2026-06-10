@@ -56,6 +56,8 @@ tags:
     description: Flashcard deck management (requires authentication)
   - name: Progress
     description: User progress tracking (requires authentication)
+  - name: Backoffice
+    description: Admin/professor endpoints for monitoring and debugging (requires admin access)
 
 paths:
   /signup:
@@ -317,6 +319,222 @@ paths:
           description: Missing course ID or user ID
         '401':
           $ref: '#/components/responses/UnauthorizedError'
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /courses/{courseId}/students/progress:
+    get:
+      tags:
+        - Backoffice
+      summary: Get students progress for a course (Admin only)
+      description: |
+        Retrieve paginated list of student progress for a specific course.
+        This endpoint is for professors/admins to track student progress.
+        
+        **Requires admin access** (`X-Admin-Token` header).
+      operationId: getStudentsProgress
+      security:
+        - BearerAuth: []
+          AdminAuth: []
+      parameters:
+        - name: courseId
+          in: path
+          required: true
+          description: Course UUID
+          schema:
+            type: string
+            format: uuid
+        - name: after
+          in: query
+          required: false
+          description: Cursor for pagination (fetch students after this cursor)
+          schema:
+            type: string
+        - name: before
+          in: query
+          required: false
+          description: Cursor for backward pagination
+          schema:
+            type: string
+        - name: first
+          in: query
+          required: false
+          description: Number of students to fetch (default 20)
+          schema:
+            type: integer
+            format: int64
+            default: 20
+        - name: detailed
+          in: query
+          required: false
+          description: Include detailed per-lesson breakdown
+          schema:
+            type: boolean
+            default: false
+      responses:
+        '200':
+          description: Paginated list of student progress
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StudentsProgressResponse'
+        '400':
+          description: Missing course ID
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          description: Admin access required
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /courses/{courseId}/users/{userId}/state:
+    get:
+      tags:
+        - Backoffice
+      summary: Get user state for debugging (Admin only)
+      description: |
+        Retrieve the full state JSON for a user in a course.
+        This is a debug/admin endpoint for troubleshooting user progress issues.
+        
+        **Requires admin access** (`X-Admin-Token` header).
+      operationId: getUserState
+      security:
+        - BearerAuth: []
+          AdminAuth: []
+      parameters:
+        - name: courseId
+          in: path
+          required: true
+          description: Course UUID
+          schema:
+            type: string
+            format: uuid
+        - name: userId
+          in: path
+          required: true
+          description: User UUID
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Full user state
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserStateResponse'
+        '400':
+          description: Missing course ID or user ID
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          description: Admin access required
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: User not enrolled in course
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+    put:
+      tags:
+        - Backoffice
+      summary: Set user state for debugging (Admin only)
+      description: |
+        Overwrite the full state JSON for a user in a course.
+        This is a debug/admin endpoint for emergency fixes or state corrections.
+        
+        **Requires admin access** (`X-Admin-Token` header).
+        
+        **Warning:** Use with caution. This completely replaces the user's progress state.
+      operationId: setUserState
+      security:
+        - BearerAuth: []
+          AdminAuth: []
+      parameters:
+        - name: courseId
+          in: path
+          required: true
+          description: Course UUID
+          schema:
+            type: string
+            format: uuid
+        - name: userId
+          in: path
+          required: true
+          description: User UUID
+          schema:
+            type: string
+            format: uuid
+        - name: sync
+          in: query
+          required: false
+          description: Trigger sync after updating state
+          schema:
+            type: boolean
+            default: false
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SetUserStateRequest'
+      responses:
+        '200':
+          description: State updated successfully, returns the updated state
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserStateResponse'
+        '400':
+          description: Invalid request body or missing parameters
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          description: Admin access required
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: User not enrolled in course
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
         '500':
           description: Internal server error
           content:
@@ -829,7 +1047,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/Error'
 
-  /decks/{id}:
+  /decks/{deckId}:
     get:
       tags:
         - Decks
@@ -839,7 +1057,7 @@ paths:
       security:
         - BearerAuth: []
       parameters:
-        - name: id
+        - name: deckId
           in: path
           required: true
           description: Deck UUID
@@ -883,7 +1101,7 @@ paths:
       security:
         - BearerAuth: []
       parameters:
-        - name: id
+        - name: deckId
           in: path
           required: true
           description: Deck UUID
@@ -920,7 +1138,7 @@ paths:
       security:
         - BearerAuth: []
       parameters:
-        - name: id
+        - name: deckId
           in: path
           required: true
           description: Deck UUID
@@ -967,7 +1185,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/Error'
 
-  /decks/{id}/cards/{cardId}:
+  /decks/{deckId}/cards/{cardId}:
     patch:
       tags:
         - Decks
@@ -980,7 +1198,7 @@ paths:
       security:
         - BearerAuth: []
       parameters:
-        - name: id
+        - name: deckId
           in: path
           required: true
           description: Deck UUID
@@ -1034,7 +1252,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/Error'
 
-  /decks/{id}/cards/{cardId}/answers/{answerId}:
+  /decks/{deckId}/cards/{cardId}/answers/{answerId}:
     patch:
       tags:
         - Decks
@@ -1047,7 +1265,7 @@ paths:
       security:
         - BearerAuth: []
       parameters:
-        - name: id
+        - name: deckId
           in: path
           required: true
           description: Deck UUID
@@ -1931,3 +2149,159 @@ components:
           description: Map of lesson UUID to lesson state (lesson_id → LessonState)
       required:
         - lesson_state
+
+    # Backoffice Schemas
+    StudentsProgressResponse:
+      type: object
+      description: Paginated response of student progress for a course
+      properties:
+        edges:
+          type: array
+          items:
+            $ref: '#/components/schemas/StudentProgressSummaryEdge'
+        page_info:
+          $ref: '#/components/schemas/PageInfo'
+        total_enrolled:
+          type: integer
+          description: Total number of enrolled students in the course
+      required:
+        - edges
+        - page_info
+        - total_enrolled
+
+    StudentProgressSummaryEdge:
+      type: object
+      properties:
+        node:
+          $ref: '#/components/schemas/StudentProgressSummary'
+        cursor:
+          type: string
+          description: Pagination cursor for this edge
+      required:
+        - node
+        - cursor
+
+    StudentProgressSummary:
+      type: object
+      description: Summary of a student's progress in a course
+      properties:
+        user_id:
+          type: string
+          format: uuid
+          description: User UUID
+        username:
+          type: string
+          description: User's username
+        nick:
+          type: string
+          description: User's display name (nickname)
+        current_lesson_id:
+          type: string
+          format: uuid
+          description: ID of the lesson the student is currently on
+        lessons_completed:
+          type: integer
+          description: Number of lessons completed
+        total_lessons:
+          type: integer
+          description: Total number of lessons in the course
+        total_correct_answers:
+          type: integer
+          description: Total number of correct answers across all lessons
+        total_incorrect_answers:
+          type: integer
+          description: Total number of incorrect answers across all lessons
+        enrolled_at:
+          type: string
+          format: date-time
+          description: When the user enrolled in the course
+        last_activity_at:
+          type: string
+          format: date-time
+          description: Timestamp of the user's last activity
+        lesson_details:
+          type: array
+          items:
+            $ref: '#/components/schemas/LessonProgressDetail'
+          description: Per-lesson breakdown (only included when detailed=true)
+      required:
+        - user_id
+        - current_lesson_id
+        - lessons_completed
+        - total_lessons
+        - total_correct_answers
+        - total_incorrect_answers
+        - enrolled_at
+        - last_activity_at
+
+    LessonProgressDetail:
+      type: object
+      description: Detailed progress for a single lesson
+      properties:
+        lesson_id:
+          type: string
+          format: uuid
+        is_completed:
+          type: boolean
+        completed_at:
+          type: string
+          format: date-time
+          nullable: true
+        correct_answers:
+          type: integer
+        incorrect_answers:
+          type: integer
+      required:
+        - lesson_id
+        - is_completed
+        - correct_answers
+        - incorrect_answers
+
+    UserStateResponse:
+      type: object
+      description: Full user state for debugging
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Progress record UUID
+        user_id:
+          type: string
+          format: uuid
+        course_id:
+          type: string
+          format: uuid
+        current_lesson_id:
+          type: string
+          format: uuid
+        state_json:
+          type: string
+          description: The full progress state as a JSON string
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+      required:
+        - id
+        - user_id
+        - course_id
+        - current_lesson_id
+        - state_json
+        - created_at
+        - updated_at
+
+    SetUserStateRequest:
+      type: object
+      description: Request body for setting user state
+      properties:
+        state_json:
+          type: string
+          description: The full progress state as a JSON string
+        current_lesson_id:
+          type: string
+          format: uuid
+          description: The current lesson ID to set. If omitted, the current lesson remains unchanged.
+      required:
+        - state_json

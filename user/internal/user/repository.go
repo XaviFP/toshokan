@@ -10,6 +10,7 @@ import (
 	_ "github.com/golang-migrate/migrate/v4/source/file"
 	"github.com/google/uuid"
 	"github.com/juju/errors"
+	"github.com/lib/pq"
 	"github.com/mediocregopher/radix/v4"
 
 	"github.com/XaviFP/toshokan/common/db"
@@ -32,6 +33,7 @@ type Repository interface {
 	GetUserByID(ctx context.Context, id uuid.UUID) (User, error)
 	GetUserByUsername(ctx context.Context, userName string) (User, error)
 	GetUserPassword(ctx context.Context, userName string) ([]byte, error)
+	GetUsersByIDs(ctx context.Context, ids []uuid.UUID) ([]User, error)
 }
 
 type redisRepository struct {
@@ -92,6 +94,10 @@ func (r *redisRepository) GetUserByUsername(ctx context.Context, userName string
 
 func (r *redisRepository) GetUserPassword(ctx context.Context, userName string) ([]byte, error) {
 	return r.pgRepo.GetUserPassword(ctx, userName)
+}
+
+func (r *redisRepository) GetUsersByIDs(ctx context.Context, ids []uuid.UUID) ([]User, error) {
+	return r.pgRepo.GetUsersByIDs(ctx, ids)
 }
 
 func (r *redisRepository) doCache(ctx context.Context, u User) error {
@@ -218,4 +224,41 @@ func (r *pgRepository) GetUserPassword(ctx context.Context, userName string) ([]
 	}
 
 	return password, nil
+}
+
+func (r *pgRepository) GetUsersByIDs(ctx context.Context, ids []uuid.UUID) ([]User, error) {
+	if len(ids) == 0 {
+		return []User{}, nil
+	}
+
+	query := `
+		SELECT 
+			id,
+			username,
+			nick,
+			bio
+		FROM users
+		WHERE id = ANY($1::uuid[])
+		ORDER BY array_position($1::uuid[], id)`
+
+	rows, err := r.db.QueryContext(ctx, query, pq.Array(ids))
+	if err != nil {
+		return nil, errors.Trace(err)
+	}
+	defer rows.Close()
+
+	users := make([]User, 0, len(ids))
+	for rows.Next() {
+		var u User
+		if err := rows.Scan(&u.ID, &u.Username, &u.Nick, &u.Bio); err != nil {
+			return nil, errors.Trace(err)
+		}
+		users = append(users, u)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, errors.Trace(err)
+	}
+
+	return users, nil
 }

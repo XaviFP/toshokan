@@ -9,13 +9,15 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	"github.com/juju/errors"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 
 	pbDeck "github.com/XaviFP/toshokan/deck/api/proto/v1"
 	pbUser "github.com/XaviFP/toshokan/user/api/proto/v1"
 )
 
 func GetDeck(ctx *gin.Context, usersClient pbUser.UserAPIClient, decksClient pbDeck.DecksAPIClient) {
-	deckID := ctx.Param("id")
+	deckID := ctx.Param("deckId")
 	if deckID == "" {
 		ctx.JSON(http.StatusBadRequest, gin.H{"error": "missing deck id"})
 		return
@@ -32,10 +34,9 @@ func GetDeck(ctx *gin.Context, usersClient pbUser.UserAPIClient, decksClient pbD
 
 	res, err := decksClient.GetDeck(ctx, req)
 	if err != nil {
-		// TODO: Handle these errors properly
-		if strings.Contains(err.Error(), "deck: deck not found") {
+		if status.Code(err) == codes.NotFound {
 			slog.Error("GetDeck: deck not found", "error", err, "deckId", deckID)
-			ctx.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
+			ctx.JSON(http.StatusNotFound, gin.H{"error": "deck not found"})
 			return
 		}
 		slog.Error("GetDeck: gRPC call failed", "error", err, "deckId", deckID, "stack", errors.ErrorStack(err))
@@ -87,21 +88,25 @@ func CreateDeck(ctx *gin.Context, usersClient pbUser.UserAPIClient, decksClient 
 }
 
 func DeleteDeck(ctx *gin.Context, usersClient pbUser.UserAPIClient, decksClient pbDeck.DecksAPIClient) {
-	id := ctx.Param("id")
-	if id == "" {
+	deckID := ctx.Param("deckId")
+	if deckID == "" {
 		ctx.JSON(http.StatusBadRequest, gin.H{"error": "missing deck id"})
 		return
 	}
 
-	if _, err := uuid.Parse(id); err != nil {
-		slog.Error("DeleteDeck: failed to parse deck ID", "error", err, "deckId", id, "stack", errors.ErrorStack(err))
+	if _, err := uuid.Parse(deckID); err != nil {
+		slog.Error("DeleteDeck: failed to parse deck ID", "error", err, "deckId", deckID, "stack", errors.ErrorStack(err))
 		ctx.JSON(http.StatusBadRequest, gin.H{"error": "invalid deck id format"})
 		return
 	}
 
-	_, err := decksClient.DeleteDeck(ctx, &pbDeck.DeleteDeckRequest{Id: id})
+	_, err := decksClient.DeleteDeck(ctx, &pbDeck.DeleteDeckRequest{Id: deckID})
 	if err != nil {
-		slog.Error("DeleteDeck: gRPC call failed", "error", err, "deckId", id, "stack", errors.ErrorStack(err))
+		if status.Code(err) == codes.NotFound {
+			ctx.JSON(http.StatusNotFound, gin.H{"error": "deck not found"})
+			return
+		}
+		slog.Error("DeleteDeck: gRPC call failed", "error", err, "deckId", deckID, "stack", errors.ErrorStack(err))
 		ctx.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
@@ -110,14 +115,14 @@ func DeleteDeck(ctx *gin.Context, usersClient pbUser.UserAPIClient, decksClient 
 }
 
 func UpdateDeck(ctx *gin.Context, usersClient pbUser.UserAPIClient, decksClient pbDeck.DecksAPIClient) {
-	id := ctx.Param("id")
-	if id == "" {
+	deckID := ctx.Param("deckId")
+	if deckID == "" {
 		ctx.JSON(http.StatusBadRequest, gin.H{"error": "missing deck id"})
 		return
 	}
 
-	if _, err := uuid.Parse(id); err != nil {
-		slog.Error("UpdateDeck: failed to parse deck ID", "error", err, "deckId", id, "stack", errors.ErrorStack(err))
+	if _, err := uuid.Parse(deckID); err != nil {
+		slog.Error("UpdateDeck: failed to parse deck ID", "error", err, "deckId", deckID, "stack", errors.ErrorStack(err))
 		ctx.JSON(http.StatusBadRequest, gin.H{"error": "invalid deck id format"})
 		return
 	}
@@ -139,17 +144,17 @@ func UpdateDeck(ctx *gin.Context, usersClient pbUser.UserAPIClient, decksClient 
 	}
 
 	res, err := decksClient.UpdateDeck(ctx, &pbDeck.UpdateDeckRequest{
-		Id:          id,
+		Id:          deckID,
 		Title:       req.Title,
 		Description: req.Description,
 		IsPublic:    req.IsPublic,
 	})
 	if err != nil {
-		if strings.Contains(err.Error(), "deck: deck not found") {
+		if status.Code(err) == codes.NotFound {
 			ctx.JSON(http.StatusNotFound, gin.H{"error": "deck not found"})
 			return
 		}
-		slog.Error("UpdateDeck: gRPC call failed", "error", err, "deckId", id, "stack", errors.ErrorStack(err))
+		slog.Error("UpdateDeck: gRPC call failed", "error", err, "deckId", deckID, "stack", errors.ErrorStack(err))
 		ctx.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
@@ -158,7 +163,7 @@ func UpdateDeck(ctx *gin.Context, usersClient pbUser.UserAPIClient, decksClient 
 }
 
 func UpdateCard(ctx *gin.Context, usersClient pbUser.UserAPIClient, decksClient pbDeck.DecksAPIClient) {
-	deckID := ctx.Param("id")
+	deckID := ctx.Param("deckId")
 	cardID := ctx.Param("cardId")
 
 	if deckID == "" {
@@ -205,11 +210,11 @@ func UpdateCard(ctx *gin.Context, usersClient pbUser.UserAPIClient, decksClient 
 		Kind:        req.Kind,
 	})
 	if err != nil {
-		if strings.Contains(err.Error(), "deck: invalid card") {
+		if status.Code(err) == codes.NotFound {
 			ctx.JSON(http.StatusNotFound, gin.H{"error": "card not found"})
 			return
 		}
-		if strings.Contains(err.Error(), "deck: kind must be") {
+		if status.Code(err) == codes.InvalidArgument {
 			ctx.JSON(http.StatusBadRequest, gin.H{"error": "invalid card kind"})
 			return
 		}
@@ -222,7 +227,7 @@ func UpdateCard(ctx *gin.Context, usersClient pbUser.UserAPIClient, decksClient 
 }
 
 func UpdateAnswer(ctx *gin.Context, usersClient pbUser.UserAPIClient, decksClient pbDeck.DecksAPIClient) {
-	deckID := ctx.Param("id")
+	deckID := ctx.Param("deckId")
 	cardID := ctx.Param("cardId")
 	answerID := ctx.Param("answerId")
 
@@ -291,23 +296,23 @@ func RegisterDeckRoutes(r *gin.RouterGroup, usersClient pbUser.UserAPIClient, de
 		CreateDeck(ctx, usersClient, decksClient)
 	})
 
-	r.DELETE("/decks/:id", func(ctx *gin.Context) {
+	r.DELETE("/decks/:deckId", func(ctx *gin.Context) {
 		DeleteDeck(ctx, usersClient, decksClient)
 	})
 
-	r.GET("/decks/:id", func(ctx *gin.Context) {
+	r.GET("/decks/:deckId", func(ctx *gin.Context) {
 		GetDeck(ctx, usersClient, decksClient)
 	})
 
-	r.PATCH("/decks/:id", RequireAdmin(adminCfg, adminCfg.UpdateDeckAdminOnly), func(ctx *gin.Context) {
+	r.PATCH("/decks/:deckId", RequireAdmin(adminCfg, adminCfg.UpdateDeckAdminOnly), func(ctx *gin.Context) {
 		UpdateDeck(ctx, usersClient, decksClient)
 	})
 
-	r.PATCH("/decks/:id/cards/:cardId", RequireAdmin(adminCfg, adminCfg.UpdateCardAdminOnly), func(ctx *gin.Context) {
+	r.PATCH("/decks/:deckId/cards/:cardId", RequireAdmin(adminCfg, adminCfg.UpdateCardAdminOnly), func(ctx *gin.Context) {
 		UpdateCard(ctx, usersClient, decksClient)
 	})
 
-	r.PATCH("/decks/:id/cards/:cardId/answers/:answerId", RequireAdmin(adminCfg, adminCfg.UpdateAnswerAdminOnly), func(ctx *gin.Context) {
+	r.PATCH("/decks/:deckId/cards/:cardId/answers/:answerId", RequireAdmin(adminCfg, adminCfg.UpdateAnswerAdminOnly), func(ctx *gin.Context) {
 		UpdateAnswer(ctx, usersClient, decksClient)
 	})
 }

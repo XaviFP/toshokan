@@ -87,6 +87,41 @@ func TestUserRepository_GetUSerByUsername(t *testing.T) {
 	})
 }
 
+func TestUserRepository_GetUsersByIDs(t *testing.T) {
+	h := newTestHarness(t)
+	repo := NewPGRepository(h.db)
+
+	uncleBen := uuid.MustParse("4e37a600-c29e-4d0f-af44-66f2cd8cc1c9")
+	peterParker := uuid.MustParse("5f48b711-d3af-5e10-bf55-77f3de9dd2da")
+	maryJane := uuid.MustParse("6a59c822-e4b0-6f20-c066-88a4ef0ee3eb")
+
+	t.Run("empty_ids", func(t *testing.T) {
+		users, err := repo.GetUsersByIDs(context.Background(), []uuid.UUID{})
+		assert.NoError(t, err)
+		assert.Empty(t, users)
+	})
+
+	t.Run("preserves_input_order", func(t *testing.T) {
+		ids := []uuid.UUID{maryJane, uncleBen, peterParker}
+		users, err := repo.GetUsersByIDs(context.Background(), ids)
+		assert.NoError(t, err)
+		assert.Len(t, users, 3)
+		assert.Equal(t, maryJane, users[0].ID)
+		assert.Equal(t, uncleBen, users[1].ID)
+		assert.Equal(t, peterParker, users[2].ID)
+	})
+
+	t.Run("partial_match", func(t *testing.T) {
+		nonExistent := uuid.MustParse("f60b2fa3-4b79-488f-9341-46123dd7332b")
+		ids := []uuid.UUID{peterParker, nonExistent, uncleBen}
+		users, err := repo.GetUsersByIDs(context.Background(), ids)
+		assert.NoError(t, err)
+		assert.Len(t, users, 2)
+		assert.Equal(t, peterParker, users[0].ID)
+		assert.Equal(t, uncleBen, users[1].ID)
+	})
+}
+
 type testHarness struct {
 	db *sql.DB
 }
@@ -132,14 +167,25 @@ func populateTestDB(pg *sql.DB) error {
 	_, err := pg.Exec(`
 		INSERT INTO
 			users (id, username, nick, password, bio, created_at)
-		VALUES(
-			'4e37a600-c29e-4d0f-af44-66f2cd8cc1c9', 
-			'Uncle Ben',
-			'Benny',
-			'$2y$10$FfS13P1/T94IBUkbWasd6.siVGANuS0THIDerH9gs9C6Ybj5g/gou', 
-			'Great power comes with great responsability.', 
-			NOW()
-		);`,
+		VALUES
+			('4e37a600-c29e-4d0f-af44-66f2cd8cc1c9',
+			 'Uncle Ben',
+			 'Benny',
+			 '$2y$10$FfS13P1/T94IBUkbWasd6.siVGANuS0THIDerH9gs9C6Ybj5g/gou',
+			 'Great power comes with great responsability.',
+			 NOW()),
+			('5f48b711-d3af-5e10-bf55-77f3de9dd2da',
+			 'Peter Parker',
+			 'Spidey',
+			 '$2y$10$FfS13P1/T94IBUkbWasd6.siVGANuS0THIDerH9gs9C6Ybj5g/gou',
+			 'Your friendly neighborhood Spider-Man.',
+			 NOW()),
+			('6a59c822-e4b0-6f20-c066-88a4ef0ee3eb',
+			 'Mary Jane',
+			 'MJ',
+			 '$2y$10$FfS13P1/T94IBUkbWasd6.siVGANuS0THIDerH9gs9C6Ybj5g/gou',
+			 'Face it tiger, you just hit the jackpot.',
+			 NOW());`,
 	)
 
 	return errors.Trace(err)

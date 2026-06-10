@@ -8,6 +8,8 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 
 	"github.com/XaviFP/toshokan/common/pagination"
 	pb "github.com/XaviFP/toshokan/deck/api/proto/v1"
@@ -154,12 +156,13 @@ func TestServer_CreateDeck(t *testing.T) {
 }
 
 func TestServer_DeleteDeck(t *testing.T) {
-	repoMock := &deck.RepositoryMock{}
-	srv := &Server{Repository: repoMock}
 	validDeckID := "fb9ffe2c-ad66-4766-9b7b-46fd5d9acd72"
 	invalidDeckID := "1f30a72f-5d7a-48da-a5c2-42efece6972a"
+	nonExistentDeckID := "00000000-0000-0000-0000-000000000000"
 
 	t.Run("success", func(t *testing.T) {
+		repoMock := &deck.RepositoryMock{}
+		srv := &Server{Repository: repoMock}
 		repoMock.On("DeleteDeck", mock.Anything, uuid.MustParse(validDeckID)).Return(nil)
 		deckReq := pb.DeleteDeckRequest{Id: validDeckID}
 		res, err := srv.DeleteDeck(context.Background(), &deckReq)
@@ -168,10 +171,23 @@ func TestServer_DeleteDeck(t *testing.T) {
 	})
 
 	t.Run("failure", func(t *testing.T) {
+		repoMock := &deck.RepositoryMock{}
+		srv := &Server{Repository: repoMock}
 		repoMock.On("DeleteDeck", mock.Anything, uuid.MustParse(invalidDeckID)).Return(assert.AnError)
 		deckReq := pb.DeleteDeckRequest{Id: invalidDeckID}
 		res, err := srv.DeleteDeck(context.Background(), &deckReq)
 		assert.Error(t, err)
+		assert.Equal(t, &pb.DeleteDeckResponse{}, res)
+	})
+
+	t.Run("not_found", func(t *testing.T) {
+		repoMock := &deck.RepositoryMock{}
+		srv := &Server{Repository: repoMock}
+		repoMock.On("DeleteDeck", mock.Anything, uuid.MustParse(nonExistentDeckID)).Return(deck.ErrDeckNotFound)
+		deckReq := pb.DeleteDeckRequest{Id: nonExistentDeckID}
+		res, err := srv.DeleteDeck(context.Background(), &deckReq)
+		assert.Error(t, err)
+		assert.Equal(t, codes.NotFound, status.Code(err))
 		assert.Equal(t, &pb.DeleteDeckResponse{}, res)
 	})
 }

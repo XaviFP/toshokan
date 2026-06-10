@@ -251,9 +251,13 @@ func (s *Server) DeleteDeck(ctx context.Context, req *pb.DeleteDeckRequest) (*pb
 	err = s.Repository.DeleteDeck(ctx, deckID)
 	if err != nil {
 		slog.Error("DeleteDeck: failed to delete deck", "error", err, "deckId", deckID.String(), "stack", errors.ErrorStack(err))
+		if errors.Cause(err) == deck.ErrDeckNotFound {
+			return &pb.DeleteDeckResponse{}, status.Error(codes.NotFound, err.Error())
+		}
+		return &pb.DeleteDeckResponse{}, errors.Trace(err)
 	}
 
-	return &pb.DeleteDeckResponse{}, errors.Trace(err)
+	return &pb.DeleteDeckResponse{}, nil
 }
 
 func (s *Server) UpdateDeck(ctx context.Context, req *pb.UpdateDeckRequest) (*pb.UpdateDeckResponse, error) {
@@ -315,7 +319,7 @@ func (s *Server) UpdateCard(ctx context.Context, req *pb.UpdateCardRequest) (*pb
 
 	// Validate kind if provided
 	if updates.Kind != nil && *updates.Kind != deck.CardKindSingleChoice && *updates.Kind != deck.CardKindFillInTheBlanks {
-		return nil, deck.ErrInvalidKind
+		return nil, status.Error(codes.InvalidArgument, deck.ErrInvalidKind.Error())
 	}
 
 	c, err := s.Repository.UpdateCard(ctx, deckID, cardID, updates)

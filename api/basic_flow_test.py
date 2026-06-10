@@ -931,7 +931,7 @@ def update_deck(base_url: str, token: str, deck_id: str, updates: Dict[str, Any]
         headers=auth_headers(token),
         timeout=TIMEOUT,
     )
-    log_response("PATCH /decks/{id}", response)
+    log_response("PATCH /decks/{deckId}", response)
     return response
 
 
@@ -962,14 +962,55 @@ def update_answer(base_url: str, token: str, deck_id: str, card_id: str, answer_
 
 
 def get_deck_response(base_url: str, token: str, deck_id: str) -> requests.Response:
-    """Fetch a deck by ID (returns raw Response for testing)."""
+    """Fetch a deck by ID and return the raw response."""
     response = requests.get(
         f"{base_url}/decks/{deck_id}",
         headers=auth_headers(token),
         timeout=TIMEOUT,
     )
-    log_response("GET /decks/{id}", response)
+    log_response("GET /decks/{deckId}", response)
     return response
+
+
+def delete_deck(base_url: str, token: str, deck_id: str) -> requests.Response:
+    """Delete a deck by ID."""
+    log_step(f"Deleting deck {deck_id}")
+    response = requests.delete(
+        f"{base_url}/decks/{deck_id}",
+        headers=auth_headers(token),
+        timeout=TIMEOUT,
+    )
+    log_response("DELETE /decks/{deckId}", response)
+    return response
+
+
+def run_delete_deck_tests(base_url: str, token: str) -> None:
+    """Test DELETE /decks/{deckId} endpoint."""
+    log_step("")
+    log_step("Testing DeleteDeck endpoint...")
+
+    # Create a deck specifically for deletion testing
+    deck = create_deck(base_url, token, "deck-to-delete")
+    deck_id = deck["id"]
+    log_step(f"  Created test deck: {deck_id}")
+
+    # Test 1: Successfully delete the deck
+    response = delete_deck(base_url, token, deck_id)
+    assert response.status_code == 200, f"Expected 200, got {response.status_code}"
+    log_step("  ✓ Delete existing deck - success")
+
+    # Test 2: Verify deck is gone (should 404)
+    get_response = get_deck_response(base_url, token, deck_id)
+    assert get_response.status_code == 404, f"Expected 404 for deleted deck, got {get_response.status_code}"
+    log_step("  ✓ Get deleted deck returns 404 - success")
+
+    # Test 3: Delete non-existent deck (should 404)
+    fake_uuid = "00000000-0000-0000-0000-000000000000"
+    response = delete_deck(base_url, token, fake_uuid)
+    assert response.status_code == 404, f"Expected 404 for non-existent deck, got {response.status_code}"
+    log_step("  ✓ Delete non-existent deck returns 404 - success")
+
+    log_step("✓ DeleteDeck tests passed")
 
 
 def run_update_course_tests(base_url: str, token: str, course_id: str) -> None:
@@ -1146,7 +1187,7 @@ def run_update_lesson_tests(base_url: str, token: str, course_id: str, lesson: D
 
 
 def run_update_deck_tests(base_url: str, token: str, deck_id: str) -> None:
-    """Test PATCH /decks/{id} endpoint."""
+    """Test PATCH /decks/{deckId} endpoint."""
     log_step("")
     log_step("Testing UpdateDeck endpoint...")
 
@@ -1353,6 +1394,120 @@ def run_get_lesson_tests(base_url: str, token: str, course_id: str, lesson: Dict
     log_step("✓ GetLesson tests passed")
 
 
+def run_backoffice_tests(base_url: str, token: str, course_id: str) -> None:
+    """Test backoffice endpoints (admin-only)."""
+    log_step("")
+    log_step("Testing Backoffice endpoints...")
+
+    # Test 1: Get students progress
+    log_step("  Testing GET /courses/{courseId}/students/progress...")
+    response = requests.get(
+        f"{base_url}/courses/{course_id}/students/progress",
+        headers=auth_headers(token),
+        timeout=TIMEOUT,
+    )
+    log_response("GET /courses/{courseId}/students/progress", response)
+    assert response.status_code == 200, f"Expected 200, got {response.status_code}"
+    data = response.json()
+    assert "edges" in data, "Response should have 'edges' field"
+    assert "page_info" in data, "Response should have 'page_info' field"
+    assert "total_enrolled" in data, "Response should have 'total_enrolled' field"
+    assert data["total_enrolled"] >= 1, "Should have at least 1 enrolled student"
+    log_step("  ✓ Get students progress - success")
+
+    # Extract the user_id from the first enrolled student for subsequent tests
+    assert len(data["edges"]) > 0, "Should have at least one student edge"
+    student_node = data["edges"][0]["node"]
+    user_id = student_node["user_id"]
+    assert user_id, "Student should have user_id"
+    # Verify user enrichment - username and nick should be present
+    assert "username" in student_node, "Student should have username from user enrichment"
+    assert student_node["username"], "Username should not be empty"
+    log_step(f"  Found enrolled user: {user_id} (username: {student_node['username']})")
+
+    # Test 2: Get students progress with detailed=true
+    log_step("  Testing GET /courses/{courseId}/students/progress?detailed=true...")
+    response = requests.get(
+        f"{base_url}/courses/{course_id}/students/progress?detailed=true",
+        headers=auth_headers(token),
+        timeout=TIMEOUT,
+    )
+    log_response("GET /courses/{courseId}/students/progress?detailed=true", response)
+    assert response.status_code == 200, f"Expected 200, got {response.status_code}"
+    data = response.json()
+    if len(data["edges"]) > 0:
+        student = data["edges"][0]["node"]
+        assert "lesson_details" in student, "Student should have lesson_details when detailed=true"
+    log_step("  ✓ Get students progress with details - success")
+
+    # Test 3: Get user state
+    log_step("  Testing GET /courses/{courseId}/users/{userId}/state...")
+    response = requests.get(
+        f"{base_url}/courses/{course_id}/users/{user_id}/state",
+        headers=auth_headers(token),
+        timeout=TIMEOUT,
+    )
+    log_response("GET /courses/{courseId}/users/{userId}/state", response)
+    assert response.status_code == 200, f"Expected 200, got {response.status_code}"
+    data = response.json()
+    assert "user_id" in data, "Response should have 'user_id' field"
+    assert "course_id" in data, "Response should have 'course_id' field"
+    assert "state_json" in data, "Response should have 'state_json' field"
+    assert "current_lesson_id" in data, "Response should have 'current_lesson_id' field"
+    # Store for later
+    original_state = data["state_json"]
+    original_lesson_id = data["current_lesson_id"]
+    log_step("  ✓ Get user state - success")
+
+    # Test 4: Set user state (and restore it back)
+    log_step("  Testing PUT /courses/{courseId}/users/{userId}/state...")
+    response = requests.put(
+        f"{base_url}/courses/{course_id}/users/{user_id}/state",
+        headers=auth_headers(token),
+        json={
+            "state_json": original_state,
+            "current_lesson_id": original_lesson_id,
+        },
+        timeout=TIMEOUT,
+    )
+    log_response("PUT /courses/{courseId}/users/{userId}/state", response)
+    assert response.status_code == 200, f"Expected 200, got {response.status_code}"
+    data = response.json()
+    # Response returns the updated state
+    assert "user_id" in data, "Response should have 'user_id' field"
+    assert "state_json" in data, "Response should have 'state_json' field"
+    log_step("  ✓ Set user state - success")
+
+    # Test 5: Set user state with sync_after=true
+    log_step("  Testing PUT /courses/{courseId}/users/{userId}/state?sync=true...")
+    response = requests.put(
+        f"{base_url}/courses/{course_id}/users/{user_id}/state?sync=true",
+        headers=auth_headers(token),
+        json={
+            "state_json": original_state,
+            "current_lesson_id": original_lesson_id,
+        },
+        timeout=TIMEOUT,
+    )
+    log_response("PUT /courses/{courseId}/users/{userId}/state?sync=true", response)
+    assert response.status_code == 200, f"Expected 200, got {response.status_code}"
+    log_step("  ✓ Set user state with sync - success")
+
+    # Test 6: Get user state for non-enrolled user (should 404)
+    fake_user_id = "00000000-0000-0000-0000-000000000000"
+    log_step("  Testing GET user state for non-enrolled user...")
+    response = requests.get(
+        f"{base_url}/courses/{course_id}/users/{fake_user_id}/state",
+        headers=auth_headers(token),
+        timeout=TIMEOUT,
+    )
+    log_response("GET /courses/{courseId}/users/{fakeUserId}/state", response)
+    assert response.status_code == 404, f"Expected 404 for non-enrolled user, got {response.status_code}"
+    log_step("  ✓ Get state for non-enrolled user returns 404 - success")
+
+    log_step("✓ Backoffice tests passed")
+
+
 def test_basic_flow():
     init_log_file()
 
@@ -1405,6 +1560,9 @@ def test_basic_flow():
 
     sync_state(base_url, token, course_id)
 
+    # Test backoffice endpoints (admin-only)
+    run_backoffice_tests(base_url, token, course_id)
+
     # Test update endpoints (admin-protected)
     run_update_course_tests(base_url, token, course_id)
     run_update_lesson_tests(base_url, token, course_id,
@@ -1425,6 +1583,9 @@ def test_basic_flow():
 
     run_update_card_tests(base_url, token, deck_id, card_id)
     run_update_answer_tests(base_url, token, deck_id, card_id, answer_id)
+
+    # Test delete deck endpoint (creates its own deck)
+    run_delete_deck_tests(base_url, token)
 
     log_step("")
     log_step("✅ Test passed!")

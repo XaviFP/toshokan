@@ -140,7 +140,7 @@ func main() {
 	authorized.POST(queryPath, grapher.NewGraphqlHandler(deckClient, userClient, dealerClient))
 	gate.RegisterDeckRoutes(authorized, userClient, deckClient, c.gate.adminConfig)
 	gate.RegisterUserRoutes(router, c.gate.signupEnabled, userClient, c.gate.adminConfig)
-	gate.RegisterCoursesRoutes(authorized, coursesClient, c.gate.adminConfig)
+	gate.RegisterCoursesRoutes(authorized, coursesClient, userClient, c.gate.adminConfig)
 
 	logger.Info("Starting HTTP server", "address", c.gate.HTTPAddress())
 
