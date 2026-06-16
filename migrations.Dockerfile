@@ -29,10 +29,10 @@ COPY deck/ deck/
 COPY user/ user/
 COPY course/ course/
 
-# Build migration runners for each service
-RUN CGO_ENABLED=0 GOOS=linux go build -o /migrate-deck ./deck/cmd/migrate/
-RUN CGO_ENABLED=0 GOOS=linux go build -o /migrate-user ./user/cmd/migrate/
-RUN CGO_ENABLED=0 GOOS=linux go build -o /migrate-course ./course/cmd/migrate/
+# Build migration runners for each service (-p 1 limits parallel compilation to reduce memory usage)
+RUN CGO_ENABLED=0 GOOS=linux go build -p 1 -o /migrate-deck ./deck/cmd/migrate/
+RUN CGO_ENABLED=0 GOOS=linux go build -p 1 -o /migrate-user ./user/cmd/migrate/
+RUN CGO_ENABLED=0 GOOS=linux go build -p 1 -o /migrate-course ./course/cmd/migrate/
 
 # =============================================================================
 # Runtime
