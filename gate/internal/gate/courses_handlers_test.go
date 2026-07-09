@@ -163,6 +163,14 @@ func (m *mockCourseAPIClient) SetUserState(ctx context.Context, req *pb.SetUserS
 	return args.Get(0).(*pb.SetUserStateResponse), args.Error(1)
 }
 
+func (m *mockCourseAPIClient) GetAllCourses(ctx context.Context, req *pb.GetAllCoursesRequest, opts ...grpc.CallOption) (*pb.GetAllCoursesResponse, error) {
+	args := m.Called(ctx, req)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*pb.GetAllCoursesResponse), args.Error(1)
+}
+
 // mockUserAPIClient is a mock implementation of pbUser.UserAPIClient for courses tests
 type mockUserAPIClient struct {
 	mock.Mock
@@ -245,11 +253,11 @@ func TestGetStudentsProgress(t *testing.T) {
 		}, nil)
 
 		router := gin.New()
-		router.GET("/courses/:courseId/students/progress", func(ctx *gin.Context) {
+		router.GET("/admin/courses/:courseId/students/progress", func(ctx *gin.Context) {
 			GetStudentsProgress(ctx, client, userClient)
 		})
 
-		req := httptest.NewRequest(http.MethodGet, "/courses/fb9ffe2c-ad66-4766-9b7b-46fd5d9acd72/students/progress?first=20", nil)
+		req := httptest.NewRequest(http.MethodGet, "/admin/courses/fb9ffe2c-ad66-4766-9b7b-46fd5d9acd72/students/progress?first=20", nil)
 		w := httptest.NewRecorder()
 		router.ServeHTTP(w, req)
 
@@ -306,11 +314,11 @@ func TestGetStudentsProgress(t *testing.T) {
 		}, nil)
 
 		router := gin.New()
-		router.GET("/courses/:courseId/students/progress", func(ctx *gin.Context) {
+		router.GET("/admin/courses/:courseId/students/progress", func(ctx *gin.Context) {
 			GetStudentsProgress(ctx, client, userClient)
 		})
 
-		req := httptest.NewRequest(http.MethodGet, "/courses/fb9ffe2c-ad66-4766-9b7b-46fd5d9acd72/students/progress?detailed=true", nil)
+		req := httptest.NewRequest(http.MethodGet, "/admin/courses/fb9ffe2c-ad66-4766-9b7b-46fd5d9acd72/students/progress?detailed=true", nil)
 		w := httptest.NewRecorder()
 		router.ServeHTTP(w, req)
 
@@ -332,12 +340,12 @@ func TestGetStudentsProgress(t *testing.T) {
 		userClient := &mockUserAPIClient{}
 
 		router := gin.New()
-		router.GET("/courses/:courseId/students/progress", func(ctx *gin.Context) {
+		router.GET("/admin/courses/:courseId/students/progress", func(ctx *gin.Context) {
 			ctx.Params = gin.Params{} // Clear params
 			GetStudentsProgress(ctx, client, userClient)
 		})
 
-		req := httptest.NewRequest(http.MethodGet, "/courses/test/students/progress", nil)
+		req := httptest.NewRequest(http.MethodGet, "/admin/courses/test/students/progress", nil)
 		w := httptest.NewRecorder()
 		router.ServeHTTP(w, req)
 
@@ -352,11 +360,11 @@ func TestGetStudentsProgress(t *testing.T) {
 		client.On("GetStudentsProgress", mock.Anything, mock.Anything).Return(nil, assert.AnError)
 
 		router := gin.New()
-		router.GET("/courses/:courseId/students/progress", func(ctx *gin.Context) {
+		router.GET("/admin/courses/:courseId/students/progress", func(ctx *gin.Context) {
 			GetStudentsProgress(ctx, client, userClient)
 		})
 
-		req := httptest.NewRequest(http.MethodGet, "/courses/fb9ffe2c-ad66-4766-9b7b-46fd5d9acd72/students/progress", nil)
+		req := httptest.NewRequest(http.MethodGet, "/admin/courses/fb9ffe2c-ad66-4766-9b7b-46fd5d9acd72/students/progress", nil)
 		w := httptest.NewRecorder()
 		router.ServeHTTP(w, req)
 
@@ -388,11 +396,11 @@ func TestGetUserState(t *testing.T) {
 		}, nil)
 
 		router := gin.New()
-		router.GET("/courses/:courseId/users/:userId/state", func(ctx *gin.Context) {
+		router.GET("/admin/courses/:courseId/users/:userId/state", func(ctx *gin.Context) {
 			GetUserState(ctx, client)
 		})
 
-		req := httptest.NewRequest(http.MethodGet, "/courses/fb9ffe2c-ad66-4766-9b7b-46fd5d9acd72/users/4e37a600-c29e-4d0f-af44-66f2cd8cc1c9/state", nil)
+		req := httptest.NewRequest(http.MethodGet, "/admin/courses/fb9ffe2c-ad66-4766-9b7b-46fd5d9acd72/users/4e37a600-c29e-4d0f-af44-66f2cd8cc1c9/state", nil)
 		w := httptest.NewRecorder()
 		router.ServeHTTP(w, req)
 
@@ -410,12 +418,12 @@ func TestGetUserState(t *testing.T) {
 		client := &mockCourseAPIClient{}
 
 		router := gin.New()
-		router.GET("/courses/:courseId/users/:userId/state", func(ctx *gin.Context) {
+		router.GET("/admin/courses/:courseId/users/:userId/state", func(ctx *gin.Context) {
 			ctx.Params = gin.Params{} // Clear params
 			GetUserState(ctx, client)
 		})
 
-		req := httptest.NewRequest(http.MethodGet, "/courses/test/users/test/state", nil)
+		req := httptest.NewRequest(http.MethodGet, "/admin/courses/test/users/test/state", nil)
 		w := httptest.NewRecorder()
 		router.ServeHTTP(w, req)
 
@@ -429,11 +437,11 @@ func TestGetUserState(t *testing.T) {
 		client.On("GetUserState", mock.Anything, mock.Anything).Return(nil, &mockNotFoundError{})
 
 		router := gin.New()
-		router.GET("/courses/:courseId/users/:userId/state", func(ctx *gin.Context) {
+		router.GET("/admin/courses/:courseId/users/:userId/state", func(ctx *gin.Context) {
 			GetUserState(ctx, client)
 		})
 
-		req := httptest.NewRequest(http.MethodGet, "/courses/fb9ffe2c-ad66-4766-9b7b-46fd5d9acd72/users/4e37a600-c29e-4d0f-af44-66f2cd8cc1c9/state", nil)
+		req := httptest.NewRequest(http.MethodGet, "/admin/courses/fb9ffe2c-ad66-4766-9b7b-46fd5d9acd72/users/4e37a600-c29e-4d0f-af44-66f2cd8cc1c9/state", nil)
 		w := httptest.NewRecorder()
 		router.ServeHTTP(w, req)
 
@@ -468,7 +476,7 @@ func TestSetUserState(t *testing.T) {
 		}, nil)
 
 		router := gin.New()
-		router.PUT("/courses/:courseId/users/:userId/state", func(ctx *gin.Context) {
+		router.PUT("/admin/courses/:courseId/users/:userId/state", func(ctx *gin.Context) {
 			SetUserState(ctx, client)
 		})
 
@@ -476,7 +484,7 @@ func TestSetUserState(t *testing.T) {
 			"current_lesson_id": "334ddbf8-1acc-405b-86d8-49f0d1ca636c",
 			"state_json":        `{"lessons":{}}`,
 		})
-		req := httptest.NewRequest(http.MethodPut, "/courses/fb9ffe2c-ad66-4766-9b7b-46fd5d9acd72/users/4e37a600-c29e-4d0f-af44-66f2cd8cc1c9/state", bytes.NewReader(body))
+		req := httptest.NewRequest(http.MethodPut, "/admin/courses/fb9ffe2c-ad66-4766-9b7b-46fd5d9acd72/users/4e37a600-c29e-4d0f-af44-66f2cd8cc1c9/state", bytes.NewReader(body))
 		req.Header.Set("Content-Type", "application/json")
 		w := httptest.NewRecorder()
 		router.ServeHTTP(w, req)
@@ -504,14 +512,14 @@ func TestSetUserState(t *testing.T) {
 		}, nil)
 
 		router := gin.New()
-		router.PUT("/courses/:courseId/users/:userId/state", func(ctx *gin.Context) {
+		router.PUT("/admin/courses/:courseId/users/:userId/state", func(ctx *gin.Context) {
 			SetUserState(ctx, client)
 		})
 
 		body, _ := json.Marshal(map[string]interface{}{
 			"state_json": `{"lessons":{}}`,
 		})
-		req := httptest.NewRequest(http.MethodPut, "/courses/fb9ffe2c-ad66-4766-9b7b-46fd5d9acd72/users/4e37a600-c29e-4d0f-af44-66f2cd8cc1c9/state?sync=true", bytes.NewReader(body))
+		req := httptest.NewRequest(http.MethodPut, "/admin/courses/fb9ffe2c-ad66-4766-9b7b-46fd5d9acd72/users/4e37a600-c29e-4d0f-af44-66f2cd8cc1c9/state?sync=true", bytes.NewReader(body))
 		req.Header.Set("Content-Type", "application/json")
 		w := httptest.NewRecorder()
 		router.ServeHTTP(w, req)
@@ -523,7 +531,7 @@ func TestSetUserState(t *testing.T) {
 		client := &mockCourseAPIClient{}
 
 		router := gin.New()
-		router.PUT("/courses/:courseId/users/:userId/state", func(ctx *gin.Context) {
+		router.PUT("/admin/courses/:courseId/users/:userId/state", func(ctx *gin.Context) {
 			ctx.Params = gin.Params{} // Clear params
 			SetUserState(ctx, client)
 		})
@@ -531,7 +539,7 @@ func TestSetUserState(t *testing.T) {
 		body, _ := json.Marshal(map[string]interface{}{
 			"state_json": `{"lessons":{}}`,
 		})
-		req := httptest.NewRequest(http.MethodPut, "/courses/test/users/test/state", bytes.NewReader(body))
+		req := httptest.NewRequest(http.MethodPut, "/admin/courses/test/users/test/state", bytes.NewReader(body))
 		req.Header.Set("Content-Type", "application/json")
 		w := httptest.NewRecorder()
 		router.ServeHTTP(w, req)
@@ -544,11 +552,11 @@ func TestSetUserState(t *testing.T) {
 		client := &mockCourseAPIClient{}
 
 		router := gin.New()
-		router.PUT("/courses/:courseId/users/:userId/state", func(ctx *gin.Context) {
+		router.PUT("/admin/courses/:courseId/users/:userId/state", func(ctx *gin.Context) {
 			SetUserState(ctx, client)
 		})
 
-		req := httptest.NewRequest(http.MethodPut, "/courses/fb9ffe2c-ad66-4766-9b7b-46fd5d9acd72/users/4e37a600-c29e-4d0f-af44-66f2cd8cc1c9/state", bytes.NewReader([]byte("invalid json")))
+		req := httptest.NewRequest(http.MethodPut, "/admin/courses/fb9ffe2c-ad66-4766-9b7b-46fd5d9acd72/users/4e37a600-c29e-4d0f-af44-66f2cd8cc1c9/state", bytes.NewReader([]byte("invalid json")))
 		req.Header.Set("Content-Type", "application/json")
 		w := httptest.NewRecorder()
 		router.ServeHTTP(w, req)
@@ -562,14 +570,14 @@ func TestSetUserState(t *testing.T) {
 		client.On("SetUserState", mock.Anything, mock.Anything).Return(nil, assert.AnError)
 
 		router := gin.New()
-		router.PUT("/courses/:courseId/users/:userId/state", func(ctx *gin.Context) {
+		router.PUT("/admin/courses/:courseId/users/:userId/state", func(ctx *gin.Context) {
 			SetUserState(ctx, client)
 		})
 
 		body, _ := json.Marshal(map[string]interface{}{
 			"state_json": `{"lessons":{}}`,
 		})
-		req := httptest.NewRequest(http.MethodPut, "/courses/fb9ffe2c-ad66-4766-9b7b-46fd5d9acd72/users/4e37a600-c29e-4d0f-af44-66f2cd8cc1c9/state", bytes.NewReader(body))
+		req := httptest.NewRequest(http.MethodPut, "/admin/courses/fb9ffe2c-ad66-4766-9b7b-46fd5d9acd72/users/4e37a600-c29e-4d0f-af44-66f2cd8cc1c9/state", bytes.NewReader(body))
 		req.Header.Set("Content-Type", "application/json")
 		w := httptest.NewRecorder()
 		router.ServeHTTP(w, req)
@@ -595,7 +603,7 @@ func TestBackofficeRoutes_RequireAdmin(t *testing.T) {
 		router := gin.New()
 		RegisterCoursesRoutes(router.Group("/"), client, userClient, adminCfg)
 
-		req := httptest.NewRequest(http.MethodGet, "/courses/fb9ffe2c-ad66-4766-9b7b-46fd5d9acd72/students/progress", nil)
+		req := httptest.NewRequest(http.MethodGet, "/admin/courses/fb9ffe2c-ad66-4766-9b7b-46fd5d9acd72/students/progress", nil)
 		w := httptest.NewRecorder()
 		router.ServeHTTP(w, req)
 
@@ -617,7 +625,7 @@ func TestBackofficeRoutes_RequireAdmin(t *testing.T) {
 		router := gin.New()
 		RegisterCoursesRoutes(router.Group("/"), client, userClient, adminCfg)
 
-		req := httptest.NewRequest(http.MethodGet, "/courses/fb9ffe2c-ad66-4766-9b7b-46fd5d9acd72/students/progress", nil)
+		req := httptest.NewRequest(http.MethodGet, "/admin/courses/fb9ffe2c-ad66-4766-9b7b-46fd5d9acd72/students/progress", nil)
 		req.Header.Set("X-Admin-Token", "secret123")
 		w := httptest.NewRecorder()
 		router.ServeHTTP(w, req)
@@ -632,7 +640,7 @@ func TestBackofficeRoutes_RequireAdmin(t *testing.T) {
 		router := gin.New()
 		RegisterCoursesRoutes(router.Group("/"), client, userClient, adminCfg)
 
-		req := httptest.NewRequest(http.MethodGet, "/courses/fb9ffe2c-ad66-4766-9b7b-46fd5d9acd72/users/4e37a600-c29e-4d0f-af44-66f2cd8cc1c9/state", nil)
+		req := httptest.NewRequest(http.MethodGet, "/admin/courses/fb9ffe2c-ad66-4766-9b7b-46fd5d9acd72/users/4e37a600-c29e-4d0f-af44-66f2cd8cc1c9/state", nil)
 		w := httptest.NewRecorder()
 		router.ServeHTTP(w, req)
 
@@ -649,7 +657,7 @@ func TestBackofficeRoutes_RequireAdmin(t *testing.T) {
 		body, _ := json.Marshal(map[string]interface{}{
 			"state_json": `{"lessons":{}}`,
 		})
-		req := httptest.NewRequest(http.MethodPut, "/courses/fb9ffe2c-ad66-4766-9b7b-46fd5d9acd72/users/4e37a600-c29e-4d0f-af44-66f2cd8cc1c9/state", bytes.NewReader(body))
+		req := httptest.NewRequest(http.MethodPut, "/admin/courses/fb9ffe2c-ad66-4766-9b7b-46fd5d9acd72/users/4e37a600-c29e-4d0f-af44-66f2cd8cc1c9/state", bytes.NewReader(body))
 		req.Header.Set("Content-Type", "application/json")
 		w := httptest.NewRecorder()
 		router.ServeHTTP(w, req)
@@ -667,7 +675,7 @@ func TestBackofficeRoutes_RequireAdmin(t *testing.T) {
 		body, _ := json.Marshal(map[string]interface{}{
 			"state_json": `{"lessons":{}}`,
 		})
-		req := httptest.NewRequest(http.MethodPut, "/courses/fb9ffe2c-ad66-4766-9b7b-46fd5d9acd72/users/4e37a600-c29e-4d0f-af44-66f2cd8cc1c9/state", bytes.NewReader(body))
+		req := httptest.NewRequest(http.MethodPut, "/admin/courses/fb9ffe2c-ad66-4766-9b7b-46fd5d9acd72/users/4e37a600-c29e-4d0f-af44-66f2cd8cc1c9/state", bytes.NewReader(body))
 		req.Header.Set("Content-Type", "application/json")
 		req.Header.Set("X-Admin-Token", "wrong-secret")
 		w := httptest.NewRecorder()
@@ -682,4 +690,171 @@ type mockNotFoundError struct{}
 
 func (e *mockNotFoundError) Error() string {
 	return "user progress not found"
+}
+
+
+func TestGetAllCourses(t *testing.T) {
+	t.Run("success", func(t *testing.T) {
+		client := &mockCourseAPIClient{}
+
+		client.On("GetAllCourses", mock.Anything, mock.MatchedBy(func(req *pb.GetAllCoursesRequest) bool {
+			return req.Pagination.First == 20
+		})).Return(&pb.GetAllCoursesResponse{
+			Courses: &pb.CoursesConnection{
+				Edges: []*pb.CoursesConnection_Edge{
+					{
+						Node: &pb.Course{
+							Id:          "fb9ffe2c-ad66-4766-9b7b-46fd5d9acd72",
+							Order:       1,
+							Title:       "Go Mastery",
+							Description: "Master the Go programming language",
+							CreatedAt:   timestamppb.Now(),
+						},
+						Cursor: "cursor1",
+					},
+					{
+						Node: &pb.Course{
+							Id:          "1f30a72f-5d7a-48da-a5c2-42efece6972a",
+							Order:       2,
+							Title:       "Advanced Go",
+							Description: "Advanced Go concepts",
+							CreatedAt:   timestamppb.Now(),
+						},
+						Cursor: "cursor2",
+					},
+				},
+				PageInfo: &pb.PageInfo{
+					HasNextPage:     false,
+					HasPreviousPage: false,
+					StartCursor:     "cursor1",
+					EndCursor:       "cursor2",
+				},
+			},
+			TotalCount: 2,
+		}, nil)
+
+		router := gin.New()
+		router.GET("/admin/courses", func(ctx *gin.Context) {
+			GetAllCourses(ctx, client)
+		})
+
+		req := httptest.NewRequest(http.MethodGet, "/admin/courses", nil)
+		w := httptest.NewRecorder()
+		router.ServeHTTP(w, req)
+
+		assert.Equal(t, http.StatusOK, w.Code)
+
+		var response map[string]interface{}
+		err := json.Unmarshal(w.Body.Bytes(), &response)
+		assert.NoError(t, err)
+
+		edges := response["edges"].([]interface{})
+		assert.Len(t, edges, 2)
+
+		totalCount := response["total_count"].(float64)
+		assert.Equal(t, float64(2), totalCount)
+
+		pageInfo := response["page_info"].(map[string]interface{})
+		assert.False(t, pageInfo["has_next_page"].(bool))
+	})
+
+	t.Run("with_pagination", func(t *testing.T) {
+		client := &mockCourseAPIClient{}
+
+		client.On("GetAllCourses", mock.Anything, mock.MatchedBy(func(req *pb.GetAllCoursesRequest) bool {
+			return req.Pagination.First == 10 && req.Pagination.After == "some-cursor"
+		})).Return(&pb.GetAllCoursesResponse{
+			Courses: &pb.CoursesConnection{
+				Edges:    []*pb.CoursesConnection_Edge{},
+				PageInfo: &pb.PageInfo{},
+			},
+			TotalCount: 0,
+		}, nil)
+
+		router := gin.New()
+		router.GET("/admin/courses", func(ctx *gin.Context) {
+			GetAllCourses(ctx, client)
+		})
+
+		req := httptest.NewRequest(http.MethodGet, "/admin/courses?first=10&after=some-cursor", nil)
+		w := httptest.NewRecorder()
+		router.ServeHTTP(w, req)
+
+		assert.Equal(t, http.StatusOK, w.Code)
+	})
+
+	t.Run("grpc_error", func(t *testing.T) {
+		client := &mockCourseAPIClient{}
+		client.On("GetAllCourses", mock.Anything, mock.Anything).Return(nil, assert.AnError)
+
+		router := gin.New()
+		router.GET("/admin/courses", func(ctx *gin.Context) {
+			GetAllCourses(ctx, client)
+		})
+
+		req := httptest.NewRequest(http.MethodGet, "/admin/courses", nil)
+		w := httptest.NewRecorder()
+		router.ServeHTTP(w, req)
+
+		assert.Equal(t, http.StatusInternalServerError, w.Code)
+	})
+}
+
+func TestGetAllCoursesRouteRequiresAdmin(t *testing.T) {
+	adminCfg := AdminConfig{
+		HeaderName:   "X-Admin-Token",
+		HeaderSecret: "test-secret",
+	}
+
+	t.Run("without_admin_header", func(t *testing.T) {
+		client := &mockCourseAPIClient{}
+		userClient := &mockUserAPIClient{}
+
+		router := gin.New()
+		RegisterCoursesRoutes(router.Group("/"), client, userClient, adminCfg)
+
+		req := httptest.NewRequest(http.MethodGet, "/admin/courses", nil)
+		w := httptest.NewRecorder()
+		router.ServeHTTP(w, req)
+
+		assert.Equal(t, http.StatusForbidden, w.Code)
+	})
+
+	t.Run("with_invalid_admin_header", func(t *testing.T) {
+		client := &mockCourseAPIClient{}
+		userClient := &mockUserAPIClient{}
+
+		router := gin.New()
+		RegisterCoursesRoutes(router.Group("/"), client, userClient, adminCfg)
+
+		req := httptest.NewRequest(http.MethodGet, "/admin/courses", nil)
+		req.Header.Set("X-Admin-Token", "wrong-secret")
+		w := httptest.NewRecorder()
+		router.ServeHTTP(w, req)
+
+		assert.Equal(t, http.StatusForbidden, w.Code)
+	})
+
+	t.Run("with_valid_admin_header", func(t *testing.T) {
+		client := &mockCourseAPIClient{}
+		userClient := &mockUserAPIClient{}
+
+		client.On("GetAllCourses", mock.Anything, mock.Anything).Return(&pb.GetAllCoursesResponse{
+			Courses: &pb.CoursesConnection{
+				Edges:    []*pb.CoursesConnection_Edge{},
+				PageInfo: &pb.PageInfo{},
+			},
+			TotalCount: 0,
+		}, nil)
+
+		router := gin.New()
+		RegisterCoursesRoutes(router.Group("/"), client, userClient, adminCfg)
+
+		req := httptest.NewRequest(http.MethodGet, "/admin/courses", nil)
+		req.Header.Set("X-Admin-Token", "test-secret")
+		w := httptest.NewRecorder()
+		router.ServeHTTP(w, req)
+
+		assert.Equal(t, http.StatusOK, w.Code)
+	})
 }

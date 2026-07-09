@@ -44,6 +44,8 @@ type Repository interface {
 	UpdateUserProgress(ctx context.Context, progress UserCourseProgress) error
 
 	// Backoffice
+	GetAllCourses(ctx context.Context, p pagination.Pagination) (CoursesConnection, error)
+	CountCourses(ctx context.Context) (int, error)
 	GetEnrolledUsersProgress(ctx context.Context, courseID uuid.UUID, p pagination.Pagination) (StudentsProgressConnection, error)
 	CountEnrolledUsers(ctx context.Context, courseID uuid.UUID) (int, error)
 }
@@ -324,6 +326,15 @@ func (r *redisRepository) GetEnrolledUsersProgress(ctx context.Context, courseID
 // CountEnrolledUsers passes through to DB (backoffice, no caching)
 func (r *redisRepository) CountEnrolledUsers(ctx context.Context, courseID uuid.UUID) (int, error) {
 	return r.db.CountEnrolledUsers(ctx, courseID)
+}
+
+
+func (r *redisRepository) GetAllCourses(ctx context.Context, p pagination.Pagination) (CoursesConnection, error) {
+	return r.db.GetAllCourses(ctx, p)
+}
+
+func (r *redisRepository) CountCourses(ctx context.Context) (int, error) {
+	return r.db.CountCourses(ctx)
 }
 
 type pgRepository struct {
@@ -1007,4 +1018,99 @@ func computeStudentSummary(progress UserCourseProgress, state *ProgressState, to
 	}
 
 	return summary
+}
+
+// CountCourses returns the total number of non-deleted courses
+func (r *pgRepository) CountCourses(ctx context.Context) (int, error) {
+	var count int
+	err := r.db.QueryRowContext(ctx,
+		`SELECT COUNT(*) FROM courses WHERE deleted_at IS NULL`,
+	).Scan(&count)
+	if err != nil {
+		return 0, errors.Trace(err)
+	}
+	return count, nil
+}
+
+// GetAllCourses retrieves all courses with pagination
+func (r *pgRepository) GetAllCourses(ctx context.Context, p pagination.Pagination) (CoursesConnection, error) {
+	var (
+		out   CoursesConnection
+		arger db.Argumenter
+	)
+
+	whereClauses := []string{"deleted_at IS NULL"}
+
+	if !p.Cursor().IsEmpty() {
+		var cursor CourseCursor
+		if err := pagination.FromCursor(p.Cursor(), &cursor); err != nil {
+			return out, errors.Trace(err)
+		}
+		whereClauses = append(whereClauses, fmt.Sprintf(`"order" %s %s`, p.Comparator(), arger.Add(cursor.Order)))
+	}
+
+	query := fmt.Sprintf(
+		`SELECT id, "order", title, description, created_at, updated_at, deleted_at
+		 FROM courses
+		 WHERE %s
+		 ORDER BY "order" %s
+		 LIMIT %s`,
+		strings.Join(whereClauses, " AND "),
+		p.OrderBy(),
+		arger.Add(p.Limit()+1),
+	)
+
+	rows, err := r.db.QueryContext(ctx, query, arger.Values()...)
+	if err != nil {
+		return out, errors.Trace(err)
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var c Course
+		if err := rows.Scan(&c.ID, &c.Order, &c.Title, &c.Description, &c.CreatedAt, &c.UpdatedAt, &c.DeletedAt); err != nil {
+			return out, errors.Trace(err)
+		}
+
+		cursor, err := pagination.ToCursor(CourseCursor{Order: c.Order})
+		if err != nil {
+			return out, errors.Trace(err)
+		}
+
+		out.Edges = append(out.Edges, CourseEdge{
+			Course: c,
+			Cursor: cursor,
+		})
+	}
+
+	if err := rows.Err(); err != nil {
+		return out, errors.Trace(err)
+	}
+
+	hasMore := len(out.Edges) > p.Limit()
+
+	pageInfo := pagination.PageInfo{
+		HasPreviousPage: hasMore && !p.IsForward(),
+		HasNextPage:     hasMore && p.IsForward(),
+	}
+
+	if hasMore {
+		out.Edges = out.Edges[:len(out.Edges)-1]
+	}
+
+	// If backward pagination, reverse to restore natural order
+	if !p.IsForward() {
+		for i, j := 0, len(out.Edges)-1; i < j; i, j = i+1, j-1 {
+			out.Edges[i], out.Edges[j] = out.Edges[j], out.Edges[i]
+		}
+	}
+
+	if len(out.Edges) > 0 {
+		pageInfo.StartCursor = out.Edges[0].Cursor
+		pageInfo.EndCursor = out.Edges[len(out.Edges)-1].Cursor
+	}
+
+	out.PageInfo = pageInfo
+
+	return out, nil
 }

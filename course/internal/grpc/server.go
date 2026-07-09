@@ -734,6 +734,67 @@ func (s *Server) SyncState(ctx context.Context, req *pb.SyncStateRequest) (*pb.S
 // Backoffice Endpoints
 // ============================================
 
+// GetAllCourses retrieves all courses with pagination (backoffice/admin)
+func (s *Server) GetAllCourses(ctx context.Context, req *pb.GetAllCoursesRequest) (*pb.GetAllCoursesResponse, error) {
+	var p pagination.Pagination
+	if req.Pagination == nil {
+		p = pagination.NewOldestFirstPagination(
+			pagination.WithFirst(20),
+		)
+	} else {
+		p = pagination.NewOldestFirstPagination(
+			pagination.WithFirst(int(req.Pagination.First)),
+			pagination.WithLast(int(req.Pagination.Last)),
+			pagination.WithAfter(pagination.Cursor(req.Pagination.After)),
+			pagination.WithBefore(pagination.Cursor(req.Pagination.Before)),
+		)
+	}
+
+	coursesConn, err := s.Repository.GetAllCourses(ctx, p)
+	if err != nil {
+		slog.Error("GetAllCourses: failed to get courses", "error", err, "stack", errors.ErrorStack(err))
+		return nil, errors.Trace(err)
+	}
+
+	totalCount, err := s.Repository.CountCourses(ctx)
+	if err != nil {
+		slog.Error("GetAllCourses: failed to count courses", "error", err, "stack", errors.ErrorStack(err))
+		return nil, errors.Trace(err)
+	}
+
+	// Convert to proto
+	protoEdges := make([]*pb.CoursesConnection_Edge, 0, len(coursesConn.Edges))
+	for _, edge := range coursesConn.Edges {
+		protoCourse := &pb.Course{
+			Id:          edge.Course.ID.String(),
+			Order:       edge.Course.Order,
+			Title:       edge.Course.Title,
+			Description: edge.Course.Description,
+			CreatedAt:   toProtoTimestamp(edge.Course.CreatedAt),
+			UpdatedAt:   toProtoTimestampPtr(edge.Course.UpdatedAt),
+			DeletedAt:   toProtoTimestampPtr(edge.Course.DeletedAt),
+		}
+
+		protoEdges = append(protoEdges, &pb.CoursesConnection_Edge{
+			Node:   protoCourse,
+			Cursor: edge.Cursor.String(),
+		})
+	}
+
+	return &pb.GetAllCoursesResponse{
+		Courses: &pb.CoursesConnection{
+			Edges: protoEdges,
+			PageInfo: &pb.PageInfo{
+				HasPreviousPage: coursesConn.PageInfo.HasPreviousPage,
+				HasNextPage:     coursesConn.PageInfo.HasNextPage,
+				StartCursor:     coursesConn.PageInfo.StartCursor.String(),
+				EndCursor:       coursesConn.PageInfo.EndCursor.String(),
+			},
+		},
+		TotalCount: int32(totalCount),
+	}, nil
+}
+
 // GetStudentsProgress retrieves paginated student progress for a course (backoffice)
 func (s *Server) GetStudentsProgress(ctx context.Context, req *pb.GetStudentsProgressRequest) (*pb.GetStudentsProgressResponse, error) {
 	courseID, err := uuid.Parse(req.CourseId)

@@ -25,6 +25,7 @@ service CourseAPI {
   rpc GetStudentsProgress (GetStudentsProgressRequest) returns (GetStudentsProgressResponse) {}
   rpc GetUserState (GetUserStateRequest) returns (GetUserStateResponse) {}
   rpc SetUserState (SetUserStateRequest) returns (SetUserStateResponse) {}
+  rpc GetAllCourses (GetAllCoursesRequest) returns (GetAllCoursesResponse) {}
 }
 
 message Course {
@@ -356,4 +357,26 @@ message SetUserStateRequest {
 
 message SetUserStateResponse {
   FullUserState user_state = 1;  // Return the updated state
+}
+
+// ============================================
+// Backoffice: List All Courses
+// ============================================
+
+message CoursesConnection {
+  message Edge {
+    Course node = 1;
+    string cursor = 2;
+  }
+  repeated Edge edges = 1;
+  PageInfo page_info = 2;
+}
+
+message GetAllCoursesRequest {
+  Pagination pagination = 1;
+}
+
+message GetAllCoursesResponse {
+  CoursesConnection courses = 1;
+  int32 total_count = 2;
 }

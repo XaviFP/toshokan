@@ -1337,7 +1337,7 @@ func TestServer_SetUserState(t *testing.T) {
 		res, err := srv.SetUserState(context.Background(), req)
 		assert.Error(t, err)
 		assert.Nil(t, res)
-		assert.Contains(t, err.Error(), "invalid state JSON")
+		assert.Contains(t, err.Error(), "invalid state_json")
 	})
 
 	t.Run("failure_invalid_current_lesson_id", func(t *testing.T) {
@@ -1384,6 +1384,124 @@ func TestServer_SetUserState(t *testing.T) {
 		}
 
 		res, err := srv.SetUserState(context.Background(), req)
+		assert.Error(t, err)
+		assert.Nil(t, res)
+	})
+}
+
+func TestServer_GetAllCourses(t *testing.T) {
+	t.Run("success", func(t *testing.T) {
+		repoMock := &course.RepositoryMock{}
+		srv := &Server{Repository: repoMock}
+
+		courses := course.CoursesConnection{
+			Edges: []course.CourseEdge{
+				{
+					Course: course.Course{
+						ID:          uuid.MustParse("fb9ffe2c-ad66-4766-9b7b-46fd5d9acd72"),
+						Order:       1,
+						Title:       "Go Mastery",
+						Description: "Master the Go programming language",
+						CreatedAt:   time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC),
+					},
+					Cursor: "cursor1",
+				},
+				{
+					Course: course.Course{
+						ID:          uuid.MustParse("1f30a72f-5d7a-48da-a5c2-42efece6972a"),
+						Order:       2,
+						Title:       "Advanced Go",
+						Description: "Advanced Go concepts",
+						CreatedAt:   time.Date(2024, 1, 2, 0, 0, 0, 0, time.UTC),
+					},
+					Cursor: "cursor2",
+				},
+			},
+			PageInfo: pagination.PageInfo{
+				HasNextPage:     false,
+				HasPreviousPage: false,
+				StartCursor:     "cursor1",
+				EndCursor:       "cursor2",
+			},
+		}
+
+		repoMock.On("GetAllCourses", mock.Anything, mock.Anything).Return(courses, nil)
+		repoMock.On("CountCourses", mock.Anything).Return(2, nil)
+
+		req := &pb.GetAllCoursesRequest{
+			Pagination: &pb.Pagination{First: 20},
+		}
+
+		res, err := srv.GetAllCourses(context.Background(), req)
+		assert.NoError(t, err)
+		assert.NotNil(t, res)
+		assert.Len(t, res.Courses.Edges, 2)
+		assert.Equal(t, int32(2), res.TotalCount)
+		assert.Equal(t, "Go Mastery", res.Courses.Edges[0].Node.Title)
+		assert.Equal(t, "Advanced Go", res.Courses.Edges[1].Node.Title)
+	})
+
+	t.Run("success_empty", func(t *testing.T) {
+		repoMock := &course.RepositoryMock{}
+		srv := &Server{Repository: repoMock}
+
+		repoMock.On("GetAllCourses", mock.Anything, mock.Anything).Return(course.CoursesConnection{}, nil)
+		repoMock.On("CountCourses", mock.Anything).Return(0, nil)
+
+		req := &pb.GetAllCoursesRequest{
+			Pagination: &pb.Pagination{First: 20},
+		}
+
+		res, err := srv.GetAllCourses(context.Background(), req)
+		assert.NoError(t, err)
+		assert.NotNil(t, res)
+		assert.Empty(t, res.Courses.Edges)
+		assert.Equal(t, int32(0), res.TotalCount)
+	})
+
+	t.Run("success_with_nil_pagination", func(t *testing.T) {
+		repoMock := &course.RepositoryMock{}
+		srv := &Server{Repository: repoMock}
+
+		repoMock.On("GetAllCourses", mock.Anything, mock.Anything).Return(course.CoursesConnection{}, nil)
+		repoMock.On("CountCourses", mock.Anything).Return(0, nil)
+
+		req := &pb.GetAllCoursesRequest{
+			Pagination: nil, // Should use default pagination
+		}
+
+		res, err := srv.GetAllCourses(context.Background(), req)
+		assert.NoError(t, err)
+		assert.NotNil(t, res)
+	})
+
+	t.Run("failure_get_courses_error", func(t *testing.T) {
+		repoMock := &course.RepositoryMock{}
+		srv := &Server{Repository: repoMock}
+
+		repoMock.On("GetAllCourses", mock.Anything, mock.Anything).Return(course.CoursesConnection{}, assert.AnError)
+
+		req := &pb.GetAllCoursesRequest{
+			Pagination: &pb.Pagination{First: 20},
+		}
+
+		res, err := srv.GetAllCourses(context.Background(), req)
+		assert.Error(t, err)
+		assert.Nil(t, res)
+	})
+
+	t.Run("failure_count_courses_error", func(t *testing.T) {
+		repoMock := &course.RepositoryMock{}
+		srv := &Server{Repository: repoMock}
+
+		repoMock.On("GetAllCourses", mock.Anything, mock.Anything).Return(course.CoursesConnection{}, nil)
+		repoMock.On("CountCourses", mock.Anything).Return(0, assert.AnError)
+
+		req := &pb.GetAllCoursesRequest{
+			Pagination: &pb.Pagination{First: 20},
+		}
+
+		res, err := srv.GetAllCourses(context.Background(), req)
 		assert.Error(t, err)
 		assert.Nil(t, res)
 	})

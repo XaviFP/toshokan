@@ -1400,13 +1400,13 @@ def run_backoffice_tests(base_url: str, token: str, course_id: str) -> None:
     log_step("Testing Backoffice endpoints...")
 
     # Test 1: Get students progress
-    log_step("  Testing GET /courses/{courseId}/students/progress...")
+    log_step("  Testing GET /admin/courses/{courseId}/students/progress...")
     response = requests.get(
-        f"{base_url}/courses/{course_id}/students/progress",
+        f"{base_url}/admin/courses/{course_id}/students/progress",
         headers=auth_headers(token),
         timeout=TIMEOUT,
     )
-    log_response("GET /courses/{courseId}/students/progress", response)
+    log_response("GET /admin/courses/{courseId}/students/progress", response)
     assert response.status_code == 200, f"Expected 200, got {response.status_code}"
     data = response.json()
     assert "edges" in data, "Response should have 'edges' field"
@@ -1426,13 +1426,13 @@ def run_backoffice_tests(base_url: str, token: str, course_id: str) -> None:
     log_step(f"  Found enrolled user: {user_id} (username: {student_node['username']})")
 
     # Test 2: Get students progress with detailed=true
-    log_step("  Testing GET /courses/{courseId}/students/progress?detailed=true...")
+    log_step("  Testing GET /admin/courses/{courseId}/students/progress?detailed=true...")
     response = requests.get(
-        f"{base_url}/courses/{course_id}/students/progress?detailed=true",
+        f"{base_url}/admin/courses/{course_id}/students/progress?detailed=true",
         headers=auth_headers(token),
         timeout=TIMEOUT,
     )
-    log_response("GET /courses/{courseId}/students/progress?detailed=true", response)
+    log_response("GET /admin/courses/{courseId}/students/progress?detailed=true", response)
     assert response.status_code == 200, f"Expected 200, got {response.status_code}"
     data = response.json()
     if len(data["edges"]) > 0:
@@ -1441,13 +1441,13 @@ def run_backoffice_tests(base_url: str, token: str, course_id: str) -> None:
     log_step("  ✓ Get students progress with details - success")
 
     # Test 3: Get user state
-    log_step("  Testing GET /courses/{courseId}/users/{userId}/state...")
+    log_step("  Testing GET /admin/courses/{courseId}/users/{userId}/state...")
     response = requests.get(
-        f"{base_url}/courses/{course_id}/users/{user_id}/state",
+        f"{base_url}/admin/courses/{course_id}/users/{user_id}/state",
         headers=auth_headers(token),
         timeout=TIMEOUT,
     )
-    log_response("GET /courses/{courseId}/users/{userId}/state", response)
+    log_response("GET /admin/courses/{courseId}/users/{userId}/state", response)
     assert response.status_code == 200, f"Expected 200, got {response.status_code}"
     data = response.json()
     assert "user_id" in data, "Response should have 'user_id' field"
@@ -1460,9 +1460,9 @@ def run_backoffice_tests(base_url: str, token: str, course_id: str) -> None:
     log_step("  ✓ Get user state - success")
 
     # Test 4: Set user state (and restore it back)
-    log_step("  Testing PUT /courses/{courseId}/users/{userId}/state...")
+    log_step("  Testing PUT /admin/courses/{courseId}/users/{userId}/state...")
     response = requests.put(
-        f"{base_url}/courses/{course_id}/users/{user_id}/state",
+        f"{base_url}/admin/courses/{course_id}/users/{user_id}/state",
         headers=auth_headers(token),
         json={
             "state_json": original_state,
@@ -1470,7 +1470,7 @@ def run_backoffice_tests(base_url: str, token: str, course_id: str) -> None:
         },
         timeout=TIMEOUT,
     )
-    log_response("PUT /courses/{courseId}/users/{userId}/state", response)
+    log_response("PUT /admin/courses/{courseId}/users/{userId}/state", response)
     assert response.status_code == 200, f"Expected 200, got {response.status_code}"
     data = response.json()
     # Response returns the updated state
@@ -1479,9 +1479,9 @@ def run_backoffice_tests(base_url: str, token: str, course_id: str) -> None:
     log_step("  ✓ Set user state - success")
 
     # Test 5: Set user state with sync_after=true
-    log_step("  Testing PUT /courses/{courseId}/users/{userId}/state?sync=true...")
+    log_step("  Testing PUT /admin/courses/{courseId}/users/{userId}/state?sync=true...")
     response = requests.put(
-        f"{base_url}/courses/{course_id}/users/{user_id}/state?sync=true",
+        f"{base_url}/admin/courses/{course_id}/users/{user_id}/state?sync=true",
         headers=auth_headers(token),
         json={
             "state_json": original_state,
@@ -1489,7 +1489,7 @@ def run_backoffice_tests(base_url: str, token: str, course_id: str) -> None:
         },
         timeout=TIMEOUT,
     )
-    log_response("PUT /courses/{courseId}/users/{userId}/state?sync=true", response)
+    log_response("PUT /admin/courses/{courseId}/users/{userId}/state?sync=true", response)
     assert response.status_code == 200, f"Expected 200, got {response.status_code}"
     log_step("  ✓ Set user state with sync - success")
 
@@ -1497,11 +1497,11 @@ def run_backoffice_tests(base_url: str, token: str, course_id: str) -> None:
     fake_user_id = "00000000-0000-0000-0000-000000000000"
     log_step("  Testing GET user state for non-enrolled user...")
     response = requests.get(
-        f"{base_url}/courses/{course_id}/users/{fake_user_id}/state",
+        f"{base_url}/admin/courses/{course_id}/users/{fake_user_id}/state",
         headers=auth_headers(token),
         timeout=TIMEOUT,
     )
-    log_response("GET /courses/{courseId}/users/{fakeUserId}/state", response)
+    log_response("GET /admin/courses/{courseId}/users/{fakeUserId}/state", response)
     assert response.status_code == 404, f"Expected 404 for non-enrolled user, got {response.status_code}"
     log_step("  ✓ Get state for non-enrolled user returns 404 - success")
 
