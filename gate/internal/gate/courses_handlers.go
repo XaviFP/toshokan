@@ -9,6 +9,8 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/juju/errors"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/types/known/timestamppb"
 
@@ -1089,6 +1091,11 @@ func isHandledError(ctx *gin.Context, err error) bool {
 		return false
 	}
 
+	if status.Code(err) == codes.InvalidArgument {
+		ctx.JSON(http.StatusBadRequest, gin.H{"error": status.Convert(err).Message()})
+		return true
+	}
+
 	lower := strings.ToLower(err.Error())
 	if strings.Contains(lower, "not found") {
 		ctx.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
@@ -1108,7 +1115,10 @@ func isHandledError(ctx *gin.Context, err error) bool {
 	return false
 }
 
-const DefaultPageSize = 20
+const (
+	DefaultPageSize = 20
+	MaxPageSize     = 1000
+)
 
 // parsePagination extracts pagination params and validates numeric values.
 // Returns a pb.Pagination or an error if parsing fails.
@@ -1132,6 +1142,10 @@ func parsePagination(ctx *gin.Context) (*pb.Pagination, error) {
 			return nil, errors.Trace(err)
 		}
 		last = v
+	}
+
+	if first < 0 || last < 0 || first > MaxPageSize || last > MaxPageSize {
+		return nil, errors.NotValidf("page size outside 0-%d", MaxPageSize)
 	}
 
 	if first == 0 && last == 0 {

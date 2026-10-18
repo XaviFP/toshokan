@@ -3,9 +3,12 @@ package pagination
 import (
 	"encoding/base64"
 	"encoding/json"
+	"fmt"
 
 	"github.com/juju/errors"
 )
+
+var ErrInvalidCursor = errors.New("invalid cursor")
 
 type Cursor string
 
@@ -31,12 +34,12 @@ func ToCursor(v any) (Cursor, error) {
 func FromCursor(c Cursor, out any) error {
 	decoded, err := base64.StdEncoding.DecodeString(c.String())
 	if err != nil {
-		return errors.Trace(err)
+		return fmt.Errorf("%w: %v", ErrInvalidCursor, err)
 	}
 
 	err = json.Unmarshal(decoded, out)
 	if err != nil {
-		return errors.Trace(err)
+		return fmt.Errorf("%w: %v", ErrInvalidCursor, err)
 	}
 
 	return nil

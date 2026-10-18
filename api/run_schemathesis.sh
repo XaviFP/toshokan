@@ -9,8 +9,11 @@ rm -f "$LOG_FILE" "$HAR_FILE"
 
 echo "Getting authentication token..."
 # First try to signup (this will fail if user exists, which is ok)
+ADMIN_TOKEN="${ADMIN_TOKEN:-change-me-in-production}"
+
 curl -s -X POST http://localhost:8080/signup \
   -H "Content-Type: application/json" \
+  -H "X-ADMIN-TOKEN: $ADMIN_TOKEN" \
   -d '{"username":"testuser","password":"password123"}' > /dev/null 2>&1 || true
 
 # Now login
@@ -38,12 +41,14 @@ echo ""
 
 docker run --network="host" --rm \
   -e PYTHONUNBUFFERED=1 \
+  -e SCHEMATHESIS_HOOKS= \
   -v "$PWD:/app" \
   -w /app \
   schemathesis/schemathesis:latest \
   run /app/openapi.yaml \
   --url=http://localhost:8080 \
   -H "Authorization: Bearer $TOKEN" \
+  -H "X-ADMIN-TOKEN: $ADMIN_TOKEN" \
   --max-examples=10 \
   --workers=1 \
   --report-har-path=/app/$HAR_FILE \

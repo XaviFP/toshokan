@@ -43,7 +43,7 @@ func (s *Server) Start() error {
 	slog.Info("Starting Course gRPC server", "address", s.GRPCAddr)
 
 	// lets print all operations
-	s.grpcServer = grpc.NewServer()
+	s.grpcServer = grpc.NewServer(grpc.UnaryInterceptor(invalidCursorInterceptor))
 	pb.RegisterCourseAPIServer(s.grpcServer, s)
 
 	listener, err := net.Listen(s.GRPCTransport, s.GRPCAddr)
@@ -56,6 +56,15 @@ func (s *Server) Start() error {
 	}
 
 	return nil
+}
+
+func invalidCursorInterceptor(ctx context.Context, req any, _ *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (any, error) {
+	res, err := handler(ctx, req)
+	if errors.Is(err, pagination.ErrInvalidCursor) {
+		return nil, status.Error(codes.InvalidArgument, err.Error())
+	}
+
+	return res, err
 }
 
 // Stop gracefully stops the gRPC server

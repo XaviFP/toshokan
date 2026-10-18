@@ -1399,6 +1399,18 @@ paths:
           schema:
             type: integer
             format: int64
+            minimum: 0
+            maximum: 1000
+            default: 20
+        - name: last
+          in: query
+          required: false
+          description: Number of courses to fetch when paginating backward (default 20)
+          schema:
+            type: integer
+            format: int64
+            minimum: 0
+            maximum: 1000
             default: 20
       responses:
         '200':
@@ -1407,6 +1419,12 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/AllCoursesResponse'
+        '400':
+          description: Invalid pagination parameters
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
         '401':
           $ref: '#/components/responses/UnauthorizedError'
         '403':

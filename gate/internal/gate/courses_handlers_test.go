@@ -12,6 +12,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/types/known/timestamppb"
 
 	pb "github.com/XaviFP/toshokan/course/api/proto/v1"
@@ -797,6 +799,135 @@ func TestGetAllCourses(t *testing.T) {
 		router.ServeHTTP(w, req)
 
 		assert.Equal(t, http.StatusInternalServerError, w.Code)
+	})
+
+	t.Run("non_numeric_first", func(t *testing.T) {
+		client := &mockCourseAPIClient{}
+
+		router := gin.New()
+		router.GET("/admin/courses", func(ctx *gin.Context) {
+			GetAllCourses(ctx, client)
+		})
+
+		req := httptest.NewRequest(http.MethodGet, "/admin/courses?first=abc", nil)
+		w := httptest.NewRecorder()
+		router.ServeHTTP(w, req)
+
+		assert.Equal(t, http.StatusBadRequest, w.Code)
+		client.AssertNotCalled(t, "GetAllCourses", mock.Anything, mock.Anything)
+	})
+
+	t.Run("negative_first", func(t *testing.T) {
+		client := &mockCourseAPIClient{}
+
+		router := gin.New()
+		router.GET("/admin/courses", func(ctx *gin.Context) {
+			GetAllCourses(ctx, client)
+		})
+
+		req := httptest.NewRequest(http.MethodGet, "/admin/courses?first=-1", nil)
+		w := httptest.NewRecorder()
+		router.ServeHTTP(w, req)
+
+		assert.Equal(t, http.StatusBadRequest, w.Code)
+		client.AssertNotCalled(t, "GetAllCourses", mock.Anything, mock.Anything)
+	})
+
+	t.Run("negative_last", func(t *testing.T) {
+		client := &mockCourseAPIClient{}
+
+		router := gin.New()
+		router.GET("/admin/courses", func(ctx *gin.Context) {
+			GetAllCourses(ctx, client)
+		})
+
+		req := httptest.NewRequest(http.MethodGet, "/admin/courses?last=-1", nil)
+		w := httptest.NewRecorder()
+		router.ServeHTTP(w, req)
+
+		assert.Equal(t, http.StatusBadRequest, w.Code)
+		client.AssertNotCalled(t, "GetAllCourses", mock.Anything, mock.Anything)
+	})
+
+	t.Run("first_above_max", func(t *testing.T) {
+		client := &mockCourseAPIClient{}
+
+		router := gin.New()
+		router.GET("/admin/courses", func(ctx *gin.Context) {
+			GetAllCourses(ctx, client)
+		})
+
+		req := httptest.NewRequest(http.MethodGet, "/admin/courses?first=1001", nil)
+		w := httptest.NewRecorder()
+		router.ServeHTTP(w, req)
+
+		assert.Equal(t, http.StatusBadRequest, w.Code)
+		client.AssertNotCalled(t, "GetAllCourses", mock.Anything, mock.Anything)
+	})
+
+	t.Run("last_max_int64", func(t *testing.T) {
+		client := &mockCourseAPIClient{}
+
+		router := gin.New()
+		router.GET("/admin/courses", func(ctx *gin.Context) {
+			GetAllCourses(ctx, client)
+		})
+
+		req := httptest.NewRequest(http.MethodGet, "/admin/courses?last=9223372036854775807", nil)
+		w := httptest.NewRecorder()
+		router.ServeHTTP(w, req)
+
+		assert.Equal(t, http.StatusBadRequest, w.Code)
+		client.AssertNotCalled(t, "GetAllCourses", mock.Anything, mock.Anything)
+	})
+
+	t.Run("last_above_max", func(t *testing.T) {
+		client := &mockCourseAPIClient{}
+
+		router := gin.New()
+		router.GET("/admin/courses", func(ctx *gin.Context) {
+			GetAllCourses(ctx, client)
+		})
+
+		req := httptest.NewRequest(http.MethodGet, "/admin/courses?last=1001", nil)
+		w := httptest.NewRecorder()
+		router.ServeHTTP(w, req)
+
+		assert.Equal(t, http.StatusBadRequest, w.Code)
+		client.AssertNotCalled(t, "GetAllCourses", mock.Anything, mock.Anything)
+	})
+
+	t.Run("first_max_int64", func(t *testing.T) {
+		client := &mockCourseAPIClient{}
+
+		router := gin.New()
+		router.GET("/admin/courses", func(ctx *gin.Context) {
+			GetAllCourses(ctx, client)
+		})
+
+		req := httptest.NewRequest(http.MethodGet, "/admin/courses?first=9223372036854775807", nil)
+		w := httptest.NewRecorder()
+		router.ServeHTTP(w, req)
+
+		assert.Equal(t, http.StatusBadRequest, w.Code)
+		client.AssertNotCalled(t, "GetAllCourses", mock.Anything, mock.Anything)
+	})
+
+	t.Run("invalid_cursor", func(t *testing.T) {
+		client := &mockCourseAPIClient{}
+		client.On("GetAllCourses", mock.Anything, mock.Anything).
+			Return(nil, status.Error(codes.InvalidArgument, "invalid cursor"))
+
+		router := gin.New()
+		router.GET("/admin/courses", func(ctx *gin.Context) {
+			GetAllCourses(ctx, client)
+		})
+
+		req := httptest.NewRequest(http.MethodGet, "/admin/courses?after=garbage", nil)
+		w := httptest.NewRecorder()
+		router.ServeHTTP(w, req)
+
+		assert.Equal(t, http.StatusBadRequest, w.Code)
 	})
 }
 

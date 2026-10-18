@@ -635,12 +635,12 @@ func TestRepository_GetAllCourses(t *testing.T) {
 	repo := NewPGRepository(slog.Default(), h.db)
 	ctx := context.Background()
 
-	for _, c := range []Course{
-		{ID: uuid.MustParse("bbbbbbbb-0000-0000-0000-000000000000"), Order: 2, Title: "B", Description: "d", CreatedAt: time.Now()},
-		{ID: uuid.MustParse("cccccccc-0000-0000-0000-000000000000"), Order: 3, Title: "C", Description: "d", CreatedAt: time.Now()},
-	} {
-		require.NoError(t, repo.StoreCourse(ctx, c))
-	}
+	require.NoError(t, repo.StoreCourse(ctx, Course{
+		ID: uuid.MustParse("bbbbbbbb-0000-0000-0000-000000000000"), Order: 2, Title: "B", Description: "d", CreatedAt: time.Now(),
+	}))
+	require.NoError(t, repo.StoreCourse(ctx, Course{
+		ID: uuid.MustParse("cccccccc-0000-0000-0000-000000000000"), Order: 3, Title: "C", Description: "d", CreatedAt: time.Now(),
+	}))
 
 	titles := func(conn CoursesConnection) []string {
 		out := make([]string, len(conn.Edges))

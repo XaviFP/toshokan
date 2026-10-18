@@ -6,9 +6,12 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/juju/errors"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 
 	"github.com/XaviFP/toshokan/common/pagination"
 	pb "github.com/XaviFP/toshokan/course/api/proto/v1"
@@ -1504,5 +1507,43 @@ func TestServer_GetAllCourses(t *testing.T) {
 		res, err := srv.GetAllCourses(context.Background(), req)
 		assert.Error(t, err)
 		assert.Nil(t, res)
+	})
+}
+
+func TestInvalidCursorInterceptor(t *testing.T) {
+	t.Run("invalid_cursor", func(t *testing.T) {
+		repoMock := &course.RepositoryMock{}
+		srv := &Server{Repository: repoMock}
+		repoMock.On("GetAllCourses", mock.Anything, mock.Anything).
+			Return(course.CoursesConnection{}, errors.Trace(pagination.FromCursor("Ây", &course.CourseCursor{})))
+
+		handler := func(ctx context.Context, req any) (any, error) {
+			return srv.GetAllCourses(ctx, req.(*pb.GetAllCoursesRequest))
+		}
+
+		res, err := invalidCursorInterceptor(context.Background(), &pb.GetAllCoursesRequest{}, nil, handler)
+		assert.Nil(t, res)
+		assert.Equal(t, codes.InvalidArgument, status.Code(err))
+	})
+
+	t.Run("other_error", func(t *testing.T) {
+		handler := func(ctx context.Context, req any) (any, error) {
+			return nil, assert.AnError
+		}
+
+		res, err := invalidCursorInterceptor(context.Background(), &pb.GetAllCoursesRequest{}, nil, handler)
+		assert.Nil(t, res)
+		assert.ErrorIs(t, err, assert.AnError)
+	})
+
+	t.Run("success", func(t *testing.T) {
+		expected := &pb.GetAllCoursesResponse{TotalCount: 1}
+		handler := func(ctx context.Context, req any) (any, error) {
+			return expected, nil
+		}
+
+		actual, err := invalidCursorInterceptor(context.Background(), &pb.GetAllCoursesRequest{}, nil, handler)
+		assert.NoError(t, err)
+		assert.Equal(t, expected, actual)
 	})
 }
