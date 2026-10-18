@@ -572,7 +572,7 @@ func (r *pgRepository) GetEnrolledCourses(ctx context.Context, userID uuid.UUID,
 		if err := pagination.FromCursor(p.Cursor(), &cursor); err != nil {
 			return out, errors.Trace(err)
 		}
-		whereClauses = append(whereClauses, fmt.Sprintf(`c."order" %s %s`, p.Comparator(), arger.Add(cursor.Order)))
+		whereClauses = append(whereClauses, fmt.Sprintf(`(c."order", c.id) %s (%s, %s)`, p.Comparator(), arger.Add(cursor.Order), arger.Add(cursor.ID)))
 	}
 
 	query := fmt.Sprintf(
@@ -581,9 +581,10 @@ func (r *pgRepository) GetEnrolledCourses(ctx context.Context, userID uuid.UUID,
 		 FROM user_course_progress ucp
 		 JOIN courses c ON c.id = ucp.course_id
 		 WHERE %s
-		 ORDER BY c."order" %s
+		 ORDER BY c."order" %s, c.id %s
 		 LIMIT %s`,
 		strings.Join(whereClauses, " AND "),
+		p.OrderBy(),
 		p.OrderBy(),
 		arger.Add(p.Limit()+1),
 	)
@@ -602,7 +603,7 @@ func (r *pgRepository) GetEnrolledCourses(ctx context.Context, userID uuid.UUID,
 			return out, errors.Trace(err)
 		}
 
-		cursor, err := pagination.ToCursor(CourseCursor{Order: c.Order})
+		cursor, err := pagination.ToCursor(CourseCursor{Order: c.Order, ID: c.ID})
 		if err != nil {
 			return out, errors.Trace(err)
 		}
@@ -1046,16 +1047,17 @@ func (r *pgRepository) GetAllCourses(ctx context.Context, p pagination.Paginatio
 		if err := pagination.FromCursor(p.Cursor(), &cursor); err != nil {
 			return out, errors.Trace(err)
 		}
-		whereClauses = append(whereClauses, fmt.Sprintf(`"order" %s %s`, p.Comparator(), arger.Add(cursor.Order)))
+		whereClauses = append(whereClauses, fmt.Sprintf(`("order", id) %s (%s, %s)`, p.Comparator(), arger.Add(cursor.Order), arger.Add(cursor.ID)))
 	}
 
 	query := fmt.Sprintf(
 		`SELECT id, "order", title, description, created_at, updated_at, deleted_at
 		 FROM courses
 		 WHERE %s
-		 ORDER BY "order" %s
+		 ORDER BY "order" %s, id %s
 		 LIMIT %s`,
 		strings.Join(whereClauses, " AND "),
+		p.OrderBy(),
 		p.OrderBy(),
 		arger.Add(p.Limit()+1),
 	)
@@ -1072,7 +1074,7 @@ func (r *pgRepository) GetAllCourses(ctx context.Context, p pagination.Paginatio
 			return out, errors.Trace(err)
 		}
 
-		cursor, err := pagination.ToCursor(CourseCursor{Order: c.Order})
+		cursor, err := pagination.ToCursor(CourseCursor{Order: c.Order, ID: c.ID})
 		if err != nil {
 			return out, errors.Trace(err)
 		}
