@@ -40,7 +40,8 @@ type LessonsWithProgressConnection struct {
 
 // Course pagination types
 type CourseCursor struct {
-	Order int64 `json:"order"`
+	Order int64     `json:"order"`
+	ID    uuid.UUID `json:"id"`
 }
 
 type CourseEdge struct {

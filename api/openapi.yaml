@@ -326,7 +326,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/Error'
 
-  /courses/{courseId}/students/progress:
+  /admin/courses/{courseId}/students/progress:
     get:
       tags:
         - Backoffice
@@ -403,7 +403,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/Error'
 
-  /courses/{courseId}/users/{userId}/state:
+  /admin/courses/{courseId}/users/{userId}/state:
     get:
       tags:
         - Backoffice
@@ -1366,6 +1366,80 @@ paths:
               schema:
                 $ref: '#/components/schemas/Error'
 
+  /admin/courses:
+    get:
+      tags:
+        - Backoffice
+      summary: List all courses (Admin only)
+      description: |
+        Retrieve paginated list of all courses in the system.
+
+        **Requires admin access** (`X-Admin-Token` header).
+      operationId: getAllCourses
+      security:
+        - BearerAuth: []
+          AdminAuth: []
+      parameters:
+        - name: after
+          in: query
+          required: false
+          description: Cursor for pagination (fetch courses after this cursor)
+          schema:
+            type: string
+        - name: before
+          in: query
+          required: false
+          description: Cursor for backward pagination
+          schema:
+            type: string
+        - name: first
+          in: query
+          required: false
+          description: Number of courses to fetch (default 20)
+          schema:
+            type: integer
+            format: int64
+            minimum: 0
+            maximum: 1000
+            default: 20
+        - name: last
+          in: query
+          required: false
+          description: Number of courses to fetch when paginating backward (default 20)
+          schema:
+            type: integer
+            format: int64
+            minimum: 0
+            maximum: 1000
+            default: 20
+      responses:
+        '200':
+          description: Paginated list of courses
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AllCoursesResponse'
+        '400':
+          description: Invalid pagination parameters
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          description: Admin access required
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
 components:
   securitySchemes:
     BearerAuth:
@@ -2151,6 +2225,36 @@ components:
         - lesson_state
 
     # Backoffice Schemas
+    AllCoursesResponse:
+      type: object
+      description: Paginated response of all courses (admin only)
+      properties:
+        edges:
+          type: array
+          items:
+            $ref: '#/components/schemas/CourseEdge'
+        page_info:
+          $ref: '#/components/schemas/PageInfo'
+        total_count:
+          type: integer
+          description: Total number of courses in the system
+      required:
+        - edges
+        - page_info
+        - total_count
+
+    CourseEdge:
+      type: object
+      properties:
+        node:
+          $ref: '#/components/schemas/Course'
+        cursor:
+          type: string
+          description: Pagination cursor for this edge
+      required:
+        - node
+        - cursor
+
     StudentsProgressResponse:
       type: object
       description: Paginated response of student progress for a course

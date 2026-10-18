@@ -630,6 +630,105 @@ func TestRepository_CountEnrolledUsers(t *testing.T) {
 	})
 }
 
+func TestRepository_GetAllCourses(t *testing.T) {
+	h := newTestHarness(t)
+	repo := NewPGRepository(slog.Default(), h.db)
+	ctx := context.Background()
+
+	require.NoError(t, repo.StoreCourse(ctx, Course{
+		ID: uuid.MustParse("bbbbbbbb-0000-0000-0000-000000000000"), Order: 2, Title: "B", Description: "d", CreatedAt: time.Now(),
+	}))
+	require.NoError(t, repo.StoreCourse(ctx, Course{
+		ID: uuid.MustParse("cccccccc-0000-0000-0000-000000000000"), Order: 3, Title: "C", Description: "d", CreatedAt: time.Now(),
+	}))
+
+	titles := func(conn CoursesConnection) []string {
+		out := make([]string, len(conn.Edges))
+		for i, e := range conn.Edges {
+			out[i] = e.Course.Title
+		}
+		return out
+	}
+
+	t.Run("forward_with_unique_order", func(t *testing.T) {
+		p := pagination.NewOldestFirstPagination(pagination.WithFirst(2))
+
+		page1, err := repo.GetAllCourses(ctx, p)
+		require.NoError(t, err)
+		assert.Equal(t, []string{"Go Fundamentals", "B"}, titles(page1))
+		assert.True(t, page1.PageInfo.HasNextPage)
+
+		p.After = page1.PageInfo.EndCursor
+		page2, err := repo.GetAllCourses(ctx, p)
+		require.NoError(t, err)
+		assert.Equal(t, []string{"C"}, titles(page2))
+		assert.False(t, page2.PageInfo.HasNextPage)
+	})
+
+	t.Run("backward_with_unique_order", func(t *testing.T) {
+		p := pagination.NewOldestFirstPagination(pagination.WithLast(2))
+
+		page1, err := repo.GetAllCourses(ctx, p)
+		require.NoError(t, err)
+		assert.Equal(t, []string{"B", "C"}, titles(page1))
+		assert.True(t, page1.PageInfo.HasPreviousPage)
+
+		p.Before = page1.PageInfo.StartCursor
+		page2, err := repo.GetAllCourses(ctx, p)
+		require.NoError(t, err)
+		assert.Equal(t, []string{"Go Fundamentals"}, titles(page2))
+		assert.False(t, page2.PageInfo.HasPreviousPage)
+	})
+
+	// A shares order 2 with B, so each page boundary below falls between them.
+	require.NoError(t, repo.StoreCourse(ctx, Course{
+		ID: uuid.MustParse("aaaaaaaa-0000-0000-0000-000000000000"), Order: 2, Title: "A", Description: "d", CreatedAt: time.Now(),
+	}))
+
+	t.Run("forward_with_duplicate_order", func(t *testing.T) {
+		p := pagination.NewOldestFirstPagination(pagination.WithFirst(2))
+
+		page1, err := repo.GetAllCourses(ctx, p)
+		require.NoError(t, err)
+		assert.Equal(t, []string{"Go Fundamentals", "A"}, titles(page1))
+		assert.True(t, page1.PageInfo.HasNextPage)
+
+		p.After = page1.PageInfo.EndCursor
+		page2, err := repo.GetAllCourses(ctx, p)
+		require.NoError(t, err)
+		assert.Equal(t, []string{"B", "C"}, titles(page2))
+		assert.False(t, page2.PageInfo.HasNextPage)
+	})
+
+	t.Run("backward_with_duplicate_order", func(t *testing.T) {
+		p := pagination.NewOldestFirstPagination(pagination.WithLast(2))
+
+		page1, err := repo.GetAllCourses(ctx, p)
+		require.NoError(t, err)
+		assert.Equal(t, []string{"B", "C"}, titles(page1))
+		assert.True(t, page1.PageInfo.HasPreviousPage)
+
+		p.Before = page1.PageInfo.StartCursor
+		page2, err := repo.GetAllCourses(ctx, p)
+		require.NoError(t, err)
+		assert.Equal(t, []string{"Go Fundamentals", "A"}, titles(page2))
+		assert.False(t, page2.PageInfo.HasPreviousPage)
+	})
+
+	t.Run("excludes_deleted", func(t *testing.T) {
+		_, err := h.db.Exec(`UPDATE courses SET deleted_at = NOW() WHERE id = 'cccccccc-0000-0000-0000-000000000000'`)
+		require.NoError(t, err)
+
+		page, err := repo.GetAllCourses(ctx, pagination.NewOldestFirstPagination(pagination.WithFirst(10)))
+		require.NoError(t, err)
+		assert.Equal(t, []string{"Go Fundamentals", "A", "B"}, titles(page))
+
+		actual, err := repo.CountCourses(ctx)
+		require.NoError(t, err)
+		assert.Equal(t, 3, actual)
+	})
+}
+
 func TestRepository_GetEnrolledUsersProgress(t *testing.T) {
 	h := newTestHarness(t)
 	repo := NewPGRepository(slog.Default(), h.db)

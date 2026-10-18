@@ -1394,19 +1394,19 @@ def run_get_lesson_tests(base_url: str, token: str, course_id: str, lesson: Dict
     log_step("✓ GetLesson tests passed")
 
 
-def run_backoffice_tests(base_url: str, token: str, course_id: str) -> None:
+def run_backoffice_tests(base_url: str, token: str, course_id: str, created_course_ids: List[str]) -> None:
     """Test backoffice endpoints (admin-only)."""
     log_step("")
     log_step("Testing Backoffice endpoints...")
 
     # Test 1: Get students progress
-    log_step("  Testing GET /courses/{courseId}/students/progress...")
+    log_step("  Testing GET /admin/courses/{courseId}/students/progress...")
     response = requests.get(
-        f"{base_url}/courses/{course_id}/students/progress",
+        f"{base_url}/admin/courses/{course_id}/students/progress",
         headers=auth_headers(token),
         timeout=TIMEOUT,
     )
-    log_response("GET /courses/{courseId}/students/progress", response)
+    log_response("GET /admin/courses/{courseId}/students/progress", response)
     assert response.status_code == 200, f"Expected 200, got {response.status_code}"
     data = response.json()
     assert "edges" in data, "Response should have 'edges' field"
@@ -1426,13 +1426,13 @@ def run_backoffice_tests(base_url: str, token: str, course_id: str) -> None:
     log_step(f"  Found enrolled user: {user_id} (username: {student_node['username']})")
 
     # Test 2: Get students progress with detailed=true
-    log_step("  Testing GET /courses/{courseId}/students/progress?detailed=true...")
+    log_step("  Testing GET /admin/courses/{courseId}/students/progress?detailed=true...")
     response = requests.get(
-        f"{base_url}/courses/{course_id}/students/progress?detailed=true",
+        f"{base_url}/admin/courses/{course_id}/students/progress?detailed=true",
         headers=auth_headers(token),
         timeout=TIMEOUT,
     )
-    log_response("GET /courses/{courseId}/students/progress?detailed=true", response)
+    log_response("GET /admin/courses/{courseId}/students/progress?detailed=true", response)
     assert response.status_code == 200, f"Expected 200, got {response.status_code}"
     data = response.json()
     if len(data["edges"]) > 0:
@@ -1441,13 +1441,13 @@ def run_backoffice_tests(base_url: str, token: str, course_id: str) -> None:
     log_step("  ✓ Get students progress with details - success")
 
     # Test 3: Get user state
-    log_step("  Testing GET /courses/{courseId}/users/{userId}/state...")
+    log_step("  Testing GET /admin/courses/{courseId}/users/{userId}/state...")
     response = requests.get(
-        f"{base_url}/courses/{course_id}/users/{user_id}/state",
+        f"{base_url}/admin/courses/{course_id}/users/{user_id}/state",
         headers=auth_headers(token),
         timeout=TIMEOUT,
     )
-    log_response("GET /courses/{courseId}/users/{userId}/state", response)
+    log_response("GET /admin/courses/{courseId}/users/{userId}/state", response)
     assert response.status_code == 200, f"Expected 200, got {response.status_code}"
     data = response.json()
     assert "user_id" in data, "Response should have 'user_id' field"
@@ -1460,9 +1460,9 @@ def run_backoffice_tests(base_url: str, token: str, course_id: str) -> None:
     log_step("  ✓ Get user state - success")
 
     # Test 4: Set user state (and restore it back)
-    log_step("  Testing PUT /courses/{courseId}/users/{userId}/state...")
+    log_step("  Testing PUT /admin/courses/{courseId}/users/{userId}/state...")
     response = requests.put(
-        f"{base_url}/courses/{course_id}/users/{user_id}/state",
+        f"{base_url}/admin/courses/{course_id}/users/{user_id}/state",
         headers=auth_headers(token),
         json={
             "state_json": original_state,
@@ -1470,7 +1470,7 @@ def run_backoffice_tests(base_url: str, token: str, course_id: str) -> None:
         },
         timeout=TIMEOUT,
     )
-    log_response("PUT /courses/{courseId}/users/{userId}/state", response)
+    log_response("PUT /admin/courses/{courseId}/users/{userId}/state", response)
     assert response.status_code == 200, f"Expected 200, got {response.status_code}"
     data = response.json()
     # Response returns the updated state
@@ -1479,9 +1479,9 @@ def run_backoffice_tests(base_url: str, token: str, course_id: str) -> None:
     log_step("  ✓ Set user state - success")
 
     # Test 5: Set user state with sync_after=true
-    log_step("  Testing PUT /courses/{courseId}/users/{userId}/state?sync=true...")
+    log_step("  Testing PUT /admin/courses/{courseId}/users/{userId}/state?sync=true...")
     response = requests.put(
-        f"{base_url}/courses/{course_id}/users/{user_id}/state?sync=true",
+        f"{base_url}/admin/courses/{course_id}/users/{user_id}/state?sync=true",
         headers=auth_headers(token),
         json={
             "state_json": original_state,
@@ -1489,7 +1489,7 @@ def run_backoffice_tests(base_url: str, token: str, course_id: str) -> None:
         },
         timeout=TIMEOUT,
     )
-    log_response("PUT /courses/{courseId}/users/{userId}/state?sync=true", response)
+    log_response("PUT /admin/courses/{courseId}/users/{userId}/state?sync=true", response)
     assert response.status_code == 200, f"Expected 200, got {response.status_code}"
     log_step("  ✓ Set user state with sync - success")
 
@@ -1497,13 +1497,127 @@ def run_backoffice_tests(base_url: str, token: str, course_id: str) -> None:
     fake_user_id = "00000000-0000-0000-0000-000000000000"
     log_step("  Testing GET user state for non-enrolled user...")
     response = requests.get(
-        f"{base_url}/courses/{course_id}/users/{fake_user_id}/state",
+        f"{base_url}/admin/courses/{course_id}/users/{fake_user_id}/state",
         headers=auth_headers(token),
         timeout=TIMEOUT,
     )
-    log_response("GET /courses/{courseId}/users/{fakeUserId}/state", response)
+    log_response("GET /admin/courses/{courseId}/users/{fakeUserId}/state", response)
     assert response.status_code == 404, f"Expected 404 for non-enrolled user, got {response.status_code}"
     log_step("  ✓ Get state for non-enrolled user returns 404 - success")
+
+    # Test 7: List all courses
+    log_step("  Testing GET /admin/courses...")
+    response = requests.get(
+        f"{base_url}/admin/courses",
+        params={"first": 1},
+        headers=auth_headers(token),
+        timeout=TIMEOUT,
+    )
+    log_response("GET /admin/courses?first=1", response)
+    assert response.status_code == 200, f"Expected 200, got {response.status_code}"
+    data = response.json()
+    assert "edges" in data, "Response should have 'edges' field"
+    assert "page_info" in data, "Response should have 'page_info' field"
+    total_count = data["total_count"]
+    assert total_count >= len(created_course_ids), f"Expected at least {len(created_course_ids)} courses, got {total_count}"
+    node = data["edges"][0]["node"]
+    for field in ("id", "title", "description", "order"):
+        assert field in node, f"Course node should have '{field}' field"
+    log_step(f"  ✓ Get all courses - success (total_count={total_count})")
+
+    # Previous runs leave courses with the same orders behind, so these pages cross duplicate orders.
+    log_step("  Testing forward pagination over all courses...")
+    response = requests.get(
+        f"{base_url}/admin/courses",
+        params={"first": total_count - 1},
+        headers=auth_headers(token),
+        timeout=TIMEOUT,
+    )
+    log_response(f"GET /admin/courses?first={total_count - 1}", response)
+    assert response.status_code == 200, f"Expected 200, got {response.status_code}"
+    page1 = response.json()
+    assert len(page1["edges"]) == total_count - 1, f"Expected {total_count - 1} edges, got {len(page1['edges'])}"
+    assert page1["page_info"]["has_next_page"], "First page should have a next page"
+    assert not page1["page_info"]["has_previous_page"], "First page should not have a previous page"
+
+    response = requests.get(
+        f"{base_url}/admin/courses",
+        params={"first": total_count - 1, "after": page1["page_info"]["end_cursor"]},
+        headers=auth_headers(token),
+        timeout=TIMEOUT,
+    )
+    log_response("GET /admin/courses?after=<end_cursor>", response)
+    assert response.status_code == 200, f"Expected 200, got {response.status_code}"
+    page2 = response.json()
+    assert len(page2["edges"]) == 1, f"Expected 1 edge on last page, got {len(page2['edges'])}"
+    assert not page2["page_info"]["has_next_page"], "Last page should not have a next page"
+
+    forward_ids = [e["node"]["id"] for e in page1["edges"] + page2["edges"]]
+    assert len(set(forward_ids)) == total_count, "Forward pagination should return every course exactly once"
+    missing = set(created_course_ids) - set(forward_ids)
+    assert not missing, f"Created courses missing from listing: {missing}"
+    log_step("  ✓ Forward pagination returns every course once - success")
+
+    log_step("  Testing backward pagination over all courses...")
+    response = requests.get(
+        f"{base_url}/admin/courses",
+        params={"last": total_count - 1},
+        headers=auth_headers(token),
+        timeout=TIMEOUT,
+    )
+    log_response(f"GET /admin/courses?last={total_count - 1}", response)
+    assert response.status_code == 200, f"Expected 200, got {response.status_code}"
+    page1 = response.json()
+    assert len(page1["edges"]) == total_count - 1, f"Expected {total_count - 1} edges, got {len(page1['edges'])}"
+    assert page1["page_info"]["has_previous_page"], "Last page should have a previous page"
+
+    response = requests.get(
+        f"{base_url}/admin/courses",
+        params={"last": total_count - 1, "before": page1["page_info"]["start_cursor"]},
+        headers=auth_headers(token),
+        timeout=TIMEOUT,
+    )
+    log_response("GET /admin/courses?before=<start_cursor>", response)
+    assert response.status_code == 200, f"Expected 200, got {response.status_code}"
+    page2 = response.json()
+    assert len(page2["edges"]) == 1, f"Expected 1 edge on first page, got {len(page2['edges'])}"
+    assert not page2["page_info"]["has_previous_page"], "First page should not have a previous page"
+
+    backward_ids = [e["node"]["id"] for e in page2["edges"] + page1["edges"]]
+    assert backward_ids == forward_ids, "Backward pagination should return the same order as forward"
+    log_step("  ✓ Backward pagination matches forward order - success")
+
+    log_step("  Testing GET /admin/courses without admin token...")
+    response = requests.get(
+        f"{base_url}/admin/courses",
+        headers={"Authorization": f"Bearer {token}"},
+        timeout=TIMEOUT,
+    )
+    log_response("GET /admin/courses (no admin token)", response)
+    assert response.status_code == 403, f"Expected 403 without admin token, got {response.status_code}"
+    log_step("  ✓ Missing admin token returns 403 - success")
+
+    log_step("  Testing GET /admin/courses with invalid pagination...")
+    response = requests.get(
+        f"{base_url}/admin/courses",
+        params={"first": "abc"},
+        headers=auth_headers(token),
+        timeout=TIMEOUT,
+    )
+    log_response("GET /admin/courses?first=abc", response)
+    assert response.status_code == 400, f"Expected 400 for invalid pagination, got {response.status_code}"
+    log_step("  ✓ Invalid pagination returns 400 - success")
+
+    log_step("  Testing GET /admin/courses with invalid cursor...")
+    response = requests.get(
+        f"{base_url}/admin/courses",
+        params={"after": "not-a-cursor"},
+        headers=auth_headers(token),
+        timeout=TIMEOUT,
+    )
+    log_response("GET /admin/courses?after=not-a-cursor", response)
+    assert response.status_code == 400, f"Expected 400 for invalid cursor, got {response.status_code}"
+    log_step("  ✓ Invalid cursor returns 400 - success")
 
     log_step("✓ Backoffice tests passed")
 
@@ -1561,7 +1675,7 @@ def test_basic_flow():
     sync_state(base_url, token, course_id)
 
     # Test backoffice endpoints (admin-only)
-    run_backoffice_tests(base_url, token, course_id)
+    run_backoffice_tests(base_url, token, course_id, all_course_ids)
 
     # Test update endpoints (admin-protected)
     run_update_course_tests(base_url, token, course_id)

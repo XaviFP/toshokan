@@ -9,6 +9,8 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/juju/errors"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/types/known/timestamppb"
 
@@ -657,6 +659,36 @@ func SetUserState(ctx *gin.Context, client pb.CourseAPIClient) {
 	ctx.JSON(http.StatusOK, toFullUserStateJSON(res.UserState))
 }
 
+// GetAllCourses retrieves all courses with pagination
+func GetAllCourses(ctx *gin.Context, client pb.CourseAPIClient) {
+	pagination, err := parsePagination(ctx)
+	if err != nil {
+		slog.Error("GetAllCourses: failed to parse pagination", "error", err, "stack", errors.ErrorStack(err))
+		ctx.JSON(http.StatusBadRequest, gin.H{"error": "invalid pagination parameters"})
+		return
+	}
+
+	req := &pb.GetAllCoursesRequest{
+		Pagination: pagination,
+	}
+
+	res, err := client.GetAllCourses(ctx, req)
+	if err != nil {
+		if isHandledError(ctx, err) {
+			return
+		}
+		slog.Error("GetAllCourses: gRPC call failed", "error", err, "stack", errors.ErrorStack(err))
+		ctx.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	ctx.JSON(http.StatusOK, gin.H{
+		"edges":       convertCourseEdges(res.Courses.Edges),
+		"page_info":   toPageInfoJSON(res.Courses.PageInfo),
+		"total_count": res.TotalCount,
+	})
+}
+
 func RegisterCoursesRoutes(r *gin.RouterGroup, client pb.CourseAPIClient, userClient userPb.UserAPIClient, adminCfg AdminConfig) {
 	course := r.Group("/courses")
 	{
@@ -699,15 +731,21 @@ func RegisterCoursesRoutes(r *gin.RouterGroup, client pb.CourseAPIClient, userCl
 		course.POST("/:courseId/sync", func(ctx *gin.Context) {
 			SyncState(ctx, client)
 		})
+	}
 
-		// Backoffice endpoints (always admin-only)
-		course.GET("/:courseId/students/progress", RequireAdmin(adminCfg, true), func(ctx *gin.Context) {
+	// Admin routes
+	admin := r.Group("/admin")
+	{
+		admin.GET("/courses", RequireAdmin(adminCfg, true), func(ctx *gin.Context) {
+			GetAllCourses(ctx, client)
+		})
+		admin.GET("/courses/:courseId/students/progress", RequireAdmin(adminCfg, true), func(ctx *gin.Context) {
 			GetStudentsProgress(ctx, client, userClient)
 		})
-		course.GET("/:courseId/users/:userId/state", RequireAdmin(adminCfg, true), func(ctx *gin.Context) {
+		admin.GET("/courses/:courseId/users/:userId/state", RequireAdmin(adminCfg, true), func(ctx *gin.Context) {
 			GetUserState(ctx, client)
 		})
-		course.PUT("/:courseId/users/:userId/state", RequireAdmin(adminCfg, true), func(ctx *gin.Context) {
+		admin.PUT("/courses/:courseId/users/:userId/state", RequireAdmin(adminCfg, true), func(ctx *gin.Context) {
 			SetUserState(ctx, client)
 		})
 	}
@@ -794,6 +832,12 @@ type CourseWithProgressEdgeJSON struct {
 	Cursor string                 `json:"cursor"`
 }
 
+// CourseEdgeJSON represents a course edge for JSON response
+type CourseEdgeJSON struct {
+	Node   CourseJSON `json:"node"`
+	Cursor string     `json:"cursor"`
+}
+
 type PageInfoJSON struct {
 	HasPreviousPage bool   `json:"has_previous_page"`
 	HasNextPage     bool   `json:"has_next_page"`
@@ -857,6 +901,18 @@ func convertCourseWithProgressEdges(edges []*pb.CoursesWithProgressConnection_Ed
 				CourseJSON:      baseCourse,
 				CurrentLessonID: edge.Node.CurrentLessonId,
 			},
+			Cursor: edge.Cursor,
+		}
+	}
+	return result
+}
+
+// convertCourseEdges converts pb CoursesConnection Edges to JSON format
+func convertCourseEdges(edges []*pb.CoursesConnection_Edge) []CourseEdgeJSON {
+	result := make([]CourseEdgeJSON, len(edges))
+	for i, edge := range edges {
+		result[i] = CourseEdgeJSON{
+			Node:   toCourseJSON(edge.Node),
 			Cursor: edge.Cursor,
 		}
 	}
@@ -1035,6 +1091,11 @@ func isHandledError(ctx *gin.Context, err error) bool {
 		return false
 	}
 
+	if status.Code(err) == codes.InvalidArgument {
+		ctx.JSON(http.StatusBadRequest, gin.H{"error": status.Convert(err).Message()})
+		return true
+	}
+
 	lower := strings.ToLower(err.Error())
 	if strings.Contains(lower, "not found") {
 		ctx.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
@@ -1054,7 +1115,10 @@ func isHandledError(ctx *gin.Context, err error) bool {
 	return false
 }
 
-const DefaultPageSize = 20
+const (
+	DefaultPageSize = 20
+	MaxPageSize     = 1000
+)
 
 // parsePagination extracts pagination params and validates numeric values.
 // Returns a pb.Pagination or an error if parsing fails.
@@ -1078,6 +1142,10 @@ func parsePagination(ctx *gin.Context) (*pb.Pagination, error) {
 			return nil, errors.Trace(err)
 		}
 		last = v
+	}
+
+	if first < 0 || last < 0 || first > MaxPageSize || last > MaxPageSize {
+		return nil, errors.NotValidf("page size outside 0-%d", MaxPageSize)
 	}
 
 	if first == 0 && last == 0 {

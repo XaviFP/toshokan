@@ -1,9 +1,11 @@
 package pagination
 
 import (
+	"encoding/base64"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestPagination(t *testing.T) {
@@ -97,5 +99,32 @@ func TestPagination(t *testing.T) {
 				assert.Equal(t, tt.expected, result)
 			})
 		}
+	})
+}
+
+func TestFromCursor(t *testing.T) {
+	type cursorData struct {
+		Order int `json:"order"`
+	}
+
+	t.Run("valid", func(t *testing.T) {
+		cursor, err := ToCursor(cursorData{Order: 3})
+		require.NoError(t, err)
+
+		var actual cursorData
+		require.NoError(t, FromCursor(cursor, &actual))
+		assert.Equal(t, cursorData{Order: 3}, actual)
+	})
+
+	t.Run("invalid_base64", func(t *testing.T) {
+		var actual cursorData
+		err := FromCursor(Cursor("Ây\xf3\x81"), &actual)
+		assert.ErrorIs(t, err, ErrInvalidCursor)
+	})
+
+	t.Run("invalid_json", func(t *testing.T) {
+		var actual cursorData
+		err := FromCursor(Cursor(base64.StdEncoding.EncodeToString([]byte("not json"))), &actual)
+		assert.ErrorIs(t, err, ErrInvalidCursor)
 	})
 }

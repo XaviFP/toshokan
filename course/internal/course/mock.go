@@ -79,6 +79,16 @@ func (m *RepositoryMock) CountEnrolledUsers(ctx context.Context, courseID uuid.U
 	return args.Get(0).(int), args.Error(1)
 }
 
+func (m *RepositoryMock) GetAllCourses(ctx context.Context, p pagination.Pagination) (CoursesConnection, error) {
+	args := m.Called(ctx, p)
+	return args.Get(0).(CoursesConnection), args.Error(1)
+}
+
+func (m *RepositoryMock) CountCourses(ctx context.Context) (int, error) {
+	args := m.Called(ctx)
+	return args.Get(0).(int), args.Error(1)
+}
+
 type EnrollerMock struct {
 	mock.Mock
 }
