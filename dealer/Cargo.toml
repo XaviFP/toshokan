@@ -30,9 +30,6 @@ features = ["serde", "v4"]
 version = "0.7.7"
 features = ["with-uuid-1", "with-chrono-0_4"]
 
-[dependencies.postgres]
-version = "0.19.4"
-
 [dependencies.async-trait]
 version = "0.1.60"
 
