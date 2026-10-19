@@ -10,7 +10,7 @@
 # Override: BUILD_MODE=sequential make services
 # =============================================================================
 
-.PHONY: services clean rebuild test-api-schema test-api-basic-flow test coverage dev proto migrations
+.PHONY: services clean rebuild test-api-schema test-api-basic-flow test test-dealer coverage dev proto migrations
 
 # Build all services (uses docker buildx bake for shared proto generation)
 # Auto-detects system resources and adjusts parallelism for low-end machines
@@ -51,6 +51,14 @@ test:
 	docker run --rm -v $(PWD):/app -w /app --network host \
 		golang:1.24-bookworm \
 		go test ./... -p=1 -coverprofile=coverage.out
+
+# Run dealer (Rust) unit and integration tests in Docker; needs the db container running
+test-dealer:
+	docker run --rm -v $(PWD):/app -w /app/dealer --network host \
+		-v toshokan-dealer-cargo-registry:/usr/local/cargo/registry \
+		-v toshokan-dealer-target:/target -e CARGO_TARGET_DIR=/target \
+		rust:1.85-bookworm \
+		sh -c "apt-get update -qq && apt-get install -y -qq protobuf-compiler > /dev/null && cargo test"
 
 # Generate coverage report (requires test to have run first)
 coverage: test

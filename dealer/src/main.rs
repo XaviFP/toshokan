@@ -1,11 +1,9 @@
 use std::collections::HashMap;
-use std::fmt::Write;
 
-use postgres::types::ToSql;
-use postgres::NoTls;
 use tokio::signal::unix::{signal, SignalKind};
+use tokio_postgres::error::SqlState;
+use tokio_postgres::NoTls;
 use tokio_util::sync::CancellationToken;
-use tonic::Code;
 use tonic::{transport::Server, Request, Response, Status};
 use uuid::Uuid;
 
@@ -19,11 +17,11 @@ use pb::{DealRequest, DealResponse, StoreAnswersRequest, StoreAnswersResponse};
 mod config;
 use config::{load_db_config, load_grpc_server_config};
 
-mod argumenter;
-use argumenter::Argumenter;
-
 mod ranker;
 use ranker::Ranker;
+
+#[cfg(test)]
+mod repository_it_test;
 
 const LEVEL1_PERCENTATGE: usize = 40; //6
 const LEVEL2_PERCENTATGE: usize = 20; //3
@@ -42,10 +40,10 @@ impl Repository {
 
     async fn get_max_cards_per_level(
         &self,
-        user_id: &String,
-        deck_id: &String,
+        user_id: &Uuid,
+        deck_id: &Uuid,
         max: &i64,
-    ) -> Result<Vec<LeveledCard>, String> {
+    ) -> Result<Vec<LeveledCard>, tokio_postgres::Error> {
         let rows = self
             .client
             .query(
@@ -54,9 +52,8 @@ impl Repository {
                     FROM cards
                     LEFT JOIN user_card_level
                     ON user_card_level.card_id = cards.id
-                    WHERE (user_card_level.user_id = $1
-                    OR user_card_level.card_id IS NULL)
-                    AND cards.deck_id = $2
+                    AND user_card_level.user_id = $1
+                    WHERE cards.deck_id = $2
                 )
                 (SELECT card_id, lvl FROM user_cards WHERE lvl = 1 LIMIT $3)
                 UNION (SELECT card_id, lvl FROM user_cards WHERE lvl = 2 LIMIT $3)
@@ -64,23 +61,10 @@ impl Repository {
                 UNION (SELECT card_id, lvl FROM user_cards WHERE lvl = 4 LIMIT $3)
                 UNION (SELECT card_id, lvl FROM user_cards WHERE lvl = 5 LIMIT $3)
                 ORDER BY lvl DESC",
-                &[
-                    &Uuid::parse_str(user_id).unwrap(),
-                    &Uuid::parse_str(deck_id).unwrap(),
-                    max,
-                ],
+                &[user_id, deck_id, max],
             )
-            .await;
-        if rows.as_ref().is_err() {
-            match rows.as_ref().err() {
-                Some(err) => {
-                    return Err(err.to_string());
-                }
-                _ => {}
-            }
-        }
+            .await?;
         Ok(rows
-            .unwrap()
             .iter()
             .map(|lvl_card| {
                 let id: Uuid = lvl_card.get(0);
@@ -96,93 +80,38 @@ impl Repository {
 
     async fn store_answers(
         &self,
-        user_id: &String,
-        answer_ids: &Vec<String>,
-    ) -> Result<(), String> {
-        if answer_ids.len() == 0 {
-            return Err("No answers provided".to_owned());
-        }
-        let mut buf = String::from("INSERT INTO card_practice (user_id, answer_id) VALUES ");
-        let mut arger = Argumenter {
-            values: Vec::<&(dyn ToSql + Sync)>::new(),
-        };
-
-        let uid_res = Uuid::try_parse(user_id);
-        if uid_res.is_err() {
-            return Err(uid_res.err().unwrap().to_string());
-        }
-
-        let uid = uid_res.unwrap();
-
-        // Transform srings to valid UUIDs
-        // Should fail or at least inform of invalid UUIDs received
-        let ans_ids: Vec<Uuid> = answer_ids
-            .iter()
-            .filter_map(|answer| {
-                let ans_res = Uuid::try_parse(answer);
-                if ans_res.is_err() {
-                    return None;
-                }
-                Some(ans_res.unwrap())
-            })
-            .collect();
-
-        for answer in ans_ids.iter() {
-            let res = buf.write_fmt(format_args!("({},{}),", arger.add(&uid), arger.add(answer)));
-            if res.is_err() {
-                return Err(res.err().unwrap().to_string());
-            }
-        }
-        // Remove trailing comma
-        buf.pop();
-        let result = self.client.execute(&buf, arger.values()).await;
-        if result.is_err() {
-            return Err(result.err().unwrap().to_string());
-        }
-
-        // Update actual user_card_levels
-        let mut arger = Argumenter {
-            values: Vec::<&(dyn ToSql + Sync)>::new(),
-        };
-        let mut answers_string_arg = String::from("");
-
-        for answer in ans_ids.iter() {
-            let res = answers_string_arg.write_fmt(format_args!("{},", arger.add(answer)));
-            if res.is_err() {
-                return Err(res.err().unwrap().to_string());
-            }
-        }
-
-        // Remove trailing comma
-        answers_string_arg.pop();
-
-        let result = self
-            .client
+        user_id: &Uuid,
+        answer_ids: &[Uuid],
+    ) -> Result<(), tokio_postgres::Error> {
+        // A card answered more than once in the same call counts as correct only if every answer was.
+        self.client
             .execute(
-                &format!(
-                    "WITH correct_answered_cards as (
-                    SELECT card_id FROM answers
-                    WHERE is_correct = true
-                    AND id in ({})
-                )
-                INSERT INTO user_card_level (user_id, card_id, updated_at)
-                (
-                    SELECT {} as user_id, c.card_id as card_id, now() as updated_at
-                    FROM correct_answered_cards as c
-                )
-                ON CONFLICT ON CONSTRAINT user_card_level_card_id_user_id_key DO UPDATE
-                SET
-                lvl = LEAST((SELECT lvl FROM user_card_level WHERE user_id = EXCLUDED.user_id AND card_id = EXCLUDED.card_id) + 1, 5),
-                updated_at = now()",
-                    answers_string_arg,
-                    arger.add(&uid),
+                "WITH practice AS (
+                    INSERT INTO card_practice (user_id, answer_id)
+                    SELECT $1::uuid, unnest($2::uuid[])
                 ),
-                arger.values(),
+                answered_cards AS (
+                    SELECT card_id, bool_and(is_correct) AS is_correct
+                    FROM answers
+                    WHERE id = ANY($2::uuid[])
+                    GROUP BY card_id
+                )
+                INSERT INTO user_card_level (user_id, card_id, lvl, updated_at)
+                SELECT $1::uuid, a.card_id,
+                    CASE WHEN a.is_correct
+                        THEN LEAST(COALESCE(l.lvl, 1) + 1, 5)
+                        ELSE GREATEST(COALESCE(l.lvl, 1) - 1, 1)
+                    END,
+                    now()
+                FROM answered_cards a
+                LEFT JOIN user_card_level l
+                ON l.card_id = a.card_id
+                AND l.user_id = $1::uuid
+                ON CONFLICT ON CONSTRAINT user_card_level_card_id_user_id_key DO UPDATE
+                SET lvl = EXCLUDED.lvl, updated_at = EXCLUDED.updated_at",
+                &[user_id, &answer_ids],
             )
-            .await;
-        if result.is_err() {
-            return Err(result.err().unwrap().to_string());
-        }
+            .await?;
 
         Ok(())
     }
@@ -193,42 +122,69 @@ struct LeveledCard {
     lvl: usize,
 }
 
+fn parse_uuid(field: &str, value: &str) -> Result<Uuid, Status> {
+    Uuid::try_parse(value).map_err(|_| Status::invalid_argument(format!("invalid {}", field)))
+}
+
+fn parse_store_answers_request(request: &StoreAnswersRequest) -> Result<(Uuid, Vec<Uuid>), Status> {
+    let user_id = parse_uuid("user_id", &request.user_id)?;
+    if request.answer_ids.is_empty() {
+        return Err(Status::invalid_argument("no answers provided"));
+    }
+    let answer_ids = request
+        .answer_ids
+        .iter()
+        .map(|id| parse_uuid("answer_id", id))
+        .collect::<Result<Vec<Uuid>, Status>>()?;
+
+    Ok((user_id, answer_ids))
+}
+
+fn parse_deal_request(request: &DealRequest) -> Result<(Uuid, Uuid), Status> {
+    Ok((
+        parse_uuid("user_id", &request.user_id)?,
+        parse_uuid("deck_id", &request.deck_id)?,
+    ))
+}
+
+fn internal_error(operation: &str, err: tokio_postgres::Error) -> Status {
+    eprintln!("{} failed: {}", operation, err);
+    Status::internal(format!("{} failed", operation))
+}
+
+fn is_null_card_id(err: &tokio_postgres::Error) -> bool {
+    err.code() == Some(&SqlState::NOT_NULL_VIOLATION)
+        && err.as_db_error().and_then(|db_err| db_err.column()) == Some("card_id")
+}
+
 #[tonic::async_trait]
 impl pbDealer for Dealer {
     async fn store_answers(
         &self,
         request: Request<StoreAnswersRequest>,
     ) -> Result<Response<StoreAnswersResponse>, Status> {
-        let result = self
-            .repo
-            .store_answers(&request.get_ref().user_id, &request.get_ref().answer_ids)
-            .await;
-        if result.as_ref().is_err() {
-            match result.as_ref().err() {
-                Some(err) => {
-                    return Err(Status::new(Code::Internal, format!("{}", err)));
-                }
-                _ => {}
+        let (user_id, answer_ids) = parse_store_answers_request(request.get_ref())?;
+
+        match self.repo.store_answers(&user_id, &answer_ids).await {
+            Ok(()) => Ok(Response::new(StoreAnswersResponse {})),
+            Err(err) if err.code() == Some(&SqlState::FOREIGN_KEY_VIOLATION) => {
+                Err(Status::invalid_argument("unknown answer_id"))
             }
+            Err(err) if is_null_card_id(&err) => {
+                Err(Status::invalid_argument("answer_id does not belong to a card"))
+            }
+            Err(err) => Err(internal_error("store answers", err)),
         }
-        return Ok(Response::new(StoreAnswersResponse {}));
     }
 
     async fn deal(&self, request: Request<DealRequest>) -> Result<Response<DealResponse>, Status> {
+        let (user_id, deck_id) = parse_deal_request(request.get_ref())?;
         let max = i64::from(request.get_ref().number_of_cards);
-        let result = self
+        let level_cards = self
             .repo
-            .get_max_cards_per_level(&request.get_ref().user_id, &request.get_ref().deck_id, &max)
-            .await;
-        if result.as_ref().is_err() {
-            match result.as_ref().err() {
-                Some(err) => {
-                    return Err(Status::new(Code::Internal, format!("{}", err)));
-                }
-                _ => {}
-            }
-        }
-        let level_cards = result.unwrap();
+            .get_max_cards_per_level(&user_id, &deck_id, &max)
+            .await
+            .map_err(|err| internal_error("deal", err))?;
         if level_cards.len() <= request.get_ref().number_of_cards as usize {
             return Ok(Response::new(DealResponse {
                 card_ids: level_cards.iter().map(|card| card.id.clone()).collect(),
@@ -468,4 +424,98 @@ fn all_cards_are_returned_if_less_than_requested() {
     let (cards, _) = _create_test_level_cards(actual);
     let out = get_user_cards(cards, max);
     assert_eq!(out.len(), actual)
+}
+
+#[cfg(test)]
+mod validation_test {
+    use tonic::Code;
+    use uuid::{uuid, Uuid};
+
+    use super::pb::{DealRequest, StoreAnswersRequest};
+    use super::{parse_deal_request, parse_store_answers_request};
+
+    const USER: Uuid = uuid!("11111111-0000-0000-0000-000000000000");
+    const DECK: Uuid = uuid!("dddddddd-0000-0000-0000-000000000000");
+    const ANSWER_A_CORRECT: Uuid = uuid!("aaaaaaaa-0000-0000-0000-00000000000c");
+    const ANSWER_B_CORRECT: Uuid = uuid!("bbbbbbbb-0000-0000-0000-00000000000c");
+
+    #[test]
+    fn parse_deal_request_rejects_invalid_user_id() {
+        let actual = parse_deal_request(&DealRequest {
+            user_id: "not-a-uuid".to_owned(),
+            deck_id: DECK.to_string(),
+            number_of_cards: 5,
+        })
+        .unwrap_err();
+
+        assert_eq!(Code::InvalidArgument, actual.code());
+    }
+
+    #[test]
+    fn parse_deal_request_rejects_invalid_deck_id() {
+        let actual = parse_deal_request(&DealRequest {
+            user_id: USER.to_string(),
+            deck_id: "not-a-uuid".to_owned(),
+            number_of_cards: 5,
+        })
+        .unwrap_err();
+
+        assert_eq!(Code::InvalidArgument, actual.code());
+    }
+
+    #[test]
+    fn parse_deal_request_accepts_valid_ids() {
+        let actual = parse_deal_request(&DealRequest {
+            user_id: USER.to_string(),
+            deck_id: DECK.to_string(),
+            number_of_cards: 5,
+        })
+        .unwrap();
+
+        assert_eq!((USER, DECK), actual);
+    }
+
+    #[test]
+    fn parse_store_answers_request_rejects_invalid_user_id() {
+        let actual = parse_store_answers_request(&StoreAnswersRequest {
+            user_id: "not-a-uuid".to_owned(),
+            answer_ids: vec![ANSWER_A_CORRECT.to_string()],
+        })
+        .unwrap_err();
+
+        assert_eq!(Code::InvalidArgument, actual.code());
+    }
+
+    #[test]
+    fn parse_store_answers_request_rejects_invalid_answer_id() {
+        let actual = parse_store_answers_request(&StoreAnswersRequest {
+            user_id: USER.to_string(),
+            answer_ids: vec![ANSWER_A_CORRECT.to_string(), "not-a-uuid".to_owned()],
+        })
+        .unwrap_err();
+
+        assert_eq!(Code::InvalidArgument, actual.code());
+    }
+
+    #[test]
+    fn parse_store_answers_request_rejects_empty_answers() {
+        let actual = parse_store_answers_request(&StoreAnswersRequest {
+            user_id: USER.to_string(),
+            answer_ids: vec![],
+        })
+        .unwrap_err();
+
+        assert_eq!(Code::InvalidArgument, actual.code());
+    }
+
+    #[test]
+    fn parse_store_answers_request_accepts_valid_ids() {
+        let actual = parse_store_answers_request(&StoreAnswersRequest {
+            user_id: USER.to_string(),
+            answer_ids: vec![ANSWER_A_CORRECT.to_string(), ANSWER_B_CORRECT.to_string()],
+        })
+        .unwrap();
+
+        assert_eq!((USER, vec![ANSWER_A_CORRECT, ANSWER_B_CORRECT]), actual);
+    }
 }
