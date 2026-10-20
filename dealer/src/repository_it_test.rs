@@ -257,6 +257,38 @@ async fn store_answers_unknown_answer_rolls_back_known_answers() {
 #[tokio::test]
 async fn get_max_cards_per_level_ignores_other_users_levels() {
     let (repo, _db_lock) = new_repository().await;
+    tokio::join!(
+        set_level(&repo, &USER, &CARD_A, 2),
+        set_level(&repo, &OTHER_USER, &CARD_A, 4),
+    );
+
+    let actual = repo
+        .get_max_cards_per_level(&USER, &DECK, &10)
+        .await
+        .unwrap();
+
+    assert_eq!(1, actual.len());
+    assert_eq!(CARD_A.to_string(), actual[0].id);
+    assert_eq!(2, actual[0].lvl);
+}
+
+#[tokio::test]
+async fn get_max_cards_per_level_excludes_never_answered_cards() {
+    let (repo, _db_lock) = new_repository().await;
+    set_level(&repo, &USER, &CARD_A, 2).await;
+
+    let actual = repo
+        .get_max_cards_per_level(&USER, &DECK, &10)
+        .await
+        .unwrap();
+
+    let ids: Vec<String> = actual.iter().map(|c| c.id.clone()).collect();
+    assert_eq!(vec![CARD_A.to_string()], ids);
+}
+
+#[tokio::test]
+async fn get_max_cards_per_level_excludes_cards_only_other_users_answered() {
+    let (repo, _db_lock) = new_repository().await;
     set_level(&repo, &OTHER_USER, &CARD_A, 4).await;
 
     let actual = repo
@@ -264,10 +296,7 @@ async fn get_max_cards_per_level_ignores_other_users_levels() {
         .await
         .unwrap();
 
-    let mut ids: Vec<String> = actual.iter().map(|c| c.id.clone()).collect();
-    ids.sort();
-    assert_eq!(vec![CARD_A.to_string(), CARD_B.to_string()], ids);
-    assert!(actual.iter().all(|c| c.lvl == 1));
+    assert!(actual.is_empty());
 }
 
 #[tokio::test]
@@ -282,6 +311,100 @@ async fn get_max_cards_per_level_uses_own_level() {
 
     let card_a = actual.iter().find(|c| c.id == CARD_A.to_string()).unwrap();
     assert_eq!(3, card_a.lvl);
+}
+
+#[tokio::test]
+async fn get_max_cards_per_level_excludes_deleted_cards() {
+    let (repo, _db_lock) = new_repository().await;
+    tokio::join!(
+        set_level(&repo, &USER, &CARD_A, 2),
+        set_level(&repo, &USER, &CARD_B, 2),
+    );
+    repo.client
+        .execute("UPDATE cards SET deleted_at = now() WHERE id = $1", &[&CARD_B])
+        .await
+        .unwrap();
+
+    let actual = repo
+        .get_max_cards_per_level(&USER, &DECK, &10)
+        .await
+        .unwrap();
+
+    let ids: Vec<String> = actual.iter().map(|c| c.id.clone()).collect();
+    assert_eq!(vec![CARD_A.to_string()], ids);
+}
+
+#[tokio::test]
+async fn get_max_cards_per_level_excludes_cards_of_deleted_deck() {
+    let (repo, _db_lock) = new_repository().await;
+    tokio::join!(
+        set_level(&repo, &USER, &CARD_A, 2),
+        set_level(&repo, &USER, &CARD_B, 2),
+    );
+    repo.client
+        .execute("UPDATE decks SET deleted_at = now() WHERE id = $1", &[&DECK])
+        .await
+        .unwrap();
+
+    let actual = repo
+        .get_max_cards_per_level(&USER, &DECK, &10)
+        .await
+        .unwrap();
+
+    assert!(actual.is_empty());
+}
+
+#[tokio::test]
+async fn get_max_cards_per_level_picks_randomly_within_a_level() {
+    let (repo, _db_lock) = new_repository().await;
+    tokio::join!(
+        set_level(&repo, &USER, &CARD_A, 2),
+        set_level(&repo, &USER, &CARD_B, 2),
+    );
+
+    repo.client.execute("SELECT setseed(0.1)", &[]).await.unwrap();
+    let first = repo
+        .get_max_cards_per_level(&USER, &DECK, &1)
+        .await
+        .unwrap();
+    repo.client.execute("SELECT setseed(0.4)", &[]).await.unwrap();
+    let second = repo
+        .get_max_cards_per_level(&USER, &DECK, &1)
+        .await
+        .unwrap();
+
+    assert_eq!(1, first.len());
+    assert_eq!(1, second.len());
+    assert_ne!(first[0].id, second[0].id);
+}
+
+#[tokio::test]
+async fn get_max_cards_per_level_limits_each_level_and_orders_by_level() {
+    let (repo, _db_lock) = new_repository().await;
+    let card_c = uuid!("cccccccc-0000-0000-0000-000000000000");
+    let card_d = uuid!("dddddddd-0000-0000-0000-00000000000d");
+    repo.client
+        .execute(
+            "INSERT INTO cards (id, deck_id, title) VALUES ($1, $3, 'c'), ($2, $3, 'd')",
+            &[&card_c, &card_d, &DECK],
+        )
+        .await
+        .unwrap();
+    tokio::join!(
+        set_level(&repo, &USER, &CARD_A, 1),
+        set_level(&repo, &USER, &CARD_B, 1),
+        set_level(&repo, &USER, &card_c, 1),
+        set_level(&repo, &USER, &card_d, 3),
+    );
+
+    let actual = repo
+        .get_max_cards_per_level(&USER, &DECK, &2)
+        .await
+        .unwrap();
+
+    let actual_levels: Vec<usize> = actual.iter().map(|c| c.lvl).collect();
+    assert_eq!(vec![1, 1, 3], actual_levels);
+    assert_eq!(card_d.to_string(), actual[2].id);
 }
 
 #[tokio::test]

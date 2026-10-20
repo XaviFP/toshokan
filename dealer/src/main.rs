@@ -48,19 +48,23 @@ impl Repository {
             .client
             .query(
                 "WITH user_cards as (
-                    SELECT cards.id as card_id, COALESCE(user_card_level.lvl, 1) as lvl
+                    SELECT cards.id as card_id, user_card_level.lvl as lvl, random() as shuffle
                     FROM cards
-                    LEFT JOIN user_card_level
+                    JOIN decks
+                    ON decks.id = cards.deck_id
+                    AND decks.deleted_at IS NULL
+                    JOIN user_card_level
                     ON user_card_level.card_id = cards.id
                     AND user_card_level.user_id = $1
                     WHERE cards.deck_id = $2
+                    AND cards.deleted_at IS NULL
                 )
-                (SELECT card_id, lvl FROM user_cards WHERE lvl = 1 LIMIT $3)
-                UNION (SELECT card_id, lvl FROM user_cards WHERE lvl = 2 LIMIT $3)
-                UNION (SELECT card_id, lvl FROM user_cards WHERE lvl = 3 LIMIT $3)
-                UNION (SELECT card_id, lvl FROM user_cards WHERE lvl = 4 LIMIT $3)
-                UNION (SELECT card_id, lvl FROM user_cards WHERE lvl = 5 LIMIT $3)
-                ORDER BY lvl DESC",
+                (SELECT card_id, lvl, shuffle FROM user_cards WHERE lvl = 1 ORDER BY shuffle LIMIT $3)
+                UNION ALL (SELECT card_id, lvl, shuffle FROM user_cards WHERE lvl = 2 ORDER BY shuffle LIMIT $3)
+                UNION ALL (SELECT card_id, lvl, shuffle FROM user_cards WHERE lvl = 3 ORDER BY shuffle LIMIT $3)
+                UNION ALL (SELECT card_id, lvl, shuffle FROM user_cards WHERE lvl = 4 ORDER BY shuffle LIMIT $3)
+                UNION ALL (SELECT card_id, lvl, shuffle FROM user_cards WHERE lvl = 5 ORDER BY shuffle LIMIT $3)
+                ORDER BY lvl, shuffle",
                 &[user_id, deck_id, max],
             )
             .await?;
