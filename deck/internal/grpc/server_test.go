@@ -8,6 +8,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 
@@ -420,8 +421,9 @@ func TestServer_UpdateCard(t *testing.T) {
 			Kind:   &invalidKind,
 		})
 
-		assert.Error(t, err)
-		assert.ErrorIs(t, err, deck.ErrInvalidKind)
+		require.Error(t, err)
+		assert.Equal(t, codes.InvalidArgument, status.Code(err))
+		assert.Equal(t, deck.ErrInvalidKind.Error(), status.Convert(err).Message())
 	})
 
 	t.Run("failure_card_not_found", func(t *testing.T) {

@@ -141,6 +141,7 @@ func main() {
 	gate.RegisterDeckRoutes(authorized, userClient, deckClient, c.gate.adminConfig)
 	gate.RegisterUserRoutes(router, c.gate.signupEnabled, userClient, c.gate.adminConfig)
 	gate.RegisterCoursesRoutes(authorized, coursesClient, userClient, c.gate.adminConfig)
+	gate.RegisterReviewRoutes(authorized, dealerClient, deckClient)
 
 	logger.Info("Starting HTTP server", "address", c.gate.HTTPAddress())
 

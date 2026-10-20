@@ -58,6 +58,8 @@ tags:
     description: User progress tracking (requires authentication)
   - name: Backoffice
     description: Admin/professor endpoints for monitoring and debugging (requires admin access)
+  - name: Review
+    description: Spaced repetition review of cards the user has answered (requires authentication)
 
 paths:
   /signup:
@@ -1366,6 +1368,99 @@ paths:
               schema:
                 $ref: '#/components/schemas/Error'
 
+  /review:
+    get:
+      tags:
+        - Review
+      summary: Get cards to review
+      description: |
+        Deal cards the user has already answered.
+        Without `deck_id`, cards come from every deck the user has answered.
+      operationId: getReview
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: max_cards
+          in: query
+          required: false
+          description: Maximum number of cards to return
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 20
+        - name: deck_id
+          in: query
+          required: false
+          description: Only review cards from this deck
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Cards to review, empty when the user has answered none
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReviewResponse'
+        '400':
+          description: Invalid query parameters
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /review/answers:
+    post:
+      tags:
+        - Review
+      summary: Submit review answers
+      description: Record the selected answers. A correct answer raises the card's level, a wrong one lowers it.
+      operationId: storeReviewAnswers
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReviewAnswersRequest'
+      responses:
+        '200':
+          description: Answers stored
+          content:
+            application/json:
+              schema:
+                type: object
+        '400':
+          description: Invalid request body
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: An answer ID does not exist
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
   /admin/courses:
     get:
       tags:
@@ -2098,6 +2193,29 @@ components:
       required:
         - card_id
         - answer_id
+
+    ReviewResponse:
+      type: object
+      properties:
+        cards:
+          type: array
+          items:
+            $ref: '#/components/schemas/Card'
+      required:
+        - cards
+
+    ReviewAnswersRequest:
+      type: object
+      properties:
+        answer_ids:
+          type: array
+          minItems: 1
+          items:
+            type: string
+            format: uuid
+          description: Selected answer UUIDs
+      required:
+        - answer_ids
 
     AnswerCardsResponse:
       type: object
