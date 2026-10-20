@@ -10,7 +10,8 @@ service Dealer {
 
 message DealRequest {
     string user_id = 1;
-    string deck_id = 2;
+    // Empty means all of the user's answered cards, across every deck.
+    repeated string deck_ids = 2;
     uint32 number_of_cards = 3;
 }
 

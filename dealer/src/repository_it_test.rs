@@ -263,7 +263,7 @@ async fn get_max_cards_per_level_ignores_other_users_levels() {
     );
 
     let actual = repo
-        .get_max_cards_per_level(&USER, &DECK, &10)
+        .get_max_cards_per_level(&USER, &[DECK], &10)
         .await
         .unwrap();
 
@@ -278,7 +278,7 @@ async fn get_max_cards_per_level_excludes_never_answered_cards() {
     set_level(&repo, &USER, &CARD_A, 2).await;
 
     let actual = repo
-        .get_max_cards_per_level(&USER, &DECK, &10)
+        .get_max_cards_per_level(&USER, &[DECK], &10)
         .await
         .unwrap();
 
@@ -292,7 +292,7 @@ async fn get_max_cards_per_level_excludes_cards_only_other_users_answered() {
     set_level(&repo, &OTHER_USER, &CARD_A, 4).await;
 
     let actual = repo
-        .get_max_cards_per_level(&USER, &DECK, &10)
+        .get_max_cards_per_level(&USER, &[DECK], &10)
         .await
         .unwrap();
 
@@ -305,7 +305,7 @@ async fn get_max_cards_per_level_uses_own_level() {
     set_level(&repo, &USER, &CARD_A, 3).await;
 
     let actual = repo
-        .get_max_cards_per_level(&USER, &DECK, &10)
+        .get_max_cards_per_level(&USER, &[DECK], &10)
         .await
         .unwrap();
 
@@ -326,7 +326,7 @@ async fn get_max_cards_per_level_excludes_deleted_cards() {
         .unwrap();
 
     let actual = repo
-        .get_max_cards_per_level(&USER, &DECK, &10)
+        .get_max_cards_per_level(&USER, &[DECK], &10)
         .await
         .unwrap();
 
@@ -347,7 +347,7 @@ async fn get_max_cards_per_level_excludes_cards_of_deleted_deck() {
         .unwrap();
 
     let actual = repo
-        .get_max_cards_per_level(&USER, &DECK, &10)
+        .get_max_cards_per_level(&USER, &[DECK], &10)
         .await
         .unwrap();
 
@@ -364,12 +364,12 @@ async fn get_max_cards_per_level_picks_randomly_within_a_level() {
 
     repo.client.execute("SELECT setseed(0.1)", &[]).await.unwrap();
     let first = repo
-        .get_max_cards_per_level(&USER, &DECK, &1)
+        .get_max_cards_per_level(&USER, &[DECK], &1)
         .await
         .unwrap();
     repo.client.execute("SELECT setseed(0.4)", &[]).await.unwrap();
     let second = repo
-        .get_max_cards_per_level(&USER, &DECK, &1)
+        .get_max_cards_per_level(&USER, &[DECK], &1)
         .await
         .unwrap();
 
@@ -398,13 +398,114 @@ async fn get_max_cards_per_level_limits_each_level_and_orders_by_level() {
     );
 
     let actual = repo
-        .get_max_cards_per_level(&USER, &DECK, &2)
+        .get_max_cards_per_level(&USER, &[DECK], &2)
         .await
         .unwrap();
 
     let actual_levels: Vec<usize> = actual.iter().map(|c| c.lvl).collect();
     assert_eq!(vec![1, 1, 3], actual_levels);
     assert_eq!(card_d.to_string(), actual[2].id);
+}
+
+#[tokio::test]
+async fn get_max_cards_per_level_returns_cards_from_every_requested_deck() {
+    let (repo, _db_lock) = new_repository().await;
+    let other_deck = uuid!("eeeeeeee-0000-0000-0000-000000000000");
+    let card_e = uuid!("eeeeeeee-0000-0000-0000-00000000000e");
+    repo.client
+        .execute(
+            "INSERT INTO decks (id, author_id, title, description) VALUES ($1, $2, 'other', 'other')",
+            &[&other_deck, &USER],
+        )
+        .await
+        .unwrap();
+    repo.client
+        .execute(
+            "INSERT INTO cards (id, deck_id, title) VALUES ($1, $2, 'e')",
+            &[&card_e, &other_deck],
+        )
+        .await
+        .unwrap();
+    tokio::join!(
+        set_level(&repo, &USER, &CARD_A, 2),
+        set_level(&repo, &USER, &card_e, 2),
+    );
+
+    let actual = repo
+        .get_max_cards_per_level(&USER, &[DECK, other_deck], &10)
+        .await
+        .unwrap();
+
+    let mut actual_ids: Vec<String> = actual.iter().map(|c| c.id.clone()).collect();
+    actual_ids.sort();
+    assert_eq!(vec![CARD_A.to_string(), card_e.to_string()], actual_ids);
+}
+
+#[tokio::test]
+async fn get_max_cards_per_level_excludes_decks_not_requested() {
+    let (repo, _db_lock) = new_repository().await;
+    let other_deck = uuid!("eeeeeeee-0000-0000-0000-000000000000");
+    let card_e = uuid!("eeeeeeee-0000-0000-0000-00000000000e");
+    repo.client
+        .execute(
+            "INSERT INTO decks (id, author_id, title, description) VALUES ($1, $2, 'other', 'other')",
+            &[&other_deck, &USER],
+        )
+        .await
+        .unwrap();
+    repo.client
+        .execute(
+            "INSERT INTO cards (id, deck_id, title) VALUES ($1, $2, 'e')",
+            &[&card_e, &other_deck],
+        )
+        .await
+        .unwrap();
+    tokio::join!(
+        set_level(&repo, &USER, &CARD_A, 2),
+        set_level(&repo, &USER, &card_e, 2),
+    );
+
+    let actual = repo
+        .get_max_cards_per_level(&USER, &[other_deck], &10)
+        .await
+        .unwrap();
+
+    let actual_ids: Vec<String> = actual.iter().map(|c| c.id.clone()).collect();
+    assert_eq!(vec![card_e.to_string()], actual_ids);
+}
+
+#[tokio::test]
+async fn get_max_cards_per_level_without_decks_returns_answered_cards_from_all_decks() {
+    let (repo, _db_lock) = new_repository().await;
+    let other_deck = uuid!("eeeeeeee-0000-0000-0000-000000000000");
+    let card_e = uuid!("eeeeeeee-0000-0000-0000-00000000000e");
+    repo.client
+        .execute(
+            "INSERT INTO decks (id, author_id, title, description) VALUES ($1, $2, 'other', 'other')",
+            &[&other_deck, &USER],
+        )
+        .await
+        .unwrap();
+    repo.client
+        .execute(
+            "INSERT INTO cards (id, deck_id, title) VALUES ($1, $2, 'e')",
+            &[&card_e, &other_deck],
+        )
+        .await
+        .unwrap();
+    tokio::join!(
+        set_level(&repo, &USER, &CARD_A, 2),
+        set_level(&repo, &USER, &card_e, 2),
+    );
+
+    let actual = repo
+        .get_max_cards_per_level(&USER, &[], &10)
+        .await
+        .unwrap();
+
+    let mut actual_ids: Vec<String> = actual.iter().map(|c| c.id.clone()).collect();
+    actual_ids.sort();
+    assert_eq!(vec![CARD_A.to_string(), card_e.to_string()], actual_ids);
 }
 
 #[tokio::test]

@@ -3,8 +3,9 @@
 pub struct DealRequest {
     #[prost(string, tag = "1")]
     pub user_id: ::prost::alloc::string::String,
-    #[prost(string, tag = "2")]
-    pub deck_id: ::prost::alloc::string::String,
+    /// Empty means all of the user's answered cards, across every deck.
+    #[prost(string, repeated, tag = "2")]
+    pub deck_ids: ::prost::alloc::vec::Vec<::prost::alloc::string::String>,
     #[prost(uint32, tag = "3")]
     pub number_of_cards: u32,
 }

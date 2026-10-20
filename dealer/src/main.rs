@@ -41,7 +41,7 @@ impl Repository {
     async fn get_max_cards_per_level(
         &self,
         user_id: &Uuid,
-        deck_id: &Uuid,
+        deck_ids: &[Uuid],
         max: &i64,
     ) -> Result<Vec<LeveledCard>, tokio_postgres::Error> {
         let rows = self
@@ -56,7 +56,7 @@ impl Repository {
                     JOIN user_card_level
                     ON user_card_level.card_id = cards.id
                     AND user_card_level.user_id = $1
-                    WHERE cards.deck_id = $2
+                    WHERE (cardinality($2::uuid[]) = 0 OR cards.deck_id = ANY($2::uuid[]))
                     AND cards.deleted_at IS NULL
                 )
                 (SELECT card_id, lvl, shuffle FROM user_cards WHERE lvl = 1 ORDER BY shuffle LIMIT $3)
@@ -65,7 +65,7 @@ impl Repository {
                 UNION ALL (SELECT card_id, lvl, shuffle FROM user_cards WHERE lvl = 4 ORDER BY shuffle LIMIT $3)
                 UNION ALL (SELECT card_id, lvl, shuffle FROM user_cards WHERE lvl = 5 ORDER BY shuffle LIMIT $3)
                 ORDER BY lvl, shuffle",
-                &[user_id, deck_id, max],
+                &[user_id, &deck_ids, max],
             )
             .await?;
         Ok(rows
@@ -144,11 +144,15 @@ fn parse_store_answers_request(request: &StoreAnswersRequest) -> Result<(Uuid, V
     Ok((user_id, answer_ids))
 }
 
-fn parse_deal_request(request: &DealRequest) -> Result<(Uuid, Uuid), Status> {
-    Ok((
-        parse_uuid("user_id", &request.user_id)?,
-        parse_uuid("deck_id", &request.deck_id)?,
-    ))
+fn parse_deal_request(request: &DealRequest) -> Result<(Uuid, Vec<Uuid>), Status> {
+    let user_id = parse_uuid("user_id", &request.user_id)?;
+    let deck_ids = request
+        .deck_ids
+        .iter()
+        .map(|id| parse_uuid("deck_id", id))
+        .collect::<Result<Vec<Uuid>, Status>>()?;
+
+    Ok((user_id, deck_ids))
 }
 
 fn internal_error(operation: &str, err: tokio_postgres::Error) -> Status {
@@ -182,11 +186,11 @@ impl pbDealer for Dealer {
     }
 
     async fn deal(&self, request: Request<DealRequest>) -> Result<Response<DealResponse>, Status> {
-        let (user_id, deck_id) = parse_deal_request(request.get_ref())?;
+        let (user_id, deck_ids) = parse_deal_request(request.get_ref())?;
         let max = i64::from(request.get_ref().number_of_cards);
         let level_cards = self
             .repo
-            .get_max_cards_per_level(&user_id, &deck_id, &max)
+            .get_max_cards_per_level(&user_id, &deck_ids, &max)
             .await
             .map_err(|err| internal_error("deal", err))?;
         if level_cards.len() <= request.get_ref().number_of_cards as usize {
@@ -440,6 +444,7 @@ mod validation_test {
 
     const USER: Uuid = uuid!("11111111-0000-0000-0000-000000000000");
     const DECK: Uuid = uuid!("dddddddd-0000-0000-0000-000000000000");
+    const OTHER_DECK: Uuid = uuid!("eeeeeeee-0000-0000-0000-000000000000");
     const ANSWER_A_CORRECT: Uuid = uuid!("aaaaaaaa-0000-0000-0000-00000000000c");
     const ANSWER_B_CORRECT: Uuid = uuid!("bbbbbbbb-0000-0000-0000-00000000000c");
 
@@ -447,7 +452,7 @@ mod validation_test {
     fn parse_deal_request_rejects_invalid_user_id() {
         let actual = parse_deal_request(&DealRequest {
             user_id: "not-a-uuid".to_owned(),
-            deck_id: DECK.to_string(),
+            deck_ids: vec![DECK.to_string()],
             number_of_cards: 5,
         })
         .unwrap_err();
@@ -459,7 +464,7 @@ mod validation_test {
     fn parse_deal_request_rejects_invalid_deck_id() {
         let actual = parse_deal_request(&DealRequest {
             user_id: USER.to_string(),
-            deck_id: "not-a-uuid".to_owned(),
+            deck_ids: vec![DECK.to_string(), "not-a-uuid".to_owned()],
             number_of_cards: 5,
         })
         .unwrap_err();
@@ -471,12 +476,24 @@ mod validation_test {
     fn parse_deal_request_accepts_valid_ids() {
         let actual = parse_deal_request(&DealRequest {
             user_id: USER.to_string(),
-            deck_id: DECK.to_string(),
+            deck_ids: vec![DECK.to_string(), OTHER_DECK.to_string()],
             number_of_cards: 5,
         })
         .unwrap();
 
-        assert_eq!((USER, DECK), actual);
+        assert_eq!((USER, vec![DECK, OTHER_DECK]), actual);
+    }
+
+    #[test]
+    fn parse_deal_request_accepts_no_decks() {
+        let actual = parse_deal_request(&DealRequest {
+            user_id: USER.to_string(),
+            deck_ids: vec![],
+            number_of_cards: 5,
+        })
+        .unwrap();
+
+        assert_eq!((USER, vec![]), actual);
     }
 
     #[test]

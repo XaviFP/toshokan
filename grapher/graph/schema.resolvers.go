@@ -122,7 +122,7 @@ func (r *queryResolver) Cards(ctx context.Context, input model.CardsInput) ([]*m
 
 	res, err := r.DealerClient.Deal(ctx, &v1Dealer.DealRequest{
 		UserId:        r.getUserID(ctx),
-		DeckId:        input.DeckID,
+		DeckIds:       []string{input.DeckID},
 		NumberOfCards: uint32(maxCards),
 	})
 	if err != nil {
