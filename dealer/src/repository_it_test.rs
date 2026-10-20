@@ -379,6 +379,35 @@ async fn get_max_cards_per_level_picks_randomly_within_a_level() {
 }
 
 #[tokio::test]
+async fn get_max_cards_per_level_limits_each_level_and_orders_by_level() {
+    let (repo, _db_lock) = new_repository().await;
+    let card_c = uuid!("cccccccc-0000-0000-0000-000000000000");
+    let card_d = uuid!("dddddddd-0000-0000-0000-00000000000d");
+    repo.client
+        .execute(
+            "INSERT INTO cards (id, deck_id, title) VALUES ($1, $3, 'c'), ($2, $3, 'd')",
+            &[&card_c, &card_d, &DECK],
+        )
+        .await
+        .unwrap();
+    tokio::join!(
+        set_level(&repo, &USER, &CARD_A, 1),
+        set_level(&repo, &USER, &CARD_B, 1),
+        set_level(&repo, &USER, &card_c, 1),
+        set_level(&repo, &USER, &card_d, 3),
+    );
+
+    let actual = repo
+        .get_max_cards_per_level(&USER, &DECK, &2)
+        .await
+        .unwrap();
+
+    let actual_levels: Vec<usize> = actual.iter().map(|c| c.lvl).collect();
+    assert_eq!(vec![1, 1, 3], actual_levels);
+    assert_eq!(card_d.to_string(), actual[2].id);
+}
+
+#[tokio::test]
 async fn store_answers_correct_answer_refreshes_updated_at() {
     let (repo, _db_lock) = new_repository().await;
     repo.client
