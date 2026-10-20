@@ -285,6 +285,47 @@ async fn get_max_cards_per_level_uses_own_level() {
 }
 
 #[tokio::test]
+async fn get_max_cards_per_level_excludes_deleted_cards() {
+    let (repo, _db_lock) = new_repository().await;
+    tokio::join!(
+        set_level(&repo, &USER, &CARD_A, 2),
+        set_level(&repo, &USER, &CARD_B, 2),
+    );
+    repo.client
+        .execute("UPDATE cards SET deleted_at = now() WHERE id = $1", &[&CARD_B])
+        .await
+        .unwrap();
+
+    let actual = repo
+        .get_max_cards_per_level(&USER, &DECK, &10)
+        .await
+        .unwrap();
+
+    let ids: Vec<String> = actual.iter().map(|c| c.id.clone()).collect();
+    assert_eq!(vec![CARD_A.to_string()], ids);
+}
+
+#[tokio::test]
+async fn get_max_cards_per_level_excludes_cards_of_deleted_deck() {
+    let (repo, _db_lock) = new_repository().await;
+    tokio::join!(
+        set_level(&repo, &USER, &CARD_A, 2),
+        set_level(&repo, &USER, &CARD_B, 2),
+    );
+    repo.client
+        .execute("UPDATE decks SET deleted_at = now() WHERE id = $1", &[&DECK])
+        .await
+        .unwrap();
+
+    let actual = repo
+        .get_max_cards_per_level(&USER, &DECK, &10)
+        .await
+        .unwrap();
+
+    assert!(actual.is_empty());
+}
+
+#[tokio::test]
 async fn store_answers_correct_answer_refreshes_updated_at() {
     let (repo, _db_lock) = new_repository().await;
     repo.client
