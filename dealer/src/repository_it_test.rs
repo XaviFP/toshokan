@@ -257,6 +257,38 @@ async fn store_answers_unknown_answer_rolls_back_known_answers() {
 #[tokio::test]
 async fn get_max_cards_per_level_ignores_other_users_levels() {
     let (repo, _db_lock) = new_repository().await;
+    tokio::join!(
+        set_level(&repo, &USER, &CARD_A, 2),
+        set_level(&repo, &OTHER_USER, &CARD_A, 4),
+    );
+
+    let actual = repo
+        .get_max_cards_per_level(&USER, &DECK, &10)
+        .await
+        .unwrap();
+
+    assert_eq!(1, actual.len());
+    assert_eq!(CARD_A.to_string(), actual[0].id);
+    assert_eq!(2, actual[0].lvl);
+}
+
+#[tokio::test]
+async fn get_max_cards_per_level_excludes_never_answered_cards() {
+    let (repo, _db_lock) = new_repository().await;
+    set_level(&repo, &USER, &CARD_A, 2).await;
+
+    let actual = repo
+        .get_max_cards_per_level(&USER, &DECK, &10)
+        .await
+        .unwrap();
+
+    let ids: Vec<String> = actual.iter().map(|c| c.id.clone()).collect();
+    assert_eq!(vec![CARD_A.to_string()], ids);
+}
+
+#[tokio::test]
+async fn get_max_cards_per_level_excludes_cards_only_other_users_answered() {
+    let (repo, _db_lock) = new_repository().await;
     set_level(&repo, &OTHER_USER, &CARD_A, 4).await;
 
     let actual = repo
@@ -264,10 +296,7 @@ async fn get_max_cards_per_level_ignores_other_users_levels() {
         .await
         .unwrap();
 
-    let mut ids: Vec<String> = actual.iter().map(|c| c.id.clone()).collect();
-    ids.sort();
-    assert_eq!(vec![CARD_A.to_string(), CARD_B.to_string()], ids);
-    assert!(actual.iter().all(|c| c.lvl == 1));
+    assert!(actual.is_empty());
 }
 
 #[tokio::test]
@@ -323,6 +352,30 @@ async fn get_max_cards_per_level_excludes_cards_of_deleted_deck() {
         .unwrap();
 
     assert!(actual.is_empty());
+}
+
+#[tokio::test]
+async fn get_max_cards_per_level_picks_randomly_within_a_level() {
+    let (repo, _db_lock) = new_repository().await;
+    tokio::join!(
+        set_level(&repo, &USER, &CARD_A, 2),
+        set_level(&repo, &USER, &CARD_B, 2),
+    );
+
+    repo.client.execute("SELECT setseed(0.1)", &[]).await.unwrap();
+    let first = repo
+        .get_max_cards_per_level(&USER, &DECK, &1)
+        .await
+        .unwrap();
+    repo.client.execute("SELECT setseed(0.4)", &[]).await.unwrap();
+    let second = repo
+        .get_max_cards_per_level(&USER, &DECK, &1)
+        .await
+        .unwrap();
+
+    assert_eq!(1, first.len());
+    assert_eq!(1, second.len());
+    assert_ne!(first[0].id, second[0].id);
 }
 
 #[tokio::test]
