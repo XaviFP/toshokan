@@ -24,3 +24,4 @@ api/*.log
 api/.hypothesis
 api/.pytest_cache/
 api/*.har
+api/.schemathesis/

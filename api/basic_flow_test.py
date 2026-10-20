@@ -220,6 +220,7 @@ def make_deck_payload(title: str, card_count: int = 4) -> Dict[str, Any]:
 
 
 def create_deck(base_url: str, token: str, title: str) -> Dict[str, Any]:
+    # Every deck gets 4 cards, and the first answer of each card is the correct one.
     log_step(f"Creating deck: {title}")
     response = requests.post(
         f"{base_url}/decks",
@@ -1013,6 +1014,89 @@ def run_delete_deck_tests(base_url: str, token: str) -> None:
     log_step("✓ DeleteDeck tests passed")
 
 
+def get_review_response(base_url: str, token: str, params: Dict[str, Any]) -> requests.Response:
+    response = requests.get(
+        f"{base_url}/review",
+        params=params,
+        headers=auth_headers(token),
+        timeout=TIMEOUT,
+    )
+    log_response("GET /review", response)
+    return response
+
+
+def store_review_answers_response(base_url: str, token: str, answer_ids: List[str]) -> requests.Response:
+    response = requests.post(
+        f"{base_url}/review/answers",
+        json={"answer_ids": answer_ids},
+        headers=auth_headers(token),
+        timeout=TIMEOUT,
+    )
+    log_response("POST /review/answers", response)
+    return response
+
+
+def run_review_tests(base_url: str) -> None:
+    """Test GET /review and POST /review/answers with a user who has answered nothing yet."""
+    log_step("")
+    log_step("Testing review endpoints...")
+
+    token = create_user(base_url)["token"]
+    answered_deck = create_deck(base_url, token, "review-answered")
+    unanswered_deck = create_deck(base_url, token, "review-unanswered")
+
+    response = get_review_response(base_url, token, {})
+    assert response.status_code == 200, f"Expected 200, got {response.status_code}"
+    assert response.json()["cards"] == [], f"Expected no cards, got {response.json()}"
+    log_step("  ✓ Review before answering is empty - success")
+
+    # First answer is the correct one, see create_deck.
+    answer_ids = [card["possible_answers"][0]["id"] for card in answered_deck["cards"]]
+    response = store_review_answers_response(base_url, token, answer_ids)
+    assert response.status_code == 200, f"Expected 200, got {response.status_code}"
+    log_step("  ✓ Store review answers - success")
+
+    # 4 answered cards is fewer than the default max_cards, so every review returns all
+    # of them whatever their level. The dealer shuffles them, hence the sort.
+    expected = sorted(card["id"] for card in answered_deck["cards"])
+
+    response = get_review_response(base_url, token, {"deck_id": answered_deck["id"]})
+    assert response.status_code == 200, f"Expected 200, got {response.status_code}"
+    actual = sorted(card["id"] for card in response.json()["cards"])
+    assert actual == expected, f"Expected {expected}, got {actual}"
+    log_step("  ✓ Review of answered deck returns its cards - success")
+
+    response = get_review_response(base_url, token, {})
+    assert response.status_code == 200, f"Expected 200, got {response.status_code}"
+    actual = sorted(card["id"] for card in response.json()["cards"])
+    assert actual == expected, f"Expected {expected}, got {actual}"
+    log_step("  ✓ Review without scope returns all answered cards - success")
+
+    response = get_review_response(base_url, token, {"deck_id": unanswered_deck["id"]})
+    assert response.status_code == 200, f"Expected 200, got {response.status_code}"
+    assert response.json()["cards"] == [], f"Expected no cards, got {response.json()}"
+    log_step("  ✓ Review of unanswered deck is empty - success")
+
+    response = get_review_response(base_url, token, {"max_cards": 1})
+    assert response.status_code == 200, f"Expected 200, got {response.status_code}"
+    assert len(response.json()["cards"]) == 1, f"Expected 1 card, got {response.json()}"
+    log_step("  ✓ Review honours max_cards - success")
+
+    response = get_review_response(base_url, token, {"max_cards": 0})
+    assert response.status_code == 400, f"Expected 400, got {response.status_code}"
+    log_step("  ✓ Review with max_cards=0 returns 400 - success")
+
+    response = get_review_response(base_url, token, {"deck_id": "invalid-uuid"})
+    assert response.status_code == 400, f"Expected 400, got {response.status_code}"
+    log_step("  ✓ Review with invalid deck_id returns 400 - success")
+
+    response = store_review_answers_response(base_url, token, ["00000000-0000-0000-0000-000000000000"])
+    assert response.status_code == 404, f"Expected 404, got {response.status_code}"
+    log_step("  ✓ Store unknown answer returns 404 - success")
+
+    log_step("✓ Review tests passed")
+
+
 def run_update_course_tests(base_url: str, token: str, course_id: str) -> None:
     """Test PATCH /courses/{courseId} endpoint."""
     log_step("")
@@ -1700,6 +1784,8 @@ def test_basic_flow():
 
     # Test delete deck endpoint (creates its own deck)
     run_delete_deck_tests(base_url, token)
+
+    run_review_tests(base_url)
 
     log_step("")
     log_step("✅ Test passed!")
