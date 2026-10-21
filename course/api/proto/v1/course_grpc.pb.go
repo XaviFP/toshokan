@@ -33,8 +33,8 @@ const (
 	CourseAPI_UpdateCourse_FullMethodName        = "/course.v1.CourseAPI/UpdateCourse"
 	CourseAPI_UpdateLesson_FullMethodName        = "/course.v1.CourseAPI/UpdateLesson"
 	CourseAPI_SyncState_FullMethodName           = "/course.v1.CourseAPI/SyncState"
-	CourseAPI_GetCourseDeckIDs_FullMethodName    = "/course.v1.CourseAPI/GetCourseDeckIDs"
-	CourseAPI_GetLessonDeckIDs_FullMethodName    = "/course.v1.CourseAPI/GetLessonDeckIDs"
+	CourseAPI_GetCourseDeckIds_FullMethodName    = "/course.v1.CourseAPI/GetCourseDeckIds"
+	CourseAPI_GetLessonDeckIds_FullMethodName    = "/course.v1.CourseAPI/GetLessonDeckIds"
 	CourseAPI_GetStudentsProgress_FullMethodName = "/course.v1.CourseAPI/GetStudentsProgress"
 	CourseAPI_GetUserState_FullMethodName        = "/course.v1.CourseAPI/GetUserState"
 	CourseAPI_SetUserState_FullMethodName        = "/course.v1.CourseAPI/SetUserState"
@@ -59,8 +59,8 @@ type CourseAPIClient interface {
 	UpdateCourse(ctx context.Context, in *UpdateCourseRequest, opts ...grpc.CallOption) (*UpdateCourseResponse, error)
 	UpdateLesson(ctx context.Context, in *UpdateLessonRequest, opts ...grpc.CallOption) (*UpdateLessonResponse, error)
 	SyncState(ctx context.Context, in *SyncStateRequest, opts ...grpc.CallOption) (*SyncStateResponse, error)
-	GetCourseDeckIDs(ctx context.Context, in *GetCourseDeckIDsRequest, opts ...grpc.CallOption) (*GetCourseDeckIDsResponse, error)
-	GetLessonDeckIDs(ctx context.Context, in *GetLessonDeckIDsRequest, opts ...grpc.CallOption) (*GetLessonDeckIDsResponse, error)
+	GetCourseDeckIds(ctx context.Context, in *GetCourseDeckIdsRequest, opts ...grpc.CallOption) (*GetCourseDeckIdsResponse, error)
+	GetLessonDeckIds(ctx context.Context, in *GetLessonDeckIdsRequest, opts ...grpc.CallOption) (*GetLessonDeckIdsResponse, error)
 	// Backoffice endpoints
 	GetStudentsProgress(ctx context.Context, in *GetStudentsProgressRequest, opts ...grpc.CallOption) (*GetStudentsProgressResponse, error)
 	GetUserState(ctx context.Context, in *GetUserStateRequest, opts ...grpc.CallOption) (*GetUserStateResponse, error)
@@ -216,20 +216,20 @@ func (c *courseAPIClient) SyncState(ctx context.Context, in *SyncStateRequest, o
 	return out, nil
 }
 
-func (c *courseAPIClient) GetCourseDeckIDs(ctx context.Context, in *GetCourseDeckIDsRequest, opts ...grpc.CallOption) (*GetCourseDeckIDsResponse, error) {
+func (c *courseAPIClient) GetCourseDeckIds(ctx context.Context, in *GetCourseDeckIdsRequest, opts ...grpc.CallOption) (*GetCourseDeckIdsResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(GetCourseDeckIDsResponse)
-	err := c.cc.Invoke(ctx, CourseAPI_GetCourseDeckIDs_FullMethodName, in, out, cOpts...)
+	out := new(GetCourseDeckIdsResponse)
+	err := c.cc.Invoke(ctx, CourseAPI_GetCourseDeckIds_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
 	return out, nil
 }
 
-func (c *courseAPIClient) GetLessonDeckIDs(ctx context.Context, in *GetLessonDeckIDsRequest, opts ...grpc.CallOption) (*GetLessonDeckIDsResponse, error) {
+func (c *courseAPIClient) GetLessonDeckIds(ctx context.Context, in *GetLessonDeckIdsRequest, opts ...grpc.CallOption) (*GetLessonDeckIdsResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(GetLessonDeckIDsResponse)
-	err := c.cc.Invoke(ctx, CourseAPI_GetLessonDeckIDs_FullMethodName, in, out, cOpts...)
+	out := new(GetLessonDeckIdsResponse)
+	err := c.cc.Invoke(ctx, CourseAPI_GetLessonDeckIds_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -294,8 +294,8 @@ type CourseAPIServer interface {
 	UpdateCourse(context.Context, *UpdateCourseRequest) (*UpdateCourseResponse, error)
 	UpdateLesson(context.Context, *UpdateLessonRequest) (*UpdateLessonResponse, error)
 	SyncState(context.Context, *SyncStateRequest) (*SyncStateResponse, error)
-	GetCourseDeckIDs(context.Context, *GetCourseDeckIDsRequest) (*GetCourseDeckIDsResponse, error)
-	GetLessonDeckIDs(context.Context, *GetLessonDeckIDsRequest) (*GetLessonDeckIDsResponse, error)
+	GetCourseDeckIds(context.Context, *GetCourseDeckIdsRequest) (*GetCourseDeckIdsResponse, error)
+	GetLessonDeckIds(context.Context, *GetLessonDeckIdsRequest) (*GetLessonDeckIdsResponse, error)
 	// Backoffice endpoints
 	GetStudentsProgress(context.Context, *GetStudentsProgressRequest) (*GetStudentsProgressResponse, error)
 	GetUserState(context.Context, *GetUserStateRequest) (*GetUserStateResponse, error)
@@ -352,11 +352,11 @@ func (UnimplementedCourseAPIServer) UpdateLesson(context.Context, *UpdateLessonR
 func (UnimplementedCourseAPIServer) SyncState(context.Context, *SyncStateRequest) (*SyncStateResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method SyncState not implemented")
 }
-func (UnimplementedCourseAPIServer) GetCourseDeckIDs(context.Context, *GetCourseDeckIDsRequest) (*GetCourseDeckIDsResponse, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method GetCourseDeckIDs not implemented")
+func (UnimplementedCourseAPIServer) GetCourseDeckIds(context.Context, *GetCourseDeckIdsRequest) (*GetCourseDeckIdsResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method GetCourseDeckIds not implemented")
 }
-func (UnimplementedCourseAPIServer) GetLessonDeckIDs(context.Context, *GetLessonDeckIDsRequest) (*GetLessonDeckIDsResponse, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method GetLessonDeckIDs not implemented")
+func (UnimplementedCourseAPIServer) GetLessonDeckIds(context.Context, *GetLessonDeckIdsRequest) (*GetLessonDeckIdsResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method GetLessonDeckIds not implemented")
 }
 func (UnimplementedCourseAPIServer) GetStudentsProgress(context.Context, *GetStudentsProgressRequest) (*GetStudentsProgressResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method GetStudentsProgress not implemented")
@@ -642,38 +642,38 @@ func _CourseAPI_SyncState_Handler(srv interface{}, ctx context.Context, dec func
 	return interceptor(ctx, in, info, handler)
 }
 
-func _CourseAPI_GetCourseDeckIDs_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(GetCourseDeckIDsRequest)
+func _CourseAPI_GetCourseDeckIds_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetCourseDeckIdsRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(CourseAPIServer).GetCourseDeckIDs(ctx, in)
+		return srv.(CourseAPIServer).GetCourseDeckIds(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: CourseAPI_GetCourseDeckIDs_FullMethodName,
+		FullMethod: CourseAPI_GetCourseDeckIds_FullMethodName,
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(CourseAPIServer).GetCourseDeckIDs(ctx, req.(*GetCourseDeckIDsRequest))
+		return srv.(CourseAPIServer).GetCourseDeckIds(ctx, req.(*GetCourseDeckIdsRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-func _CourseAPI_GetLessonDeckIDs_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(GetLessonDeckIDsRequest)
+func _CourseAPI_GetLessonDeckIds_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetLessonDeckIdsRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(CourseAPIServer).GetLessonDeckIDs(ctx, in)
+		return srv.(CourseAPIServer).GetLessonDeckIds(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: CourseAPI_GetLessonDeckIDs_FullMethodName,
+		FullMethod: CourseAPI_GetLessonDeckIds_FullMethodName,
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(CourseAPIServer).GetLessonDeckIDs(ctx, req.(*GetLessonDeckIDsRequest))
+		return srv.(CourseAPIServer).GetLessonDeckIds(ctx, req.(*GetLessonDeckIdsRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -814,12 +814,12 @@ var CourseAPI_ServiceDesc = grpc.ServiceDesc{
 			Handler:    _CourseAPI_SyncState_Handler,
 		},
 		{
-			MethodName: "GetCourseDeckIDs",
-			Handler:    _CourseAPI_GetCourseDeckIDs_Handler,
+			MethodName: "GetCourseDeckIds",
+			Handler:    _CourseAPI_GetCourseDeckIds_Handler,
 		},
 		{
-			MethodName: "GetLessonDeckIDs",
-			Handler:    _CourseAPI_GetLessonDeckIDs_Handler,
+			MethodName: "GetLessonDeckIds",
+			Handler:    _CourseAPI_GetLessonDeckIds_Handler,
 		},
 		{
 			MethodName: "GetStudentsProgress",

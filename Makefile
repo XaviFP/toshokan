@@ -58,7 +58,7 @@ test-dealer:
 		-v toshokan-dealer-cargo-registry:/usr/local/cargo/registry \
 		-v toshokan-dealer-target:/target -e CARGO_TARGET_DIR=/target \
 		rust:1.85-bookworm \
-		sh -c "apt-get update -qq && apt-get install -y -qq protobuf-compiler > /dev/null && cargo test"
+		sh -c "apt-get update -qq && apt-get install -y -qq protobuf-compiler libprotobuf-dev > /dev/null && cargo test"
 
 # Generate coverage report (requires test to have run first)
 coverage: test

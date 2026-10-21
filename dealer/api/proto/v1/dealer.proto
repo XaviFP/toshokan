@@ -12,9 +12,12 @@ service Dealer {
 
 message DealRequest {
     string user_id = 1;
-    // Empty means all of the user's answered cards, across every deck.
+    // Set at most one of deck_ids, course_id and lesson_id. None means all of the user's
+    // answered cards, across every deck.
     repeated string deck_ids = 2;
     uint32 number_of_cards = 3;
+    string course_id = 4;
+    string lesson_id = 5;
 }
 
 message DealResponse {

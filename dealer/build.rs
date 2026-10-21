@@ -6,5 +6,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                  &["api/proto/v1/dealer.proto"],
                  &["api/proto/v1/"],
              )?;
+        tonic_build::configure()
+             .build_server(false)
+             .out_dir("api/proto/v1")
+             .compile(
+                 &["../course/api/proto/v1/course.proto"],
+                 &["../course/api/proto/v1/"],
+             )?;
         Ok(())
 }

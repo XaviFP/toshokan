@@ -3,12 +3,12 @@ use std::path::{Path, PathBuf};
 use tokio::sync::{Mutex, MutexGuard};
 use tokio_postgres::error::SqlState;
 use tokio_postgres::NoTls;
-use tonic::{Code, Request};
+use tonic::{Code, Request, Status};
 use uuid::{uuid, Uuid};
 
 use super::pb::dealer_server::Dealer as _;
-use super::pb::{ReviewAnswersRequest, StoreAnswersRequest};
-use super::{Dealer, Repository};
+use super::pb::{DealRequest, ReviewAnswersRequest, StoreAnswersRequest};
+use super::{CourseDecks, Dealer, Repository};
 
 const USER: Uuid = uuid!("11111111-0000-0000-0000-000000000000");
 const OTHER_USER: Uuid = uuid!("22222222-0000-0000-0000-000000000000");
@@ -31,6 +31,31 @@ fn deck_migrations() -> Vec<String> {
         name.split('_').next().unwrap().parse::<u32>().unwrap()
     });
     files.iter().map(|path| std::fs::read_to_string(path).unwrap()).collect()
+}
+
+// Fake course service: returns the preset deck lists, or `error` when set.
+#[derive(Default)]
+struct FakeCourses {
+    course_decks: Vec<Uuid>,
+    lesson_decks: Vec<Uuid>,
+    error: Option<Code>,
+}
+
+#[tonic::async_trait]
+impl CourseDecks for FakeCourses {
+    async fn course_deck_ids(&self, _course_id: &Uuid) -> Result<Vec<Uuid>, Status> {
+        match self.error {
+            Some(code) => Err(Status::new(code, "fake course service error")),
+            None => Ok(self.course_decks.clone()),
+        }
+    }
+
+    async fn lesson_deck_ids(&self, _lesson_id: &Uuid) -> Result<Vec<Uuid>, Status> {
+        match self.error {
+            Some(code) => Err(Status::new(code, "fake course service error")),
+            None => Ok(self.lesson_decks.clone()),
+        }
+    }
 }
 
 static DB_LOCK: Mutex<()> = Mutex::const_new(());
@@ -598,7 +623,10 @@ async fn store_answers_rejects_answer_without_card() {
         )
         .await
         .unwrap();
-    let dealer = Dealer { repo };
+    let dealer = Dealer {
+        repo,
+        courses: Box::new(FakeCourses::default()),
+    };
 
     let actual = dealer
         .store_answers(Request::new(StoreAnswersRequest {
@@ -614,7 +642,10 @@ async fn store_answers_rejects_answer_without_card() {
 #[tokio::test]
 async fn store_answers_rejects_unknown_answer_id() {
     let (repo, _db_lock) = new_repository().await;
-    let dealer = Dealer { repo };
+    let dealer = Dealer {
+        repo,
+        courses: Box::new(FakeCourses::default()),
+    };
 
     let actual = dealer
         .store_answers(Request::new(StoreAnswersRequest {
@@ -631,7 +662,10 @@ async fn store_answers_rejects_unknown_answer_id() {
 async fn review_answers_correct_answer_raises_level_of_card_in_pool() {
     let (repo, _db_lock) = new_repository().await;
     set_level(&repo, &USER, &CARD_A, 2).await;
-    let dealer = Dealer { repo };
+    let dealer = Dealer {
+        repo,
+        courses: Box::new(FakeCourses::default()),
+    };
 
     dealer
         .review_answers(Request::new(ReviewAnswersRequest {
@@ -648,7 +682,10 @@ async fn review_answers_correct_answer_raises_level_of_card_in_pool() {
 async fn review_answers_wrong_answer_lowers_level_of_card_in_pool() {
     let (repo, _db_lock) = new_repository().await;
     set_level(&repo, &USER, &CARD_A, 3).await;
-    let dealer = Dealer { repo };
+    let dealer = Dealer {
+        repo,
+        courses: Box::new(FakeCourses::default()),
+    };
 
     dealer
         .review_answers(Request::new(ReviewAnswersRequest {
@@ -664,7 +701,10 @@ async fn review_answers_wrong_answer_lowers_level_of_card_in_pool() {
 #[tokio::test]
 async fn review_answers_rejects_card_outside_pool_and_writes_nothing() {
     let (repo, _db_lock) = new_repository().await;
-    let dealer = Dealer { repo };
+    let dealer = Dealer {
+        repo,
+        courses: Box::new(FakeCourses::default()),
+    };
 
     let actual = dealer
         .review_answers(Request::new(ReviewAnswersRequest {
@@ -697,7 +737,10 @@ async fn review_answers_rejects_card_outside_pool_and_writes_nothing() {
 async fn review_answers_rejects_whole_batch_when_one_card_is_outside_pool() {
     let (repo, _db_lock) = new_repository().await;
     set_level(&repo, &USER, &CARD_A, 2).await;
-    let dealer = Dealer { repo };
+    let dealer = Dealer {
+        repo,
+        courses: Box::new(FakeCourses::default()),
+    };
 
     let actual = dealer
         .review_answers(Request::new(ReviewAnswersRequest {
@@ -731,7 +774,10 @@ async fn review_answers_rejects_whole_batch_when_one_card_is_outside_pool() {
 async fn review_answers_rejects_card_only_in_another_users_pool() {
     let (repo, _db_lock) = new_repository().await;
     set_level(&repo, &OTHER_USER, &CARD_A, 2).await;
-    let dealer = Dealer { repo };
+    let dealer = Dealer {
+        repo,
+        courses: Box::new(FakeCourses::default()),
+    };
 
     let actual = dealer
         .review_answers(Request::new(ReviewAnswersRequest {
@@ -748,7 +794,10 @@ async fn review_answers_rejects_card_only_in_another_users_pool() {
 #[tokio::test]
 async fn review_answers_rejects_unknown_answer_id() {
     let (repo, _db_lock) = new_repository().await;
-    let dealer = Dealer { repo };
+    let dealer = Dealer {
+        repo,
+        courses: Box::new(FakeCourses::default()),
+    };
 
     let actual = dealer
         .review_answers(Request::new(ReviewAnswersRequest {
@@ -759,4 +808,210 @@ async fn review_answers_rejects_unknown_answer_id() {
         .unwrap_err();
 
     assert_eq!(Code::InvalidArgument, actual.code());
+}
+
+#[tokio::test]
+async fn deal_course_scope_deals_only_from_the_course_decks() {
+    let (repo, _db_lock) = new_repository().await;
+    let course_deck = uuid!("eeeeeeee-0000-0000-0000-000000000000");
+    let course_card = uuid!("eeeeeeee-0000-0000-0000-00000000000e");
+    repo.client
+        .execute(
+            "INSERT INTO decks (id, author_id, title, description) VALUES ($1, $2, 'course', 'course')",
+            &[&course_deck, &USER],
+        )
+        .await
+        .unwrap();
+    repo.client
+        .execute(
+            "INSERT INTO cards (id, deck_id, title) VALUES ($1, $2, 'course card')",
+            &[&course_card, &course_deck],
+        )
+        .await
+        .unwrap();
+    // CARD_A is answered too but its deck isn't in the course, so it must not be dealt.
+    tokio::join!(
+        set_level(&repo, &USER, &CARD_A, 2),
+        set_level(&repo, &USER, &course_card, 2),
+    );
+    let dealer = Dealer {
+        repo,
+        courses: Box::new(FakeCourses {
+            course_decks: vec![course_deck],
+            ..Default::default()
+        }),
+    };
+
+    let actual = dealer
+        .deal(Request::new(DealRequest {
+            user_id: USER.to_string(),
+            course_id: uuid!("c0c0c0c0-0000-0000-0000-000000000000").to_string(),
+            number_of_cards: 10,
+            ..Default::default()
+        }))
+        .await
+        .unwrap();
+
+    assert_eq!(vec![course_card.to_string()], actual.get_ref().card_ids);
+}
+
+#[tokio::test]
+async fn deal_lesson_scope_deals_only_from_the_lesson_decks() {
+    let (repo, _db_lock) = new_repository().await;
+    let outside_deck = uuid!("eeeeeeee-0000-0000-0000-000000000000");
+    let outside_card = uuid!("eeeeeeee-0000-0000-0000-00000000000e");
+    repo.client
+        .execute(
+            "INSERT INTO decks (id, author_id, title, description) VALUES ($1, $2, 'outside', 'outside')",
+            &[&outside_deck, &USER],
+        )
+        .await
+        .unwrap();
+    repo.client
+        .execute(
+            "INSERT INTO cards (id, deck_id, title) VALUES ($1, $2, 'outside card')",
+            &[&outside_card, &outside_deck],
+        )
+        .await
+        .unwrap();
+    // The lesson only has DECK; outside_card is answered too but must not be dealt.
+    tokio::join!(
+        set_level(&repo, &USER, &CARD_A, 2),
+        set_level(&repo, &USER, &outside_card, 2),
+    );
+    let dealer = Dealer {
+        repo,
+        courses: Box::new(FakeCourses {
+            lesson_decks: vec![DECK],
+            ..Default::default()
+        }),
+    };
+
+    let actual = dealer
+        .deal(Request::new(DealRequest {
+            user_id: USER.to_string(),
+            lesson_id: uuid!("1e1e1e1e-0000-0000-0000-000000000000").to_string(),
+            number_of_cards: 10,
+            ..Default::default()
+        }))
+        .await
+        .unwrap();
+
+    assert_eq!(vec![CARD_A.to_string()], actual.get_ref().card_ids);
+}
+
+#[tokio::test]
+async fn deal_course_without_decks_deals_nothing() {
+    let (repo, _db_lock) = new_repository().await;
+    set_level(&repo, &USER, &CARD_A, 2).await;
+    let dealer = Dealer {
+        repo,
+        courses: Box::new(FakeCourses::default()),
+    };
+
+    let actual = dealer
+        .deal(Request::new(DealRequest {
+            user_id: USER.to_string(),
+            course_id: uuid!("c0c0c0c0-0000-0000-0000-000000000000").to_string(),
+            number_of_cards: 10,
+            ..Default::default()
+        }))
+        .await
+        .unwrap();
+
+    assert!(actual.get_ref().card_ids.is_empty());
+}
+
+#[tokio::test]
+async fn deal_lesson_without_decks_deals_nothing() {
+    let (repo, _db_lock) = new_repository().await;
+    set_level(&repo, &USER, &CARD_A, 2).await;
+    let dealer = Dealer {
+        repo,
+        courses: Box::new(FakeCourses::default()),
+    };
+
+    let actual = dealer
+        .deal(Request::new(DealRequest {
+            user_id: USER.to_string(),
+            lesson_id: uuid!("1e1e1e1e-0000-0000-0000-000000000000").to_string(),
+            number_of_cards: 10,
+            ..Default::default()
+        }))
+        .await
+        .unwrap();
+
+    assert!(actual.get_ref().card_ids.is_empty());
+}
+
+#[tokio::test]
+async fn deal_unknown_course_is_not_found() {
+    let (repo, _db_lock) = new_repository().await;
+    let dealer = Dealer {
+        repo,
+        courses: Box::new(FakeCourses {
+            error: Some(Code::NotFound),
+            ..Default::default()
+        }),
+    };
+
+    let actual = dealer
+        .deal(Request::new(DealRequest {
+            user_id: USER.to_string(),
+            course_id: uuid!("c0c0c0c0-0000-0000-0000-000000000000").to_string(),
+            number_of_cards: 10,
+            ..Default::default()
+        }))
+        .await
+        .unwrap_err();
+
+    assert_eq!(Code::NotFound, actual.code());
+}
+
+#[tokio::test]
+async fn deal_course_invalid_argument_is_returned_unchanged() {
+    let (repo, _db_lock) = new_repository().await;
+    let dealer = Dealer {
+        repo,
+        courses: Box::new(FakeCourses {
+            error: Some(Code::InvalidArgument),
+            ..Default::default()
+        }),
+    };
+
+    let actual = dealer
+        .deal(Request::new(DealRequest {
+            user_id: USER.to_string(),
+            course_id: uuid!("c0c0c0c0-0000-0000-0000-000000000000").to_string(),
+            number_of_cards: 10,
+            ..Default::default()
+        }))
+        .await
+        .unwrap_err();
+
+    assert_eq!(Code::InvalidArgument, actual.code());
+}
+
+#[tokio::test]
+async fn deal_course_service_failure_is_internal() {
+    let (repo, _db_lock) = new_repository().await;
+    let dealer = Dealer {
+        repo,
+        courses: Box::new(FakeCourses {
+            error: Some(Code::Unavailable),
+            ..Default::default()
+        }),
+    };
+
+    let actual = dealer
+        .deal(Request::new(DealRequest {
+            user_id: USER.to_string(),
+            course_id: uuid!("c0c0c0c0-0000-0000-0000-000000000000").to_string(),
+            number_of_cards: 10,
+            ..Default::default()
+        }))
+        .await
+        .unwrap_err();
+
+    assert_eq!(Code::Internal, actual.code());
 }

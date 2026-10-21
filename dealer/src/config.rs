@@ -18,6 +18,17 @@ impl fmt::Display for DBConfig {
     }
 }
 
+pub struct CourseServiceConfig {
+    pub host: String,
+    pub port: String,
+}
+
+impl fmt::Display for CourseServiceConfig {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "http://{}:{}", self.host, self.port)
+    }
+}
+
 pub struct GRPCServerConfig {
     pub host: String,
     pub port: String,
@@ -107,6 +118,38 @@ pub fn load_grpc_server_config() -> Result<GRPCServerConfig, String> {
         return Err(format!(
             "missing environment variable: {}",
             GRPC_SERVER_PORT
+        ));
+    }
+
+    config.port = port.unwrap();
+
+    Ok(config)
+}
+
+const COURSE_GRPC_SERVER_HOST: &str = "COURSE_GRPC_SERVER_HOST";
+const COURSE_GRPC_SERVER_PORT: &str = "COURSE_GRPC_SERVER_PORT";
+
+pub fn load_course_service_config() -> Result<CourseServiceConfig, String> {
+    let mut config = CourseServiceConfig {
+        host: "".to_owned(),
+        port: "".to_owned(),
+    };
+
+    let host = env::var(COURSE_GRPC_SERVER_HOST);
+    if host.is_err() {
+        return Err(format!(
+            "missing environment variable: {}",
+            COURSE_GRPC_SERVER_HOST
+        ));
+    }
+
+    config.host = host.unwrap();
+
+    let port = env::var(COURSE_GRPC_SERVER_PORT);
+    if port.is_err() {
+        return Err(format!(
+            "missing environment variable: {}",
+            COURSE_GRPC_SERVER_PORT
         ));
     }
 

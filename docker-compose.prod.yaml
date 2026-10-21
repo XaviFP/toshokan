@@ -145,7 +145,8 @@ services:
 
   dealer:
     build:
-      context: dealer/
+      context: .
+      dockerfile: dealer/Dockerfile
     depends_on:
       db:
         condition: service_healthy

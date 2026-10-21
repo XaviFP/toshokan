@@ -74,8 +74,8 @@ target "gate" {
 # Rust Service - has its own proto generation via tonic-build
 # -----------------------------------------------------------------------------
 target "dealer" {
-  dockerfile = "Dockerfile"
-  context    = "dealer/"
+  dockerfile = "dealer/Dockerfile"
+  context    = "."
   tags       = ["${REGISTRY}toshokan-dealer:${TAG}"]
 }
 

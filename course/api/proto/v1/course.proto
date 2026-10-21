@@ -20,8 +20,8 @@ service CourseAPI {
   rpc UpdateCourse (UpdateCourseRequest) returns (UpdateCourseResponse) {}
   rpc UpdateLesson (UpdateLessonRequest) returns (UpdateLessonResponse) {}
   rpc SyncState (SyncStateRequest) returns (SyncStateResponse) {}
-  rpc GetCourseDeckIDs (GetCourseDeckIDsRequest) returns (GetCourseDeckIDsResponse) {}
-  rpc GetLessonDeckIDs (GetLessonDeckIDsRequest) returns (GetLessonDeckIDsResponse) {}
+  rpc GetCourseDeckIds (GetCourseDeckIdsRequest) returns (GetCourseDeckIdsResponse) {}
+  rpc GetLessonDeckIds (GetLessonDeckIdsRequest) returns (GetLessonDeckIdsResponse) {}
   
   // Backoffice endpoints
   rpc GetStudentsProgress (GetStudentsProgressRequest) returns (GetStudentsProgressResponse) {}
@@ -134,19 +134,19 @@ message GetLessonResponse {
   Lesson lesson = 1;
 }
 
-message GetCourseDeckIDsRequest {
+message GetCourseDeckIdsRequest {
   string course_id = 1;
 }
 
-message GetCourseDeckIDsResponse {
+message GetCourseDeckIdsResponse {
   repeated string deck_ids = 1;
 }
 
-message GetLessonDeckIDsRequest {
+message GetLessonDeckIdsRequest {
   string lesson_id = 1;
 }
 
-message GetLessonDeckIDsResponse {
+message GetLessonDeckIdsResponse {
   repeated string deck_ids = 1;
 }
 

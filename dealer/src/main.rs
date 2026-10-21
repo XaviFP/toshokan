@@ -1,16 +1,24 @@
 use std::collections::HashMap;
+use std::time::Duration;
 
 use tokio::signal::unix::{signal, SignalKind};
 use tokio_postgres::error::SqlState;
 use tokio_postgres::NoTls;
 use tokio_util::sync::CancellationToken;
-use tonic::{transport::Server, Request, Response, Status};
+use tonic::transport::{Channel, Endpoint, Server};
+use tonic::{Code, Request, Response, Status};
 use uuid::Uuid;
 
 mod pb {
     include!("../api/proto/v1/v1.rs");
 }
 
+mod course_pb {
+    include!("../api/proto/v1/course.v1.rs");
+}
+
+use course_pb::course_api_client::CourseApiClient;
+use course_pb::{GetCourseDeckIdsRequest, GetLessonDeckIdsRequest};
 use pb::dealer_server::{Dealer as pbDealer, DealerServer};
 use pb::{
     DealRequest, DealResponse, ReviewAnswersRequest, ReviewAnswersResponse, StoreAnswersRequest,
@@ -18,7 +26,7 @@ use pb::{
 };
 
 mod config;
-use config::{load_db_config, load_grpc_server_config};
+use config::{load_course_service_config, load_db_config, load_grpc_server_config};
 
 mod ranker;
 use ranker::Ranker;
@@ -32,8 +40,48 @@ const LEVEL3_PERCENTATGE: usize = 15; //2
 const LEVEL4_PERCENTATGE: usize = 15; //2
 const LEVEL5_PERCENTATGE: usize = 10; //1
 
+const COURSE_SERVICE_TIMEOUT: Duration = Duration::from_secs(5);
+
 struct Dealer {
     repo: Repository,
+    courses: Box<dyn CourseDecks>,
+}
+
+// Looks up which decks belong to a course or lesson, in the course service.
+#[tonic::async_trait]
+trait CourseDecks: Send + Sync + 'static {
+    async fn course_deck_ids(&self, course_id: &Uuid) -> Result<Vec<Uuid>, Status>;
+    async fn lesson_deck_ids(&self, lesson_id: &Uuid) -> Result<Vec<Uuid>, Status>;
+}
+
+#[tonic::async_trait]
+impl CourseDecks for CourseApiClient<Channel> {
+    async fn course_deck_ids(&self, course_id: &Uuid) -> Result<Vec<Uuid>, Status> {
+        let response = self
+            .clone()
+            .get_course_deck_ids(GetCourseDeckIdsRequest {
+                course_id: course_id.to_string(),
+            })
+            .await?;
+        parse_deck_ids(&response.get_ref().deck_ids)
+    }
+
+    async fn lesson_deck_ids(&self, lesson_id: &Uuid) -> Result<Vec<Uuid>, Status> {
+        let response = self
+            .clone()
+            .get_lesson_deck_ids(GetLessonDeckIdsRequest {
+                lesson_id: lesson_id.to_string(),
+            })
+            .await?;
+        parse_deck_ids(&response.get_ref().deck_ids)
+    }
+}
+
+fn parse_deck_ids(deck_ids: &[String]) -> Result<Vec<Uuid>, Status> {
+    deck_ids
+        .iter()
+        .map(|id| Uuid::try_parse(id).map_err(|_| Status::internal("invalid deck_id from course service")))
+        .collect()
 }
 struct Repository {
     client: tokio_postgres::Client,
@@ -147,6 +195,14 @@ impl Repository {
     }
 }
 
+#[derive(Debug, PartialEq)]
+enum Scope {
+    All,
+    Decks(Vec<Uuid>),
+    Course(Uuid),
+    Lesson(Uuid),
+}
+
 struct LeveledCard {
     id: String,
     lvl: usize,
@@ -169,20 +225,55 @@ fn parse_answers_request(user_id: &str, answer_ids: &[String]) -> Result<(Uuid, 
     Ok((user_id, answer_ids))
 }
 
-fn parse_deal_request(request: &DealRequest) -> Result<(Uuid, Vec<Uuid>), Status> {
+fn parse_deal_request(request: &DealRequest) -> Result<(Uuid, Scope), Status> {
     let user_id = parse_uuid("user_id", &request.user_id)?;
+    let scopes_set = [
+        !request.deck_ids.is_empty(),
+        !request.course_id.is_empty(),
+        !request.lesson_id.is_empty(),
+    ]
+    .iter()
+    .filter(|set| **set)
+    .count();
+    if scopes_set > 1 {
+        return Err(Status::invalid_argument(
+            "set at most one of deck_ids, course_id and lesson_id",
+        ));
+    }
+
+    if !request.course_id.is_empty() {
+        return Ok((user_id, Scope::Course(parse_uuid("course_id", &request.course_id)?)));
+    }
+    if !request.lesson_id.is_empty() {
+        return Ok((user_id, Scope::Lesson(parse_uuid("lesson_id", &request.lesson_id)?)));
+    }
+    if request.deck_ids.is_empty() {
+        return Ok((user_id, Scope::All));
+    }
+
     let deck_ids = request
         .deck_ids
         .iter()
         .map(|id| parse_uuid("deck_id", id))
         .collect::<Result<Vec<Uuid>, Status>>()?;
 
-    Ok((user_id, deck_ids))
+    Ok((user_id, Scope::Decks(deck_ids)))
 }
 
 fn internal_error(operation: &str, err: tokio_postgres::Error) -> Status {
     eprintln!("{} failed: {}", operation, err);
     Status::internal(format!("{} failed", operation))
+}
+
+// Not found and invalid argument are the caller's mistake, so they pass through as is.
+fn course_service_error(err: Status) -> Status {
+    match err.code() {
+        Code::NotFound | Code::InvalidArgument => err,
+        _ => {
+            eprintln!("course service lookup failed: {}", err);
+            Status::internal("course service lookup failed")
+        }
+    }
 }
 
 fn is_null_card_id(err: &tokio_postgres::Error) -> bool {
@@ -237,7 +328,26 @@ impl pbDealer for Dealer {
     }
 
     async fn deal(&self, request: Request<DealRequest>) -> Result<Response<DealResponse>, Status> {
-        let (user_id, deck_ids) = parse_deal_request(request.get_ref())?;
+        let (user_id, scope) = parse_deal_request(request.get_ref())?;
+        let whole_pool = scope == Scope::All;
+        let deck_ids = match scope {
+            Scope::All => vec![],
+            Scope::Decks(deck_ids) => deck_ids,
+            Scope::Course(course_id) => self
+                .courses
+                .course_deck_ids(&course_id)
+                .await
+                .map_err(course_service_error)?,
+            Scope::Lesson(lesson_id) => self
+                .courses
+                .lesson_deck_ids(&lesson_id)
+                .await
+                .map_err(course_service_error)?,
+        };
+        // A course or lesson without decks deals nothing; an empty list would mean every deck to the query.
+        if deck_ids.is_empty() && !whole_pool {
+            return Ok(Response::new(DealResponse { card_ids: vec![] }));
+        }
         let max = i64::from(request.get_ref().number_of_cards);
         let level_cards = self
             .repo
@@ -313,8 +423,18 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let addr = grpc_config.unwrap().to_string().parse()?;
     println!("Starting Dealer gRPC server on: {}", addr);
 
+    let course_config = load_course_service_config();
+    if course_config.is_err() {
+        panic!("{}", course_config.err().unwrap());
+    }
+    // Lazy, so dealer starts even when the course service isn't up yet.
+    let course_channel = Endpoint::from_shared(course_config.unwrap().to_string())?
+        .timeout(COURSE_SERVICE_TIMEOUT)
+        .connect_lazy();
+
     let dealer = Dealer {
         repo: Repository { client },
+        courses: Box::new(CourseApiClient::new(course_channel)),
     };
 
     Server::builder()
@@ -491,11 +611,13 @@ mod validation_test {
     use uuid::{uuid, Uuid};
 
     use super::pb::DealRequest;
-    use super::{parse_answers_request, parse_deal_request};
+    use super::{parse_answers_request, parse_deal_request, Scope};
 
     const USER: Uuid = uuid!("11111111-0000-0000-0000-000000000000");
     const DECK: Uuid = uuid!("dddddddd-0000-0000-0000-000000000000");
     const OTHER_DECK: Uuid = uuid!("eeeeeeee-0000-0000-0000-000000000000");
+    const COURSE: Uuid = uuid!("c0c0c0c0-0000-0000-0000-000000000000");
+    const LESSON: Uuid = uuid!("1e1e1e1e-0000-0000-0000-000000000000");
     const ANSWER_A_CORRECT: Uuid = uuid!("aaaaaaaa-0000-0000-0000-00000000000c");
     const ANSWER_B_CORRECT: Uuid = uuid!("bbbbbbbb-0000-0000-0000-00000000000c");
 
@@ -505,6 +627,7 @@ mod validation_test {
             user_id: "not-a-uuid".to_owned(),
             deck_ids: vec![DECK.to_string()],
             number_of_cards: 5,
+            ..Default::default()
         })
         .unwrap_err();
 
@@ -517,6 +640,7 @@ mod validation_test {
             user_id: USER.to_string(),
             deck_ids: vec![DECK.to_string(), "not-a-uuid".to_owned()],
             number_of_cards: 5,
+            ..Default::default()
         })
         .unwrap_err();
 
@@ -524,27 +648,108 @@ mod validation_test {
     }
 
     #[test]
-    fn parse_deal_request_accepts_valid_ids() {
+    fn parse_deal_request_rejects_invalid_course_id() {
+        let actual = parse_deal_request(&DealRequest {
+            user_id: USER.to_string(),
+            course_id: "not-a-uuid".to_owned(),
+            number_of_cards: 5,
+            ..Default::default()
+        })
+        .unwrap_err();
+
+        assert_eq!(Code::InvalidArgument, actual.code());
+    }
+
+    #[test]
+    fn parse_deal_request_rejects_invalid_lesson_id() {
+        let actual = parse_deal_request(&DealRequest {
+            user_id: USER.to_string(),
+            lesson_id: "not-a-uuid".to_owned(),
+            number_of_cards: 5,
+            ..Default::default()
+        })
+        .unwrap_err();
+
+        assert_eq!(Code::InvalidArgument, actual.code());
+    }
+
+    #[test]
+    fn parse_deal_request_rejects_decks_and_course_together() {
+        let actual = parse_deal_request(&DealRequest {
+            user_id: USER.to_string(),
+            deck_ids: vec![DECK.to_string()],
+            course_id: COURSE.to_string(),
+            number_of_cards: 5,
+            ..Default::default()
+        })
+        .unwrap_err();
+
+        assert_eq!(Code::InvalidArgument, actual.code());
+    }
+
+    #[test]
+    fn parse_deal_request_rejects_course_and_lesson_together() {
+        let actual = parse_deal_request(&DealRequest {
+            user_id: USER.to_string(),
+            course_id: COURSE.to_string(),
+            lesson_id: LESSON.to_string(),
+            number_of_cards: 5,
+            ..Default::default()
+        })
+        .unwrap_err();
+
+        assert_eq!(Code::InvalidArgument, actual.code());
+    }
+
+    #[test]
+    fn parse_deal_request_accepts_decks() {
         let actual = parse_deal_request(&DealRequest {
             user_id: USER.to_string(),
             deck_ids: vec![DECK.to_string(), OTHER_DECK.to_string()],
             number_of_cards: 5,
+            ..Default::default()
         })
         .unwrap();
 
-        assert_eq!((USER, vec![DECK, OTHER_DECK]), actual);
+        assert_eq!((USER, Scope::Decks(vec![DECK, OTHER_DECK])), actual);
     }
 
     #[test]
-    fn parse_deal_request_accepts_no_decks() {
+    fn parse_deal_request_accepts_course() {
         let actual = parse_deal_request(&DealRequest {
             user_id: USER.to_string(),
-            deck_ids: vec![],
+            course_id: COURSE.to_string(),
             number_of_cards: 5,
+            ..Default::default()
         })
         .unwrap();
 
-        assert_eq!((USER, vec![]), actual);
+        assert_eq!((USER, Scope::Course(COURSE)), actual);
+    }
+
+    #[test]
+    fn parse_deal_request_accepts_lesson() {
+        let actual = parse_deal_request(&DealRequest {
+            user_id: USER.to_string(),
+            lesson_id: LESSON.to_string(),
+            number_of_cards: 5,
+            ..Default::default()
+        })
+        .unwrap();
+
+        assert_eq!((USER, Scope::Lesson(LESSON)), actual);
+    }
+
+    #[test]
+    fn parse_deal_request_accepts_no_scope() {
+        let actual = parse_deal_request(&DealRequest {
+            user_id: USER.to_string(),
+            number_of_cards: 5,
+            ..Default::default()
+        })
+        .unwrap();
+
+        assert_eq!((USER, Scope::All), actual);
     }
 
     #[test]
