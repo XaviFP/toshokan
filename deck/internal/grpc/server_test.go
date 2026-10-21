@@ -250,6 +250,39 @@ func TestServer_CreateCard(t *testing.T) {
 		}}
 		assert.Equal(t, expected, actual)
 	})
+
+	t.Run("failure_invalid_card", func(t *testing.T) {
+		repoMock := &deck.RepositoryMock{}
+		srv := &Server{Repository: repoMock}
+
+		_, err := srv.CreateCard(context.Background(), &pb.CreateCardRequest{Card: &pb.Card{
+			DeckId: "fb9ffe2c-ad66-4766-9b7b-46fd5d9acd72",
+			Title:  "What does CSP stand for?",
+			Kind:   "single_choice",
+		}})
+
+		assert.Equal(t, codes.InvalidArgument, status.Code(err))
+		repoMock.AssertNotCalled(t, "StoreCard", mock.Anything, mock.Anything, mock.Anything)
+	})
+
+	t.Run("failure_deck_not_found", func(t *testing.T) {
+		repoMock := &deck.RepositoryMock{}
+		srv := &Server{Repository: repoMock}
+
+		deckID := uuid.MustParse("fb9ffe2c-ad66-4766-9b7b-46fd5d9acd72")
+		repoMock.On("GetDeck", mock.Anything, deckID).Return(deck.Deck{}, deck.ErrDeckNotFound)
+
+		_, err := srv.CreateCard(context.Background(), &pb.CreateCardRequest{Card: &pb.Card{
+			DeckId: deckID.String(),
+			Title:  "What does CSP stand for?",
+			Kind:   "single_choice",
+			PossibleAnswers: []*pb.Answer{
+				{Text: "Communicating Sequential Processes", IsCorrect: true},
+			},
+		}})
+
+		assert.Equal(t, codes.NotFound, status.Code(err))
+	})
 }
 
 func TestServer_DeleteDeck(t *testing.T) {

@@ -195,7 +195,7 @@ func TestRedisRepository_DeleteDeck_InvalidatesCache(t *testing.T) {
 	mockDB.AssertExpectations(t)
 }
 
-func TestRedisRepository_StoreCard_RefreshesCache(t *testing.T) {
+func TestRedisRepository_StoreCard_InvalidatesCache(t *testing.T) {
 	h := newRedisTestHarness(t)
 	mockDB := new(RepositoryMock)
 
@@ -208,17 +208,59 @@ func TestRedisRepository_StoreCard_RefreshesCache(t *testing.T) {
 		Title: "Test Card",
 		Kind:  "single_choice",
 	}
-	answers := []Answer{{ID: uuid.New(), Text: "Answer 1", IsCorrect: true}}
 
 	deck := Deck{ID: deckID, Title: "Test Deck"}
+	deckJSON, _ := json.Marshal(deck)
+	key := "cache:deck:" + deckID.String()
+	err := h.redisClient.Do(ctx, radix.FlatCmd(nil, "SETEX", key, 3600, string(deckJSON)))
+	assert.NoError(t, err)
 
 	mockDB.On("StoreCard", ctx, card, deckID).Return(nil)
-	mockDB.On("GetDeck", ctx, deckID).Return(deck, nil)
-	mockDB.On("GetDeckCards", ctx, deckID).Return([]Card{card}, nil)
-	mockDB.On("GetCardAnswers", ctx, card.ID).Return(answers, nil)
 
-	err := repo.StoreCard(ctx, card, deckID)
+	err = repo.StoreCard(ctx, card, deckID)
 	assert.NoError(t, err)
+
+	var cached string
+	mb := radix.Maybe{Rcv: &cached}
+	err = h.redisClient.Do(ctx, radix.Cmd(&mb, "GET", key))
+	assert.NoError(t, err)
+
+	assert.True(t, mb.Null)
+
+	mockDB.AssertExpectations(t)
+}
+
+func TestRedisRepository_StoreCard_GetDeckReturnsNewCard(t *testing.T) {
+	h := newRedisTestHarness(t)
+	mockDB := new(RepositoryMock)
+
+	repo := NewRedisRepository(h.redisClient, mockDB)
+
+	ctx := context.Background()
+	deckID := uuid.New()
+	oldCard := Card{ID: uuid.New(), DeckID: deckID, Title: "Old Card", Kind: "single_choice"}
+	newCard := Card{ID: uuid.New(), DeckID: deckID, Title: "New Card", Kind: "single_choice"}
+
+	deck := Deck{ID: deckID, Title: "Test Deck", Cards: []Card{oldCard}}
+	deckJSON, _ := json.Marshal(deck)
+	key := "cache:deck:" + deckID.String()
+	err := h.redisClient.Do(ctx, radix.FlatCmd(nil, "SETEX", key, 3600, string(deckJSON)))
+	assert.NoError(t, err)
+
+	mockDB.On("StoreCard", ctx, newCard, deckID).Return(nil)
+	mockDB.On("GetDeck", ctx, deckID).Return(Deck{ID: deckID, Title: "Test Deck"}, nil)
+	mockDB.On("GetDeckCards", ctx, deckID).Return([]Card{oldCard, newCard}, nil)
+	mockDB.On("GetCardAnswers", ctx, oldCard.ID).Return([]Answer(nil), nil)
+	mockDB.On("GetCardAnswers", ctx, newCard.ID).Return([]Answer(nil), nil)
+
+	err = repo.StoreCard(ctx, newCard, deckID)
+	assert.NoError(t, err)
+
+	actual, err := repo.GetDeck(ctx, deckID)
+	assert.NoError(t, err)
+
+	expected := Deck{ID: deckID, Title: "Test Deck", Cards: []Card{oldCard, newCard}}
+	assert.Equal(t, expected, actual)
 
 	mockDB.AssertExpectations(t)
 }

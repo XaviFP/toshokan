@@ -87,6 +87,48 @@ func CreateDeck(ctx *gin.Context, usersClient pbUser.UserAPIClient, decksClient 
 	ctx.JSON(http.StatusOK, toDeckResponse(res.Deck))
 }
 
+func CreateCard(ctx *gin.Context, usersClient pbUser.UserAPIClient, decksClient pbDeck.DecksAPIClient) {
+	deckID := ctx.Param("deckId")
+	if deckID == "" {
+		ctx.JSON(http.StatusBadRequest, gin.H{"error": "missing deck id"})
+		return
+	}
+
+	if _, err := uuid.Parse(deckID); err != nil {
+		slog.Error("CreateCard: failed to parse deck ID", "error", err, "deckId", deckID, "stack", errors.ErrorStack(err))
+		ctx.JSON(http.StatusBadRequest, gin.H{"error": "invalid deck id format"})
+		return
+	}
+
+	var c pbDeck.Card
+	if err := ctx.ShouldBindJSON(&c); err != nil {
+		slog.Error("CreateCard: failed to bind JSON", "error", err, "deckId", deckID, "stack", errors.ErrorStack(err))
+		ctx.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.DeckId = deckID
+
+	res, err := decksClient.CreateCard(ctx, &pbDeck.CreateCardRequest{Card: &c})
+	if err != nil {
+		if status.Code(err) == codes.InvalidArgument {
+			slog.Error("CreateCard: validation error", "error", err, "deckId", deckID)
+			ctx.JSON(http.StatusBadRequest, gin.H{"error": "invalid card"})
+			return
+		}
+		if status.Code(err) == codes.NotFound {
+			slog.Error("CreateCard: deck not found", "error", err, "deckId", deckID)
+			ctx.JSON(http.StatusNotFound, gin.H{"error": "deck not found"})
+			return
+		}
+		slog.Error("CreateCard: gRPC call failed", "error", err, "deckId", deckID, "stack", errors.ErrorStack(err))
+		ctx.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	ctx.JSON(http.StatusOK, toCardResponse(res.Card))
+}
+
 func DeleteDeck(ctx *gin.Context, usersClient pbUser.UserAPIClient, decksClient pbDeck.DecksAPIClient) {
 	deckID := ctx.Param("deckId")
 	if deckID == "" {
@@ -294,6 +336,10 @@ func UpdateAnswer(ctx *gin.Context, usersClient pbUser.UserAPIClient, decksClien
 func RegisterDeckRoutes(r *gin.RouterGroup, usersClient pbUser.UserAPIClient, decksClient pbDeck.DecksAPIClient, adminCfg AdminConfig) {
 	r.POST("/decks", RequireAdmin(adminCfg, adminCfg.CreateDeckAdminOnly), func(ctx *gin.Context) {
 		CreateDeck(ctx, usersClient, decksClient)
+	})
+
+	r.POST("/decks/:deckId/cards", RequireAdmin(adminCfg, adminCfg.CreateCardAdminOnly), func(ctx *gin.Context) {
+		CreateCard(ctx, usersClient, decksClient)
 	})
 
 	r.DELETE("/decks/:deckId", func(ctx *gin.Context) {

@@ -1187,6 +1187,68 @@ paths:
               schema:
                 $ref: '#/components/schemas/Error'
 
+  /decks/{deckId}/cards:
+    post:
+      tags:
+        - Decks
+      summary: Add a card to a deck
+      description: |
+        Add one card, with its answers, to an existing deck. Users enrolled in a course using
+        this deck see the lesson as not completed again after their next sync, with the new
+        card unanswered.
+
+        **Note:** This endpoint may require admin access (`X-Admin-Token` header) depending on server configuration.
+      operationId: createCard
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: deckId
+          in: path
+          required: true
+          description: Deck UUID
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CardInput'
+      responses:
+        '200':
+          description: Card created successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Card'
+        '400':
+          description: Invalid deck ID, invalid request body, or invalid card
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          description: Admin access required (when endpoint is admin-protected)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Deck not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
   /decks/{deckId}/cards/{cardId}:
     patch:
       tags:

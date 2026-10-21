@@ -18,6 +18,7 @@ type AdminConfig struct {
 	CreateCourseAdminOnly bool
 	CreateLessonAdminOnly bool
 	CreateDeckAdminOnly   bool
+	CreateCardAdminOnly   bool
 	UpdateCourseAdminOnly bool
 	UpdateLessonAdminOnly bool
 	UpdateDeckAdminOnly   bool

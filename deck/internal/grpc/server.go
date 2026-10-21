@@ -136,7 +136,8 @@ func (s *Server) CreateCard(ctx context.Context, req *pb.CreateCardRequest) (*pb
 
 	isValid, _ := deck.ValidateCard(card)
 	if !isValid {
-		return &pb.CreateCardResponse{}, deck.ErrCardInvalid
+		slog.Error("CreateCard: invalid card", "deckId", deckID.String(), "cardTitle", card.Title)
+		return &pb.CreateCardResponse{}, status.Error(codes.InvalidArgument, deck.ErrCardInvalid.Error())
 	}
 
 	// Check if deck exists

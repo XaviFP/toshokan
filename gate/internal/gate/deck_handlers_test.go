@@ -11,6 +11,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
+	"github.com/stretchr/testify/require"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -21,6 +22,178 @@ import (
 
 func init() {
 	gin.SetMode(gin.TestMode)
+}
+
+func TestCreateCard(t *testing.T) {
+	card := map[string]interface{}{
+		"title": "What does CSP stand for?",
+		"kind":  "single_choice",
+		"possible_answers": []map[string]interface{}{
+			{"text": "Communicating Sequential Processes", "is_correct": true},
+		},
+	}
+
+	t.Run("success", func(t *testing.T) {
+		decksClient := &mockDecksClient{}
+		usersClient := &mockUsersClient{}
+
+		decksClient.On("CreateCard", mock.Anything, mock.MatchedBy(func(req *pbDeck.CreateCardRequest) bool {
+			return req.Card.DeckId == "fb9ffe2c-ad66-4766-9b7b-46fd5d9acd72" &&
+				req.Card.Title == "What does CSP stand for?" &&
+				req.Card.Kind == "single_choice" &&
+				len(req.Card.PossibleAnswers) == 1 &&
+				req.Card.PossibleAnswers[0].Text == "Communicating Sequential Processes" &&
+				req.Card.PossibleAnswers[0].IsCorrect
+		})).Return(&pbDeck.CreateCardResponse{
+			Card: &pbDeck.Card{
+				Id:     "72bdff92-5bc8-4e1d-9217-d0b23e22ff33",
+				DeckId: "fb9ffe2c-ad66-4766-9b7b-46fd5d9acd72",
+				Title:  "What does CSP stand for?",
+				Kind:   "single_choice",
+				PossibleAnswers: []*pbDeck.Answer{
+					{
+						Id:        "7e6926da-82b2-4ae8-99b4-1b803ebf1877",
+						CardId:    "72bdff92-5bc8-4e1d-9217-d0b23e22ff33",
+						Text:      "Communicating Sequential Processes",
+						IsCorrect: true,
+					},
+				},
+			},
+		}, nil)
+
+		router := gin.New()
+		router.POST("/decks/:deckId/cards", func(ctx *gin.Context) {
+			CreateCard(ctx, usersClient, decksClient)
+		})
+
+		body, _ := json.Marshal(card)
+		req := httptest.NewRequest(http.MethodPost, "/decks/fb9ffe2c-ad66-4766-9b7b-46fd5d9acd72/cards", bytes.NewReader(body))
+		req.Header.Set("Content-Type", "application/json")
+		w := httptest.NewRecorder()
+		router.ServeHTTP(w, req)
+
+		require.Equal(t, http.StatusOK, w.Code)
+
+		var actual cardResponse
+		require.NoError(t, json.Unmarshal(w.Body.Bytes(), &actual))
+
+		expected := cardResponse{
+			ID:     "72bdff92-5bc8-4e1d-9217-d0b23e22ff33",
+			DeckID: "fb9ffe2c-ad66-4766-9b7b-46fd5d9acd72",
+			Title:  "What does CSP stand for?",
+			Kind:   "single_choice",
+			PossibleAnswers: []answerResponse{
+				{
+					ID:        "7e6926da-82b2-4ae8-99b4-1b803ebf1877",
+					CardID:    "72bdff92-5bc8-4e1d-9217-d0b23e22ff33",
+					Text:      "Communicating Sequential Processes",
+					IsCorrect: true,
+				},
+			},
+		}
+		assert.Equal(t, expected, actual)
+	})
+
+	t.Run("failure_invalid_deck_uuid", func(t *testing.T) {
+		decksClient := &mockDecksClient{}
+		usersClient := &mockUsersClient{}
+
+		router := gin.New()
+		router.POST("/decks/:deckId/cards", func(ctx *gin.Context) {
+			CreateCard(ctx, usersClient, decksClient)
+		})
+
+		body, _ := json.Marshal(card)
+		req := httptest.NewRequest(http.MethodPost, "/decks/invalid-uuid/cards", bytes.NewReader(body))
+		req.Header.Set("Content-Type", "application/json")
+		w := httptest.NewRecorder()
+		router.ServeHTTP(w, req)
+
+		assert.Equal(t, http.StatusBadRequest, w.Code)
+		assert.Contains(t, w.Body.String(), "invalid deck id format")
+	})
+
+	t.Run("failure_malformed_body", func(t *testing.T) {
+		decksClient := &mockDecksClient{}
+		usersClient := &mockUsersClient{}
+
+		router := gin.New()
+		router.POST("/decks/:deckId/cards", func(ctx *gin.Context) {
+			CreateCard(ctx, usersClient, decksClient)
+		})
+
+		req := httptest.NewRequest(http.MethodPost, "/decks/fb9ffe2c-ad66-4766-9b7b-46fd5d9acd72/cards", bytes.NewReader([]byte("{")))
+		req.Header.Set("Content-Type", "application/json")
+		w := httptest.NewRecorder()
+		router.ServeHTTP(w, req)
+
+		assert.Equal(t, http.StatusBadRequest, w.Code)
+	})
+
+	t.Run("failure_invalid_card", func(t *testing.T) {
+		decksClient := &mockDecksClient{}
+		usersClient := &mockUsersClient{}
+
+		decksClient.On("CreateCard", mock.Anything, mock.Anything).
+			Return(nil, status.Error(codes.InvalidArgument, "deck: invalid card"))
+
+		router := gin.New()
+		router.POST("/decks/:deckId/cards", func(ctx *gin.Context) {
+			CreateCard(ctx, usersClient, decksClient)
+		})
+
+		body, _ := json.Marshal(card)
+		req := httptest.NewRequest(http.MethodPost, "/decks/fb9ffe2c-ad66-4766-9b7b-46fd5d9acd72/cards", bytes.NewReader(body))
+		req.Header.Set("Content-Type", "application/json")
+		w := httptest.NewRecorder()
+		router.ServeHTTP(w, req)
+
+		assert.Equal(t, http.StatusBadRequest, w.Code)
+		assert.Contains(t, w.Body.String(), "invalid card")
+	})
+
+	t.Run("failure_deck_not_found", func(t *testing.T) {
+		decksClient := &mockDecksClient{}
+		usersClient := &mockUsersClient{}
+
+		decksClient.On("CreateCard", mock.Anything, mock.Anything).
+			Return(nil, status.Error(codes.NotFound, "deck: deck not found"))
+
+		router := gin.New()
+		router.POST("/decks/:deckId/cards", func(ctx *gin.Context) {
+			CreateCard(ctx, usersClient, decksClient)
+		})
+
+		body, _ := json.Marshal(card)
+		req := httptest.NewRequest(http.MethodPost, "/decks/fb9ffe2c-ad66-4766-9b7b-46fd5d9acd72/cards", bytes.NewReader(body))
+		req.Header.Set("Content-Type", "application/json")
+		w := httptest.NewRecorder()
+		router.ServeHTTP(w, req)
+
+		assert.Equal(t, http.StatusNotFound, w.Code)
+		assert.Contains(t, w.Body.String(), "deck not found")
+	})
+
+	t.Run("failure_missing_admin_header", func(t *testing.T) {
+		decksClient := &mockDecksClient{}
+		usersClient := &mockUsersClient{}
+
+		router := gin.New()
+		RegisterDeckRoutes(router.Group("/"), usersClient, decksClient, AdminConfig{
+			HeaderName:          "X-Admin-Token",
+			HeaderSecret:        "secret123",
+			CreateCardAdminOnly: true,
+		})
+
+		body, _ := json.Marshal(card)
+		req := httptest.NewRequest(http.MethodPost, "/decks/fb9ffe2c-ad66-4766-9b7b-46fd5d9acd72/cards", bytes.NewReader(body))
+		req.Header.Set("Content-Type", "application/json")
+		w := httptest.NewRecorder()
+		router.ServeHTTP(w, req)
+
+		assert.Equal(t, http.StatusForbidden, w.Code)
+		decksClient.AssertNotCalled(t, "CreateCard", mock.Anything, mock.Anything)
+	})
 }
 
 func TestDeleteDeck(t *testing.T) {
