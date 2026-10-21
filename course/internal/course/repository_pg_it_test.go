@@ -354,6 +354,115 @@ func TestRepository_GetLesson(t *testing.T) {
 	})
 }
 
+func TestRepository_GetCourseDeckIDs(t *testing.T) {
+	h := newTestHarness(t)
+	repo := NewPGRepository(slog.Default(), h.db)
+
+	courseID := uuid.MustParse("fb9ffe2c-ad66-4766-9b7b-46fd5d9acd72")
+
+	// Lesson 1 already has deck 60766223-... at order 1 (see populateTestDB).
+	_, err := h.db.Exec(`
+		INSERT INTO lesson_decks (lesson_id, deck_id, "order") VALUES
+			('60766223-ff9f-4871-a497-f765c05a0c5e', 'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb', 1),
+			('334ddbf8-1acc-405b-86d8-49f0d1ca636c', 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa', 2),
+			('11111111-1111-1111-1111-111111111111', '60766223-ff9f-4871-a497-f765c05a0c5e', 1),
+			('22222222-2222-2222-2222-222222222222', 'cccccccc-cccc-cccc-cccc-cccccccccccc', 1)
+	`)
+	require.NoError(t, err)
+
+	t.Run("success", func(t *testing.T) {
+		expected := []uuid.UUID{
+			uuid.MustParse("60766223-ff9f-4871-a497-f765c05a0c5e"),
+			uuid.MustParse("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"),
+			uuid.MustParse("bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb"),
+			uuid.MustParse("cccccccc-cccc-cccc-cccc-cccccccccccc"),
+		}
+
+		actual, err := repo.GetCourseDeckIDs(context.Background(), courseID)
+		require.NoError(t, err)
+		assert.Equal(t, expected, actual)
+	})
+
+	t.Run("skips_deleted_lessons", func(t *testing.T) {
+		_, err := h.db.Exec(`UPDATE lessons SET deleted_at = NOW() WHERE id = '22222222-2222-2222-2222-222222222222'`)
+		require.NoError(t, err)
+
+		expected := []uuid.UUID{
+			uuid.MustParse("60766223-ff9f-4871-a497-f765c05a0c5e"),
+			uuid.MustParse("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"),
+			uuid.MustParse("bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb"),
+		}
+
+		actual, err := repo.GetCourseDeckIDs(context.Background(), courseID)
+		require.NoError(t, err)
+		assert.Equal(t, expected, actual)
+	})
+
+	t.Run("empty", func(t *testing.T) {
+		actual, err := repo.GetCourseDeckIDs(context.Background(), uuid.MustParse("00000000-0000-0000-0000-000000000000"))
+		require.NoError(t, err)
+		assert.Empty(t, actual)
+	})
+
+	t.Run("skips_deleted_course", func(t *testing.T) {
+		_, err := h.db.Exec(`UPDATE courses SET deleted_at = NOW() WHERE id = $1`, courseID)
+		require.NoError(t, err)
+
+		actual, err := repo.GetCourseDeckIDs(context.Background(), courseID)
+		require.NoError(t, err)
+		assert.Empty(t, actual)
+	})
+}
+
+func TestRepository_GetLessonDeckIDs(t *testing.T) {
+	h := newTestHarness(t)
+	repo := NewPGRepository(slog.Default(), h.db)
+
+	// The lesson already has deck 60766223-... at order 1 (see populateTestDB).
+	_, err := h.db.Exec(`
+		INSERT INTO lesson_decks (lesson_id, deck_id, "order") VALUES
+			('334ddbf8-1acc-405b-86d8-49f0d1ca636c', 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa', 0)
+	`)
+	require.NoError(t, err)
+
+	t.Run("success", func(t *testing.T) {
+		expected := []uuid.UUID{
+			uuid.MustParse("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"),
+			uuid.MustParse("60766223-ff9f-4871-a497-f765c05a0c5e"),
+		}
+
+		actual, err := repo.GetLessonDeckIDs(context.Background(), uuid.MustParse("334ddbf8-1acc-405b-86d8-49f0d1ca636c"))
+		require.NoError(t, err)
+		assert.Equal(t, expected, actual)
+	})
+
+	t.Run("empty", func(t *testing.T) {
+		actual, err := repo.GetLessonDeckIDs(context.Background(), uuid.MustParse("60766223-ff9f-4871-a497-f765c05a0c5e"))
+		require.NoError(t, err)
+		assert.Empty(t, actual)
+	})
+
+	t.Run("skips_deleted_lesson", func(t *testing.T) {
+		_, err := h.db.Exec(`UPDATE lessons SET deleted_at = NOW() WHERE id = '334ddbf8-1acc-405b-86d8-49f0d1ca636c'`)
+		require.NoError(t, err)
+
+		actual, err := repo.GetLessonDeckIDs(context.Background(), uuid.MustParse("334ddbf8-1acc-405b-86d8-49f0d1ca636c"))
+		require.NoError(t, err)
+		assert.Empty(t, actual)
+	})
+
+	t.Run("skips_deleted_course", func(t *testing.T) {
+		_, err := h.db.Exec(`UPDATE lessons SET deleted_at = NULL WHERE id = '334ddbf8-1acc-405b-86d8-49f0d1ca636c'`)
+		require.NoError(t, err)
+		_, err = h.db.Exec(`UPDATE courses SET deleted_at = NOW() WHERE id = 'fb9ffe2c-ad66-4766-9b7b-46fd5d9acd72'`)
+		require.NoError(t, err)
+
+		actual, err := repo.GetLessonDeckIDs(context.Background(), uuid.MustParse("334ddbf8-1acc-405b-86d8-49f0d1ca636c"))
+		require.NoError(t, err)
+		assert.Empty(t, actual)
+	})
+}
+
 func TestRepository_GetLessonsByCourseID(t *testing.T) {
 	h := newTestHarness(t)
 	repo := NewPGRepository(slog.Default(), h.db)

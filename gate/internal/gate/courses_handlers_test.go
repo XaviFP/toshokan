@@ -141,6 +141,22 @@ func (m *mockCourseAPIClient) SyncState(ctx context.Context, req *pb.SyncStateRe
 	return args.Get(0).(*pb.SyncStateResponse), args.Error(1)
 }
 
+func (m *mockCourseAPIClient) GetCourseDeckIDs(ctx context.Context, req *pb.GetCourseDeckIDsRequest, opts ...grpc.CallOption) (*pb.GetCourseDeckIDsResponse, error) {
+	args := m.Called(ctx, req)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*pb.GetCourseDeckIDsResponse), args.Error(1)
+}
+
+func (m *mockCourseAPIClient) GetLessonDeckIDs(ctx context.Context, req *pb.GetLessonDeckIDsRequest, opts ...grpc.CallOption) (*pb.GetLessonDeckIDsResponse, error) {
+	args := m.Called(ctx, req)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*pb.GetLessonDeckIDsResponse), args.Error(1)
+}
+
 func (m *mockCourseAPIClient) GetStudentsProgress(ctx context.Context, req *pb.GetStudentsProgressRequest, opts ...grpc.CallOption) (*pb.GetStudentsProgressResponse, error) {
 	args := m.Called(ctx, req)
 	if args.Get(0) == nil {

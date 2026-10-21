@@ -186,6 +186,68 @@ func (s *Server) GetLesson(ctx context.Context, req *pb.GetLessonRequest) (*pb.G
 	}, nil
 }
 
+// GetCourseDeckIDs retrieves the IDs of the decks in a course's lessons
+func (s *Server) GetCourseDeckIDs(ctx context.Context, req *pb.GetCourseDeckIDsRequest) (*pb.GetCourseDeckIDsResponse, error) {
+	courseID, err := uuid.Parse(req.CourseId)
+	if err != nil {
+		slog.Error("GetCourseDeckIDs: failed to parse course ID", "error", err, "courseId", req.CourseId, "stack", errors.ErrorStack(err))
+		return nil, status.Errorf(codes.InvalidArgument, "invalid course_id: %s", req.CourseId)
+	}
+
+	if _, err := s.Repository.GetCourse(ctx, courseID); err != nil {
+		if errors.Is(err, course.ErrCourseNotFound) {
+			slog.Error("GetCourseDeckIDs: course not found", "error", err, "courseId", courseID.String())
+			return nil, status.Error(codes.NotFound, course.ErrCourseNotFound.Error())
+		}
+		slog.Error("GetCourseDeckIDs: failed to get course from repository", "error", err, "courseId", courseID.String(), "stack", errors.ErrorStack(err))
+		return nil, errors.Trace(err)
+	}
+
+	deckIDs, err := s.Repository.GetCourseDeckIDs(ctx, courseID)
+	if err != nil {
+		slog.Error("GetCourseDeckIDs: failed to get deck IDs from repository", "error", err, "courseId", courseID.String(), "stack", errors.ErrorStack(err))
+		return nil, errors.Trace(err)
+	}
+
+	out := make([]string, 0, len(deckIDs))
+	for _, id := range deckIDs {
+		out = append(out, id.String())
+	}
+
+	return &pb.GetCourseDeckIDsResponse{DeckIds: out}, nil
+}
+
+// GetLessonDeckIDs retrieves the IDs of a lesson's decks
+func (s *Server) GetLessonDeckIDs(ctx context.Context, req *pb.GetLessonDeckIDsRequest) (*pb.GetLessonDeckIDsResponse, error) {
+	lessonID, err := uuid.Parse(req.LessonId)
+	if err != nil {
+		slog.Error("GetLessonDeckIDs: failed to parse lesson ID", "error", err, "lessonId", req.LessonId, "stack", errors.ErrorStack(err))
+		return nil, status.Errorf(codes.InvalidArgument, "invalid lesson_id: %s", req.LessonId)
+	}
+
+	if _, err := s.Repository.GetLesson(ctx, lessonID); err != nil {
+		if errors.Is(err, course.ErrLessonNotFound) {
+			slog.Error("GetLessonDeckIDs: lesson not found", "error", err, "lessonId", lessonID.String())
+			return nil, status.Error(codes.NotFound, course.ErrLessonNotFound.Error())
+		}
+		slog.Error("GetLessonDeckIDs: failed to get lesson from repository", "error", err, "lessonId", lessonID.String(), "stack", errors.ErrorStack(err))
+		return nil, errors.Trace(err)
+	}
+
+	deckIDs, err := s.Repository.GetLessonDeckIDs(ctx, lessonID)
+	if err != nil {
+		slog.Error("GetLessonDeckIDs: failed to get deck IDs from repository", "error", err, "lessonId", lessonID.String(), "stack", errors.ErrorStack(err))
+		return nil, errors.Trace(err)
+	}
+
+	out := make([]string, 0, len(deckIDs))
+	for _, id := range deckIDs {
+		out = append(out, id.String())
+	}
+
+	return &pb.GetLessonDeckIDsResponse{DeckIds: out}, nil
+}
+
 // GetLessons retrieves lessons for a course with pagination
 func (s *Server) GetLessons(ctx context.Context, req *pb.GetLessonsRequest) (*pb.GetLessonsResponse, error) {
 	courseID, err := uuid.Parse(req.CourseId)

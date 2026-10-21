@@ -1,3 +1,4 @@
+import time
 import uuid
 from pathlib import Path
 from typing import Any, Dict, List
@@ -1036,6 +1037,26 @@ def store_review_answers_response(base_url: str, token: str, answer_ids: List[st
     return response
 
 
+def run_lesson_answers_review_test(base_url: str, token: str, deck_id: str) -> None:
+    """Test that answering a lesson deck makes its cards available in GET /review."""
+    log_step("")
+    log_step("Testing review after answering lessons...")
+
+    expected = sorted(card["id"] for card in get_deck(base_url, token, deck_id)["cards"])
+
+    # The course service sends lesson answers to the dealer in the background, so they may
+    # not be there yet on a slow machine. Give it a few tries before calling it a failure.
+    for _ in range(10):
+        response = get_review_response(base_url, token, {"deck_id": deck_id})
+        assert response.status_code == 200, f"Expected 200, got {response.status_code}"
+        actual = sorted(card["id"] for card in response.json()["cards"])
+        if actual == expected:
+            break
+        time.sleep(0.2)
+    assert actual == expected, f"Expected {expected}, got {actual}"
+    log_step("  ✓ Review of a lesson deck returns its answered cards - success")
+
+
 def run_review_tests(base_url: str) -> None:
     """Test GET /review and POST /review/answers with a user who has answered nothing yet."""
     log_step("")
@@ -1784,6 +1805,8 @@ def test_basic_flow():
 
     # Test delete deck endpoint (creates its own deck)
     run_delete_deck_tests(base_url, token)
+
+    run_lesson_answers_review_test(base_url, token, lesson_deck_ids[0])
 
     run_review_tests(base_url)
 
