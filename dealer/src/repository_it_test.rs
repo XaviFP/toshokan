@@ -7,7 +7,7 @@ use tonic::{Code, Request};
 use uuid::{uuid, Uuid};
 
 use super::pb::dealer_server::Dealer as _;
-use super::pb::StoreAnswersRequest;
+use super::pb::{ReviewAnswersRequest, StoreAnswersRequest};
 use super::{Dealer, Repository};
 
 const USER: Uuid = uuid!("11111111-0000-0000-0000-000000000000");
@@ -618,6 +618,140 @@ async fn store_answers_rejects_unknown_answer_id() {
 
     let actual = dealer
         .store_answers(Request::new(StoreAnswersRequest {
+            user_id: USER.to_string(),
+            answer_ids: vec!["99999999-0000-0000-0000-000000000000".to_owned()],
+        }))
+        .await
+        .unwrap_err();
+
+    assert_eq!(Code::InvalidArgument, actual.code());
+}
+
+#[tokio::test]
+async fn review_answers_correct_answer_raises_level_of_card_in_pool() {
+    let (repo, _db_lock) = new_repository().await;
+    set_level(&repo, &USER, &CARD_A, 2).await;
+    let dealer = Dealer { repo };
+
+    dealer
+        .review_answers(Request::new(ReviewAnswersRequest {
+            user_id: USER.to_string(),
+            answer_ids: vec![ANSWER_A_CORRECT.to_string()],
+        }))
+        .await
+        .unwrap();
+
+    assert_eq!(3, level(&dealer.repo, &USER, &CARD_A).await);
+}
+
+#[tokio::test]
+async fn review_answers_wrong_answer_lowers_level_of_card_in_pool() {
+    let (repo, _db_lock) = new_repository().await;
+    set_level(&repo, &USER, &CARD_A, 3).await;
+    let dealer = Dealer { repo };
+
+    dealer
+        .review_answers(Request::new(ReviewAnswersRequest {
+            user_id: USER.to_string(),
+            answer_ids: vec![ANSWER_A_WRONG.to_string()],
+        }))
+        .await
+        .unwrap();
+
+    assert_eq!(2, level(&dealer.repo, &USER, &CARD_A).await);
+}
+
+#[tokio::test]
+async fn review_answers_rejects_card_outside_pool_and_writes_nothing() {
+    let (repo, _db_lock) = new_repository().await;
+    let dealer = Dealer { repo };
+
+    let actual = dealer
+        .review_answers(Request::new(ReviewAnswersRequest {
+            user_id: USER.to_string(),
+            answer_ids: vec![ANSWER_A_CORRECT.to_string()],
+        }))
+        .await
+        .unwrap_err();
+
+    let practiced: i64 = dealer
+        .repo
+        .client
+        .query_one("SELECT count(*) FROM card_practice", &[])
+        .await
+        .unwrap()
+        .get(0);
+    let leveled: i64 = dealer
+        .repo
+        .client
+        .query_one("SELECT count(*) FROM user_card_level", &[])
+        .await
+        .unwrap()
+        .get(0);
+    assert_eq!(Code::InvalidArgument, actual.code());
+    assert_eq!(0, practiced);
+    assert_eq!(0, leveled);
+}
+
+#[tokio::test]
+async fn review_answers_rejects_whole_batch_when_one_card_is_outside_pool() {
+    let (repo, _db_lock) = new_repository().await;
+    set_level(&repo, &USER, &CARD_A, 2).await;
+    let dealer = Dealer { repo };
+
+    let actual = dealer
+        .review_answers(Request::new(ReviewAnswersRequest {
+            user_id: USER.to_string(),
+            answer_ids: vec![ANSWER_A_CORRECT.to_string(), ANSWER_B_CORRECT.to_string()],
+        }))
+        .await
+        .unwrap_err();
+
+    let practiced: i64 = dealer
+        .repo
+        .client
+        .query_one("SELECT count(*) FROM card_practice", &[])
+        .await
+        .unwrap()
+        .get(0);
+    let leveled: i64 = dealer
+        .repo
+        .client
+        .query_one("SELECT count(*) FROM user_card_level", &[])
+        .await
+        .unwrap()
+        .get(0);
+    assert_eq!(Code::InvalidArgument, actual.code());
+    assert_eq!(2, level(&dealer.repo, &USER, &CARD_A).await);
+    assert_eq!(0, practiced);
+    assert_eq!(1, leveled);
+}
+
+#[tokio::test]
+async fn review_answers_rejects_card_only_in_another_users_pool() {
+    let (repo, _db_lock) = new_repository().await;
+    set_level(&repo, &OTHER_USER, &CARD_A, 2).await;
+    let dealer = Dealer { repo };
+
+    let actual = dealer
+        .review_answers(Request::new(ReviewAnswersRequest {
+            user_id: USER.to_string(),
+            answer_ids: vec![ANSWER_A_CORRECT.to_string()],
+        }))
+        .await
+        .unwrap_err();
+
+    assert_eq!(Code::InvalidArgument, actual.code());
+    assert_eq!(2, level(&dealer.repo, &OTHER_USER, &CARD_A).await);
+}
+
+#[tokio::test]
+async fn review_answers_rejects_unknown_answer_id() {
+    let (repo, _db_lock) = new_repository().await;
+    let dealer = Dealer { repo };
+
+    let actual = dealer
+        .review_answers(Request::new(ReviewAnswersRequest {
             user_id: USER.to_string(),
             answer_ids: vec!["99999999-0000-0000-0000-000000000000".to_owned()],
         }))

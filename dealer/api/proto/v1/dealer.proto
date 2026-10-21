@@ -6,6 +6,8 @@ option go_package = "github.com/XaviFP/toshokan/dealer/api/proto/v1";
 service Dealer {
     rpc Deal (DealRequest) returns (DealResponse);
     rpc StoreAnswers (StoreAnswersRequest) returns (StoreAnswersResponse);
+    // Like StoreAnswers, but only for cards already in the user's pool; never adds cards.
+    rpc ReviewAnswers (ReviewAnswersRequest) returns (ReviewAnswersResponse);
 }
 
 message DealRequest {
@@ -25,3 +27,10 @@ message StoreAnswersRequest {
 }
 
 message StoreAnswersResponse {}
+
+message ReviewAnswersRequest {
+    string user_id = 1;
+    repeated string answer_ids = 2;
+}
+
+message ReviewAnswersResponse {}

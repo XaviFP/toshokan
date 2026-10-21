@@ -1026,7 +1026,7 @@ def get_review_response(base_url: str, token: str, params: Dict[str, Any]) -> re
     return response
 
 
-def store_review_answers_response(base_url: str, token: str, answer_ids: List[str]) -> requests.Response:
+def review_answers_response(base_url: str, token: str, answer_ids: List[str]) -> requests.Response:
     response = requests.post(
         f"{base_url}/review/answers",
         json={"answer_ids": answer_ids},
@@ -1064,7 +1064,9 @@ def run_review_tests(base_url: str) -> None:
 
     token = create_user(base_url)["token"]
     answered_deck = create_deck(base_url, token, "review-answered")
-    unanswered_deck = create_deck(base_url, token, "review-unanswered")
+    course = create_course(base_url, token, "review-course", "review-course description")
+    lesson = create_lesson(base_url, token, course["id"], 1, "review-lesson", answered_deck["id"])
+    enroll_course(base_url, token, course["id"])
 
     response = get_review_response(base_url, token, {})
     assert response.status_code == 200, f"Expected 200, got {response.status_code}"
@@ -1073,19 +1075,31 @@ def run_review_tests(base_url: str) -> None:
 
     # First answer is the correct one, see create_deck.
     answer_ids = [card["possible_answers"][0]["id"] for card in answered_deck["cards"]]
-    response = store_review_answers_response(base_url, token, answer_ids)
-    assert response.status_code == 200, f"Expected 200, got {response.status_code}"
-    log_step("  ✓ Store review answers - success")
+
+    # Cards only enter the review pool through a lesson, so these are rejected for now.
+    response = review_answers_response(base_url, token, answer_ids)
+    assert response.status_code == 404, f"Expected 404, got {response.status_code}"
+    response = get_review_response(base_url, token, {})
+    assert response.json()["cards"] == [], f"Expected no cards, got {response.json()}"
+    log_step("  ✓ Review answers for cards never answered in a lesson return 404 - success")
+
+    answer_deck(base_url, token, course["id"], lesson["id"], answered_deck)
 
     # 4 answered cards is fewer than the default max_cards, so every review returns all
     # of them whatever their level. The dealer shuffles them, hence the sort.
     expected = sorted(card["id"] for card in answered_deck["cards"])
 
-    response = get_review_response(base_url, token, {"deck_id": answered_deck["id"]})
-    assert response.status_code == 200, f"Expected 200, got {response.status_code}"
-    actual = sorted(card["id"] for card in response.json()["cards"])
+    # The course service sends lesson answers to the dealer in the background, so they may
+    # not be there yet on a slow machine. Give it a few tries before calling it a failure.
+    for _ in range(10):
+        response = get_review_response(base_url, token, {"deck_id": answered_deck["id"]})
+        assert response.status_code == 200, f"Expected 200, got {response.status_code}"
+        actual = sorted(card["id"] for card in response.json()["cards"])
+        if actual == expected:
+            break
+        time.sleep(0.2)
     assert actual == expected, f"Expected {expected}, got {actual}"
-    log_step("  ✓ Review of answered deck returns its cards - success")
+    log_step("  ✓ Review of a deck answered in a lesson returns its cards - success")
 
     response = get_review_response(base_url, token, {})
     assert response.status_code == 200, f"Expected 200, got {response.status_code}"
@@ -1093,10 +1107,9 @@ def run_review_tests(base_url: str) -> None:
     assert actual == expected, f"Expected {expected}, got {actual}"
     log_step("  ✓ Review without scope returns all answered cards - success")
 
-    response = get_review_response(base_url, token, {"deck_id": unanswered_deck["id"]})
+    response = review_answers_response(base_url, token, answer_ids)
     assert response.status_code == 200, f"Expected 200, got {response.status_code}"
-    assert response.json()["cards"] == [], f"Expected no cards, got {response.json()}"
-    log_step("  ✓ Review of unanswered deck is empty - success")
+    log_step("  ✓ Review answers for cards in the pool - success")
 
     response = get_review_response(base_url, token, {"max_cards": 1})
     assert response.status_code == 200, f"Expected 200, got {response.status_code}"
@@ -1111,7 +1124,7 @@ def run_review_tests(base_url: str) -> None:
     assert response.status_code == 400, f"Expected 400, got {response.status_code}"
     log_step("  ✓ Review with invalid deck_id returns 400 - success")
 
-    response = store_review_answers_response(base_url, token, ["00000000-0000-0000-0000-000000000000"])
+    response = review_answers_response(base_url, token, ["00000000-0000-0000-0000-000000000000"])
     assert response.status_code == 404, f"Expected 404, got {response.status_code}"
     log_step("  ✓ Store unknown answer returns 404 - success")
 

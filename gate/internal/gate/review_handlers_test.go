@@ -300,19 +300,19 @@ func TestGetReview(t *testing.T) {
 	})
 }
 
-func TestStoreReviewAnswers(t *testing.T) {
+func TestReviewAnswers(t *testing.T) {
 	t.Run("success", func(t *testing.T) {
 		dealerClient := &mockDealerClient{}
 
-		dealerClient.On("StoreAnswers", mock.Anything, &pbDealer.StoreAnswersRequest{
+		dealerClient.On("ReviewAnswers", mock.Anything, &pbDealer.ReviewAnswersRequest{
 			UserId:    "4acc3aa4-7684-4a64-b61c-28a599881922",
 			AnswerIds: []string{"7e6926da-82b2-4ae8-99b4-1b803ebf1877", "72bdff92-5bc8-4e1d-9217-d0b23e22ff33"},
-		}).Return(&pbDealer.StoreAnswersResponse{}, nil)
+		}).Return(&pbDealer.ReviewAnswersResponse{}, nil)
 
 		router := gin.New()
 		router.Use(func(ctx *gin.Context) { ctx.Set("userID", "4acc3aa4-7684-4a64-b61c-28a599881922") })
 		router.POST("/review/answers", func(ctx *gin.Context) {
-			StoreReviewAnswers(ctx, dealerClient)
+			ReviewAnswers(ctx, dealerClient)
 		})
 
 		body, _ := json.Marshal(map[string]interface{}{
@@ -332,7 +332,7 @@ func TestStoreReviewAnswers(t *testing.T) {
 
 		router := gin.New()
 		router.POST("/review/answers", func(ctx *gin.Context) {
-			StoreReviewAnswers(ctx, dealerClient)
+			ReviewAnswers(ctx, dealerClient)
 		})
 
 		body, _ := json.Marshal(map[string]interface{}{"answer_ids": []string{}})
@@ -350,7 +350,7 @@ func TestStoreReviewAnswers(t *testing.T) {
 
 		router := gin.New()
 		router.POST("/review/answers", func(ctx *gin.Context) {
-			StoreReviewAnswers(ctx, dealerClient)
+			ReviewAnswers(ctx, dealerClient)
 		})
 
 		body, _ := json.Marshal(map[string]interface{}{"answer_ids": []string{"invalid-uuid"}})
@@ -368,7 +368,7 @@ func TestStoreReviewAnswers(t *testing.T) {
 
 		router := gin.New()
 		router.POST("/review/answers", func(ctx *gin.Context) {
-			StoreReviewAnswers(ctx, dealerClient)
+			ReviewAnswers(ctx, dealerClient)
 		})
 
 		req := httptest.NewRequest(http.MethodPost, "/review/answers", bytes.NewReader([]byte("{")))
@@ -379,15 +379,15 @@ func TestStoreReviewAnswers(t *testing.T) {
 		assert.Equal(t, http.StatusBadRequest, w.Code)
 	})
 
-	t.Run("failure_dealer_unknown_answer", func(t *testing.T) {
+	t.Run("failure_dealer_answer_not_in_pool", func(t *testing.T) {
 		dealerClient := &mockDealerClient{}
 
-		dealerClient.On("StoreAnswers", mock.Anything, mock.Anything).
-			Return(nil, status.Error(codes.InvalidArgument, "unknown answer_id"))
+		dealerClient.On("ReviewAnswers", mock.Anything, mock.Anything).
+			Return(nil, status.Error(codes.InvalidArgument, "answer_id not in review pool"))
 
 		router := gin.New()
 		router.POST("/review/answers", func(ctx *gin.Context) {
-			StoreReviewAnswers(ctx, dealerClient)
+			ReviewAnswers(ctx, dealerClient)
 		})
 
 		body, _ := json.Marshal(map[string]interface{}{"answer_ids": []string{"7e6926da-82b2-4ae8-99b4-1b803ebf1877"}})
@@ -397,18 +397,18 @@ func TestStoreReviewAnswers(t *testing.T) {
 		router.ServeHTTP(w, req)
 
 		assert.Equal(t, http.StatusNotFound, w.Code)
-		assert.Contains(t, w.Body.String(), "unknown answer_id")
+		assert.Contains(t, w.Body.String(), "answer_id not in review pool")
 	})
 
 	t.Run("failure_dealer_internal", func(t *testing.T) {
 		dealerClient := &mockDealerClient{}
 
-		dealerClient.On("StoreAnswers", mock.Anything, mock.Anything).
+		dealerClient.On("ReviewAnswers", mock.Anything, mock.Anything).
 			Return(nil, status.Error(codes.Internal, "store_answers failed"))
 
 		router := gin.New()
 		router.POST("/review/answers", func(ctx *gin.Context) {
-			StoreReviewAnswers(ctx, dealerClient)
+			ReviewAnswers(ctx, dealerClient)
 		})
 
 		body, _ := json.Marshal(map[string]interface{}{"answer_ids": []string{"7e6926da-82b2-4ae8-99b4-1b803ebf1877"}})
@@ -439,4 +439,12 @@ func (m *mockDealerClient) StoreAnswers(ctx context.Context, req *pbDealer.Store
 		return nil, args.Error(1)
 	}
 	return args.Get(0).(*pbDealer.StoreAnswersResponse), args.Error(1)
+}
+
+func (m *mockDealerClient) ReviewAnswers(ctx context.Context, req *pbDealer.ReviewAnswersRequest, opts ...grpc.CallOption) (*pbDealer.ReviewAnswersResponse, error) {
+	args := m.Called(ctx, req)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*pbDealer.ReviewAnswersResponse), args.Error(1)
 }

@@ -630,3 +630,11 @@ func (m *MockDealerClient) StoreAnswers(ctx context.Context, in *pbDealer.StoreA
 	}
 	return args.Get(0).(*pbDealer.StoreAnswersResponse), args.Error(1)
 }
+
+func (m *MockDealerClient) ReviewAnswers(ctx context.Context, in *pbDealer.ReviewAnswersRequest, opts ...grpc.CallOption) (*pbDealer.ReviewAnswersResponse, error) {
+	args := m.Called(ctx, in)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*pbDealer.ReviewAnswersResponse), args.Error(1)
+}

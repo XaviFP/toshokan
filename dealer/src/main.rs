@@ -12,7 +12,10 @@ mod pb {
 }
 
 use pb::dealer_server::{Dealer as pbDealer, DealerServer};
-use pb::{DealRequest, DealResponse, StoreAnswersRequest, StoreAnswersResponse};
+use pb::{
+    DealRequest, DealResponse, ReviewAnswersRequest, ReviewAnswersResponse, StoreAnswersRequest,
+    StoreAnswersResponse,
+};
 
 mod config;
 use config::{load_db_config, load_grpc_server_config};
@@ -119,6 +122,29 @@ impl Repository {
 
         Ok(())
     }
+
+    // Unknown answers and answers without a card count as outside the pool too.
+    async fn count_answers_outside_pool(
+        &self,
+        user_id: &Uuid,
+        answer_ids: &[Uuid],
+    ) -> Result<i64, tokio_postgres::Error> {
+        let row = self
+            .client
+            .query_one(
+                "SELECT count(*)
+                FROM unnest($2::uuid[]) AS submitted(answer_id)
+                LEFT JOIN answers a ON a.id = submitted.answer_id
+                LEFT JOIN user_card_level l
+                ON l.card_id = a.card_id
+                AND l.user_id = $1::uuid
+                WHERE l.card_id IS NULL",
+                &[user_id, &answer_ids],
+            )
+            .await?;
+
+        Ok(row.get(0))
+    }
 }
 
 struct LeveledCard {
@@ -130,13 +156,12 @@ fn parse_uuid(field: &str, value: &str) -> Result<Uuid, Status> {
     Uuid::try_parse(value).map_err(|_| Status::invalid_argument(format!("invalid {}", field)))
 }
 
-fn parse_store_answers_request(request: &StoreAnswersRequest) -> Result<(Uuid, Vec<Uuid>), Status> {
-    let user_id = parse_uuid("user_id", &request.user_id)?;
-    if request.answer_ids.is_empty() {
+fn parse_answers_request(user_id: &str, answer_ids: &[String]) -> Result<(Uuid, Vec<Uuid>), Status> {
+    let user_id = parse_uuid("user_id", user_id)?;
+    if answer_ids.is_empty() {
         return Err(Status::invalid_argument("no answers provided"));
     }
-    let answer_ids = request
-        .answer_ids
+    let answer_ids = answer_ids
         .iter()
         .map(|id| parse_uuid("answer_id", id))
         .collect::<Result<Vec<Uuid>, Status>>()?;
@@ -171,7 +196,8 @@ impl pbDealer for Dealer {
         &self,
         request: Request<StoreAnswersRequest>,
     ) -> Result<Response<StoreAnswersResponse>, Status> {
-        let (user_id, answer_ids) = parse_store_answers_request(request.get_ref())?;
+        let request = request.get_ref();
+        let (user_id, answer_ids) = parse_answers_request(&request.user_id, &request.answer_ids)?;
 
         match self.repo.store_answers(&user_id, &answer_ids).await {
             Ok(()) => Ok(Response::new(StoreAnswersResponse {})),
@@ -183,6 +209,31 @@ impl pbDealer for Dealer {
             }
             Err(err) => Err(internal_error("store answers", err)),
         }
+    }
+
+    async fn review_answers(
+        &self,
+        request: Request<ReviewAnswersRequest>,
+    ) -> Result<Response<ReviewAnswersResponse>, Status> {
+        let request = request.get_ref();
+        let (user_id, answer_ids) = parse_answers_request(&request.user_id, &request.answer_ids)?;
+
+        // Cards never leave a pool, so the check can't go stale before the write.
+        let outside_pool = self
+            .repo
+            .count_answers_outside_pool(&user_id, &answer_ids)
+            .await
+            .map_err(|err| internal_error("review answers", err))?;
+        if outside_pool > 0 {
+            return Err(Status::invalid_argument("answer_id not in review pool"));
+        }
+
+        self.repo
+            .store_answers(&user_id, &answer_ids)
+            .await
+            .map_err(|err| internal_error("review answers", err))?;
+
+        Ok(Response::new(ReviewAnswersResponse {}))
     }
 
     async fn deal(&self, request: Request<DealRequest>) -> Result<Response<DealResponse>, Status> {
@@ -439,8 +490,8 @@ mod validation_test {
     use tonic::Code;
     use uuid::{uuid, Uuid};
 
-    use super::pb::{DealRequest, StoreAnswersRequest};
-    use super::{parse_deal_request, parse_store_answers_request};
+    use super::pb::DealRequest;
+    use super::{parse_answers_request, parse_deal_request};
 
     const USER: Uuid = uuid!("11111111-0000-0000-0000-000000000000");
     const DECK: Uuid = uuid!("dddddddd-0000-0000-0000-000000000000");
@@ -497,44 +548,37 @@ mod validation_test {
     }
 
     #[test]
-    fn parse_store_answers_request_rejects_invalid_user_id() {
-        let actual = parse_store_answers_request(&StoreAnswersRequest {
-            user_id: "not-a-uuid".to_owned(),
-            answer_ids: vec![ANSWER_A_CORRECT.to_string()],
-        })
+    fn parse_answers_request_rejects_invalid_user_id() {
+        let actual =
+            parse_answers_request("not-a-uuid", &[ANSWER_A_CORRECT.to_string()]).unwrap_err();
+
+        assert_eq!(Code::InvalidArgument, actual.code());
+    }
+
+    #[test]
+    fn parse_answers_request_rejects_invalid_answer_id() {
+        let actual = parse_answers_request(
+            &USER.to_string(),
+            &[ANSWER_A_CORRECT.to_string(), "not-a-uuid".to_owned()],
+        )
         .unwrap_err();
 
         assert_eq!(Code::InvalidArgument, actual.code());
     }
 
     #[test]
-    fn parse_store_answers_request_rejects_invalid_answer_id() {
-        let actual = parse_store_answers_request(&StoreAnswersRequest {
-            user_id: USER.to_string(),
-            answer_ids: vec![ANSWER_A_CORRECT.to_string(), "not-a-uuid".to_owned()],
-        })
-        .unwrap_err();
+    fn parse_answers_request_rejects_empty_answers() {
+        let actual = parse_answers_request(&USER.to_string(), &[]).unwrap_err();
 
         assert_eq!(Code::InvalidArgument, actual.code());
     }
 
     #[test]
-    fn parse_store_answers_request_rejects_empty_answers() {
-        let actual = parse_store_answers_request(&StoreAnswersRequest {
-            user_id: USER.to_string(),
-            answer_ids: vec![],
-        })
-        .unwrap_err();
-
-        assert_eq!(Code::InvalidArgument, actual.code());
-    }
-
-    #[test]
-    fn parse_store_answers_request_accepts_valid_ids() {
-        let actual = parse_store_answers_request(&StoreAnswersRequest {
-            user_id: USER.to_string(),
-            answer_ids: vec![ANSWER_A_CORRECT.to_string(), ANSWER_B_CORRECT.to_string()],
-        })
+    fn parse_answers_request_accepts_valid_ids() {
+        let actual = parse_answers_request(
+            &USER.to_string(),
+            &[ANSWER_A_CORRECT.to_string(), ANSWER_B_CORRECT.to_string()],
+        )
         .unwrap();
 
         assert_eq!((USER, vec![ANSWER_A_CORRECT, ANSWER_B_CORRECT]), actual);

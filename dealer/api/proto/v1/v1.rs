@@ -26,6 +26,17 @@ pub struct StoreAnswersRequest {
 #[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct StoreAnswersResponse {}
+#[allow(clippy::derive_partial_eq_without_eq)]
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct ReviewAnswersRequest {
+    #[prost(string, tag = "1")]
+    pub user_id: ::prost::alloc::string::String,
+    #[prost(string, repeated, tag = "2")]
+    pub answer_ids: ::prost::alloc::vec::Vec<::prost::alloc::string::String>,
+}
+#[allow(clippy::derive_partial_eq_without_eq)]
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct ReviewAnswersResponse {}
 /// Generated client implementations.
 pub mod dealer_client {
     #![allow(unused_variables, dead_code, missing_docs, clippy::let_unit_value)]
@@ -129,6 +140,24 @@ pub mod dealer_client {
             let path = http::uri::PathAndQuery::from_static("/v1.Dealer/StoreAnswers");
             self.inner.unary(request.into_request(), path, codec).await
         }
+        /// Like StoreAnswers, but only for cards already in the user's pool; never adds cards.
+        pub async fn review_answers(
+            &mut self,
+            request: impl tonic::IntoRequest<super::ReviewAnswersRequest>,
+        ) -> Result<tonic::Response<super::ReviewAnswersResponse>, tonic::Status> {
+            self.inner
+                .ready()
+                .await
+                .map_err(|e| {
+                    tonic::Status::new(
+                        tonic::Code::Unknown,
+                        format!("Service was not ready: {}", e.into()),
+                    )
+                })?;
+            let codec = tonic::codec::ProstCodec::default();
+            let path = http::uri::PathAndQuery::from_static("/v1.Dealer/ReviewAnswers");
+            self.inner.unary(request.into_request(), path, codec).await
+        }
     }
 }
 /// Generated server implementations.
@@ -146,6 +175,11 @@ pub mod dealer_server {
             &self,
             request: tonic::Request<super::StoreAnswersRequest>,
         ) -> Result<tonic::Response<super::StoreAnswersResponse>, tonic::Status>;
+        /// Like StoreAnswers, but only for cards already in the user's pool; never adds cards.
+        async fn review_answers(
+            &self,
+            request: tonic::Request<super::ReviewAnswersRequest>,
+        ) -> Result<tonic::Response<super::ReviewAnswersResponse>, tonic::Status>;
     }
     #[derive(Debug)]
     pub struct DealerServer<T: Dealer> {
@@ -271,6 +305,46 @@ pub mod dealer_server {
                     let fut = async move {
                         let inner = inner.0;
                         let method = StoreAnswersSvc(inner);
+                        let codec = tonic::codec::ProstCodec::default();
+                        let mut grpc = tonic::server::Grpc::new(codec)
+                            .apply_compression_config(
+                                accept_compression_encodings,
+                                send_compression_encodings,
+                            );
+                        let res = grpc.unary(method, req).await;
+                        Ok(res)
+                    };
+                    Box::pin(fut)
+                }
+                "/v1.Dealer/ReviewAnswers" => {
+                    #[allow(non_camel_case_types)]
+                    struct ReviewAnswersSvc<T: Dealer>(pub Arc<T>);
+                    impl<
+                        T: Dealer,
+                    > tonic::server::UnaryService<super::ReviewAnswersRequest>
+                    for ReviewAnswersSvc<T> {
+                        type Response = super::ReviewAnswersResponse;
+                        type Future = BoxFuture<
+                            tonic::Response<Self::Response>,
+                            tonic::Status,
+                        >;
+                        fn call(
+                            &mut self,
+                            request: tonic::Request<super::ReviewAnswersRequest>,
+                        ) -> Self::Future {
+                            let inner = self.0.clone();
+                            let fut = async move {
+                                (*inner).review_answers(request).await
+                            };
+                            Box::pin(fut)
+                        }
+                    }
+                    let accept_compression_encodings = self.accept_compression_encodings;
+                    let send_compression_encodings = self.send_compression_encodings;
+                    let inner = self.inner.clone();
+                    let fut = async move {
+                        let inner = inner.0;
+                        let method = ReviewAnswersSvc(inner);
                         let codec = tonic::codec::ProstCodec::default();
                         let mut grpc = tonic::server::Grpc::new(codec)
                             .apply_compression_config(
