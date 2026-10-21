@@ -1157,6 +1157,140 @@ def run_review_tests(base_url: str) -> None:
     log_step("✓ Review tests passed")
 
 
+def create_card_response(base_url: str, token: str, deck_id: str, card: Dict[str, Any]) -> requests.Response:
+    response = requests.post(
+        f"{base_url}/decks/{deck_id}/cards",
+        json=card,
+        headers=auth_headers(token),
+        timeout=TIMEOUT,
+    )
+    log_response("POST /decks/{deckId}/cards", response)
+    return response
+
+
+def make_card_payload(title: str) -> Dict[str, Any]:
+    return {
+        "title": title,
+        "kind": "single_choice",
+        "explanation": f"{title} explanation",
+        "possible_answers": [
+            {"text": f"{title} right", "is_correct": True},
+            {"text": f"{title} wrong", "is_correct": False},
+        ],
+    }
+
+
+def run_create_card_tests(base_url: str, token: str) -> None:
+    """Test POST /decks/{deckId}/cards, including that the cached deck shows the new card."""
+    log_step("")
+    log_step("Testing CreateCard endpoint...")
+
+    deck = create_deck(base_url, token, "deck-for-new-card")
+
+    # Reading the deck caches it, so the next read proves the cache was cleared.
+    get_deck(base_url, token, deck["id"])
+
+    response = create_card_response(base_url, token, deck["id"], make_card_payload("new-card"))
+    assert response.status_code == 200, f"Expected 200, got {response.status_code}"
+    actual = response.json()
+    assert actual["deck_id"] == deck["id"], f"Expected deck_id {deck['id']}, got {actual['deck_id']}"
+    assert actual["title"] == "new-card", f"Expected title new-card, got {actual['title']}"
+    assert actual["kind"] == "single_choice", f"Expected kind single_choice, got {actual['kind']}"
+    assert actual["explanation"] == "new-card explanation", f"Unexpected explanation {actual['explanation']}"
+    answers = sorted((a["text"], a["is_correct"], a["card_id"]) for a in actual["possible_answers"])
+    expected_answers = [("new-card right", True, actual["id"]), ("new-card wrong", False, actual["id"])]
+    assert answers == expected_answers, f"Expected {expected_answers}, got {answers}"
+    log_step("  ✓ Create card returns the new card - success")
+
+    deck_after = get_deck(base_url, token, deck["id"])
+    card_ids = [card["id"] for card in deck_after["cards"]]
+    assert actual["id"] in card_ids, f"New card {actual['id']} missing from deck, got {card_ids}"
+    assert len(card_ids) == len(deck["cards"]) + 1, f"Expected {len(deck['cards']) + 1} cards, got {len(card_ids)}"
+    log_step("  ✓ Deck read after adding a card includes it - success")
+
+    response = create_card_response(base_url, token, "00000000-0000-0000-0000-000000000000", make_card_payload("orphan"))
+    assert response.status_code == 404, f"Expected 404, got {response.status_code}"
+    log_step("  ✓ Create card on an unknown deck returns 404 - success")
+
+    invalid_card = {"title": "no-answers", "kind": "single_choice", "possible_answers": []}
+    response = create_card_response(base_url, token, deck["id"], invalid_card)
+    assert response.status_code == 400, f"Expected 400, got {response.status_code}"
+    log_step("  ✓ Create card without answers returns 400 - success")
+
+    log_step("✓ CreateCard tests passed")
+
+
+def run_new_card_reopens_lesson_test(base_url: str) -> None:
+    """Test that adding a card to a completed lesson's deck reopens the lesson after a sync."""
+    log_step("")
+    log_step("Testing that a new card reopens a completed lesson...")
+
+    token = create_user(base_url)["token"]
+    deck = create_deck(base_url, token, "deck-reopened")
+    course = create_course(base_url, token, "reopen-course", "reopen-course description")
+    lesson = create_lesson(base_url, token, course["id"], 1, "reopen-lesson", deck["id"])
+    enroll_course(base_url, token, course["id"])
+    answer_deck(base_url, token, course["id"], lesson["id"], deck)
+
+    lesson_progress = get_lesson_state(base_url, token, course["id"], lesson["id"])["lesson_state"][lesson["id"]]
+    assert lesson_progress["is_completed"] is True, "Lesson should be completed before the new card"
+    log_step("  ✓ Lesson is completed - success")
+
+    response = create_card_response(base_url, token, deck["id"], make_card_payload("late-card"))
+    assert response.status_code == 200, f"Expected 200, got {response.status_code}"
+    new_card_id = response.json()["id"]
+
+    sync_state(base_url, token, course["id"])
+
+    lesson_progress = get_lesson_state(base_url, token, course["id"], lesson["id"])["lesson_state"][lesson["id"]]
+    assert lesson_progress["is_completed"] is False, "Lesson should be reopened by the new card"
+    deck_progress = lesson_progress["decks"][deck["id"]]
+    assert deck_progress["is_completed"] is False, "Deck should be reopened by the new card"
+    assert deck_progress["cards"][new_card_id]["is_completed"] is False, "New card should be unanswered"
+    log_step("  ✓ New card reopens the lesson, unanswered - success")
+
+    log_step("✓ New card reopens lesson test passed")
+
+
+def run_new_deck_reopens_lesson_test(base_url: str) -> None:
+    """Test that adding a deck to a completed lesson reopens the lesson after a sync."""
+    log_step("")
+    log_step("Testing that a new deck reopens a completed lesson...")
+
+    token = create_user(base_url)["token"]
+    first_deck = create_deck(base_url, token, "deck-first")
+    second_deck = create_deck(base_url, token, "deck-added-later")
+    course = create_course(base_url, token, "reopen-deck-course", "reopen-deck-course description")
+    lesson = create_lesson(base_url, token, course["id"], 1, "reopen-deck-lesson", first_deck["id"])
+    enroll_course(base_url, token, course["id"])
+    answer_deck(base_url, token, course["id"], lesson["id"], first_deck)
+
+    lesson_progress = get_lesson_state(base_url, token, course["id"], lesson["id"])["lesson_state"][lesson["id"]]
+    assert lesson_progress["is_completed"] is True, "Lesson should be completed before the new deck"
+    log_step("  ✓ Lesson is completed - success")
+
+    # A lesson's decks are the ![deck](id) references in its body, so this adds second_deck to the lesson.
+    new_body = f"Lesson with decks ![deck]({first_deck['id']}) and ![deck]({second_deck['id']})"
+    response = update_lesson(base_url, token, course["id"], lesson["id"], {"body": new_body})
+    assert response.status_code == 200, f"Expected 200, got {response.status_code}"
+
+    sync_state(base_url, token, course["id"])
+
+    lesson_progress = get_lesson_state(base_url, token, course["id"], lesson["id"])["lesson_state"][lesson["id"]]
+    assert lesson_progress["is_completed"] is False, "Lesson should be reopened by the new deck"
+    assert lesson_progress["decks"][first_deck["id"]]["is_completed"] is True, "First deck should stay completed"
+    new_deck_progress = lesson_progress["decks"][second_deck["id"]]
+    assert new_deck_progress["is_completed"] is False, "New deck should not be completed"
+    expected_card_ids = sorted(card["id"] for card in second_deck["cards"])
+    actual_card_ids = sorted(new_deck_progress["cards"].keys())
+    assert actual_card_ids == expected_card_ids, f"Expected cards {expected_card_ids}, got {actual_card_ids}"
+    actual_completed = {card["is_completed"] for card in new_deck_progress["cards"].values()}
+    assert actual_completed == {False}, f"New deck's cards should all be unanswered, got {actual_completed}"
+    log_step("  ✓ New deck reopens the lesson, with its cards unanswered - success")
+
+    log_step("✓ New deck reopens lesson test passed")
+
+
 def run_update_course_tests(base_url: str, token: str, course_id: str) -> None:
     """Test PATCH /courses/{courseId} endpoint."""
     log_step("")
@@ -1844,6 +1978,12 @@ def test_basic_flow():
 
     # Test delete deck endpoint (creates its own deck)
     run_delete_deck_tests(base_url, token)
+
+    run_create_card_tests(base_url, token)
+
+    run_new_card_reopens_lesson_test(base_url)
+
+    run_new_deck_reopens_lesson_test(base_url)
 
     run_lesson_answers_review_test(base_url, token, lesson_deck_ids[0])
 

@@ -64,10 +64,7 @@ func (r *redisRepository) StoreCard(ctx context.Context, c Card, dID uuid.UUID) 
 		return errors.Trace(err)
 	}
 
-	r.delete(ctx, dID.String())
-
-	// Update cache TODO
-	if _, err := r.GetDeck(ctx, dID); err == nil {
+	if err := r.delete(ctx, r.getDeckCacheKey(dID)); err != nil {
 		return errors.Trace(err)
 	}
 
