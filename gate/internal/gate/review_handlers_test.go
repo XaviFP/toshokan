@@ -239,6 +239,248 @@ func TestGetReview(t *testing.T) {
 		assert.Contains(t, w.Body.String(), "invalid deck id format")
 	})
 
+	t.Run("success_with_course_id", func(t *testing.T) {
+		dealerClient := &mockDealerClient{}
+		decksClient := &mockDecksClient{}
+
+		dealerClient.On("Deal", mock.Anything, &pbDealer.DealRequest{
+			UserId:        "4acc3aa4-7684-4a64-b61c-28a599881922",
+			CourseId:      "0c5e1a3b-6d4f-4f7e-9a2b-8c1d2e3f4a5b",
+			NumberOfCards: DefaultReviewCards,
+		}).Return(&pbDealer.DealResponse{CardIds: []string{"card-a"}}, nil)
+		decksClient.On("GetCards", mock.Anything, &pbDeck.GetCardsRequest{CardIds: []string{"card-a"}}).
+			Return(&pbDeck.GetCardsResponse{Cards: map[string]*pbDeck.Card{
+				"card-a": {Id: "card-a", Title: "A"},
+			}}, nil)
+
+		router := gin.New()
+		router.Use(func(ctx *gin.Context) { ctx.Set("userID", "4acc3aa4-7684-4a64-b61c-28a599881922") })
+		router.GET("/review", func(ctx *gin.Context) {
+			GetReview(ctx, dealerClient, decksClient)
+		})
+
+		req := httptest.NewRequest(http.MethodGet, "/review?course_id=0c5e1a3b-6d4f-4f7e-9a2b-8c1d2e3f4a5b", nil)
+		w := httptest.NewRecorder()
+		router.ServeHTTP(w, req)
+
+		require.Equal(t, http.StatusOK, w.Code)
+
+		var actual reviewResponse
+		require.NoError(t, json.Unmarshal(w.Body.Bytes(), &actual))
+
+		require.Len(t, actual.Cards, 1)
+		assert.Equal(t, "card-a", actual.Cards[0].ID)
+	})
+
+	t.Run("success_with_lesson_id", func(t *testing.T) {
+		dealerClient := &mockDealerClient{}
+		decksClient := &mockDecksClient{}
+
+		dealerClient.On("Deal", mock.Anything, &pbDealer.DealRequest{
+			UserId:        "4acc3aa4-7684-4a64-b61c-28a599881922",
+			LessonId:      "7b9a2c4d-3e5f-4a6b-8c7d-9e0f1a2b3c4d",
+			NumberOfCards: DefaultReviewCards,
+		}).Return(&pbDealer.DealResponse{CardIds: []string{"card-a"}}, nil)
+		decksClient.On("GetCards", mock.Anything, &pbDeck.GetCardsRequest{CardIds: []string{"card-a"}}).
+			Return(&pbDeck.GetCardsResponse{Cards: map[string]*pbDeck.Card{
+				"card-a": {Id: "card-a", Title: "A"},
+			}}, nil)
+
+		router := gin.New()
+		router.Use(func(ctx *gin.Context) { ctx.Set("userID", "4acc3aa4-7684-4a64-b61c-28a599881922") })
+		router.GET("/review", func(ctx *gin.Context) {
+			GetReview(ctx, dealerClient, decksClient)
+		})
+
+		req := httptest.NewRequest(http.MethodGet, "/review?lesson_id=7b9a2c4d-3e5f-4a6b-8c7d-9e0f1a2b3c4d", nil)
+		w := httptest.NewRecorder()
+		router.ServeHTTP(w, req)
+
+		require.Equal(t, http.StatusOK, w.Code)
+
+		var actual reviewResponse
+		require.NoError(t, json.Unmarshal(w.Body.Bytes(), &actual))
+
+		require.Len(t, actual.Cards, 1)
+		assert.Equal(t, "card-a", actual.Cards[0].ID)
+	})
+
+	t.Run("failure_invalid_course_id", func(t *testing.T) {
+		dealerClient := &mockDealerClient{}
+		decksClient := &mockDecksClient{}
+
+		router := gin.New()
+		router.GET("/review", func(ctx *gin.Context) {
+			GetReview(ctx, dealerClient, decksClient)
+		})
+
+		req := httptest.NewRequest(http.MethodGet, "/review?course_id=invalid-uuid", nil)
+		w := httptest.NewRecorder()
+		router.ServeHTTP(w, req)
+
+		assert.Equal(t, http.StatusBadRequest, w.Code)
+		assert.Contains(t, w.Body.String(), "invalid course id format")
+	})
+
+	t.Run("failure_empty_course_id", func(t *testing.T) {
+		dealerClient := &mockDealerClient{}
+		decksClient := &mockDecksClient{}
+
+		router := gin.New()
+		router.GET("/review", func(ctx *gin.Context) {
+			GetReview(ctx, dealerClient, decksClient)
+		})
+
+		req := httptest.NewRequest(http.MethodGet, "/review?course_id=", nil)
+		w := httptest.NewRecorder()
+		router.ServeHTTP(w, req)
+
+		assert.Equal(t, http.StatusBadRequest, w.Code)
+		assert.Contains(t, w.Body.String(), "invalid course id format")
+	})
+
+	t.Run("failure_invalid_lesson_id", func(t *testing.T) {
+		dealerClient := &mockDealerClient{}
+		decksClient := &mockDecksClient{}
+
+		router := gin.New()
+		router.GET("/review", func(ctx *gin.Context) {
+			GetReview(ctx, dealerClient, decksClient)
+		})
+
+		req := httptest.NewRequest(http.MethodGet, "/review?lesson_id=invalid-uuid", nil)
+		w := httptest.NewRecorder()
+		router.ServeHTTP(w, req)
+
+		assert.Equal(t, http.StatusBadRequest, w.Code)
+		assert.Contains(t, w.Body.String(), "invalid lesson id format")
+	})
+
+	t.Run("failure_empty_lesson_id", func(t *testing.T) {
+		dealerClient := &mockDealerClient{}
+		decksClient := &mockDecksClient{}
+
+		router := gin.New()
+		router.GET("/review", func(ctx *gin.Context) {
+			GetReview(ctx, dealerClient, decksClient)
+		})
+
+		req := httptest.NewRequest(http.MethodGet, "/review?lesson_id=", nil)
+		w := httptest.NewRecorder()
+		router.ServeHTTP(w, req)
+
+		assert.Equal(t, http.StatusBadRequest, w.Code)
+		assert.Contains(t, w.Body.String(), "invalid lesson id format")
+	})
+
+	t.Run("failure_deck_id_and_course_id", func(t *testing.T) {
+		dealerClient := &mockDealerClient{}
+		decksClient := &mockDecksClient{}
+
+		router := gin.New()
+		router.GET("/review", func(ctx *gin.Context) {
+			GetReview(ctx, dealerClient, decksClient)
+		})
+
+		req := httptest.NewRequest(http.MethodGet, "/review?deck_id=fb9ffe2c-ad66-4766-9b7b-46fd5d9acd72&course_id=0c5e1a3b-6d4f-4f7e-9a2b-8c1d2e3f4a5b", nil)
+		w := httptest.NewRecorder()
+		router.ServeHTTP(w, req)
+
+		assert.Equal(t, http.StatusBadRequest, w.Code)
+		assert.Contains(t, w.Body.String(), "set at most one of: deck_id, course_id, lesson_id")
+	})
+
+	t.Run("failure_course_id_and_lesson_id", func(t *testing.T) {
+		dealerClient := &mockDealerClient{}
+		decksClient := &mockDecksClient{}
+
+		router := gin.New()
+		router.GET("/review", func(ctx *gin.Context) {
+			GetReview(ctx, dealerClient, decksClient)
+		})
+
+		req := httptest.NewRequest(http.MethodGet, "/review?course_id=0c5e1a3b-6d4f-4f7e-9a2b-8c1d2e3f4a5b&lesson_id=7b9a2c4d-3e5f-4a6b-8c7d-9e0f1a2b3c4d", nil)
+		w := httptest.NewRecorder()
+		router.ServeHTTP(w, req)
+
+		assert.Equal(t, http.StatusBadRequest, w.Code)
+		assert.Contains(t, w.Body.String(), "set at most one of: deck_id, course_id, lesson_id")
+	})
+
+	t.Run("failure_deck_id_and_lesson_id", func(t *testing.T) {
+		dealerClient := &mockDealerClient{}
+		decksClient := &mockDecksClient{}
+
+		router := gin.New()
+		router.GET("/review", func(ctx *gin.Context) {
+			GetReview(ctx, dealerClient, decksClient)
+		})
+
+		req := httptest.NewRequest(http.MethodGet, "/review?deck_id=fb9ffe2c-ad66-4766-9b7b-46fd5d9acd72&lesson_id=7b9a2c4d-3e5f-4a6b-8c7d-9e0f1a2b3c4d", nil)
+		w := httptest.NewRecorder()
+		router.ServeHTTP(w, req)
+
+		assert.Equal(t, http.StatusBadRequest, w.Code)
+		assert.Contains(t, w.Body.String(), "set at most one of: deck_id, course_id, lesson_id")
+	})
+
+	t.Run("failure_all_three_scopes", func(t *testing.T) {
+		dealerClient := &mockDealerClient{}
+		decksClient := &mockDecksClient{}
+
+		router := gin.New()
+		router.GET("/review", func(ctx *gin.Context) {
+			GetReview(ctx, dealerClient, decksClient)
+		})
+
+		req := httptest.NewRequest(http.MethodGet, "/review?deck_id=fb9ffe2c-ad66-4766-9b7b-46fd5d9acd72&course_id=0c5e1a3b-6d4f-4f7e-9a2b-8c1d2e3f4a5b&lesson_id=7b9a2c4d-3e5f-4a6b-8c7d-9e0f1a2b3c4d", nil)
+		w := httptest.NewRecorder()
+		router.ServeHTTP(w, req)
+
+		assert.Equal(t, http.StatusBadRequest, w.Code)
+		assert.Contains(t, w.Body.String(), "set at most one of: deck_id, course_id, lesson_id")
+	})
+
+	t.Run("failure_dealer_course_not_found", func(t *testing.T) {
+		dealerClient := &mockDealerClient{}
+		decksClient := &mockDecksClient{}
+
+		dealerClient.On("Deal", mock.Anything, mock.Anything).
+			Return(nil, status.Error(codes.NotFound, "courses: course not found"))
+
+		router := gin.New()
+		router.GET("/review", func(ctx *gin.Context) {
+			GetReview(ctx, dealerClient, decksClient)
+		})
+
+		req := httptest.NewRequest(http.MethodGet, "/review?course_id=0c5e1a3b-6d4f-4f7e-9a2b-8c1d2e3f4a5b", nil)
+		w := httptest.NewRecorder()
+		router.ServeHTTP(w, req)
+
+		assert.Equal(t, http.StatusNotFound, w.Code)
+		assert.Contains(t, w.Body.String(), "course not found")
+	})
+
+	t.Run("failure_dealer_lesson_not_found", func(t *testing.T) {
+		dealerClient := &mockDealerClient{}
+		decksClient := &mockDecksClient{}
+
+		dealerClient.On("Deal", mock.Anything, mock.Anything).
+			Return(nil, status.Error(codes.NotFound, "courses: lesson not found"))
+
+		router := gin.New()
+		router.GET("/review", func(ctx *gin.Context) {
+			GetReview(ctx, dealerClient, decksClient)
+		})
+
+		req := httptest.NewRequest(http.MethodGet, "/review?lesson_id=7b9a2c4d-3e5f-4a6b-8c7d-9e0f1a2b3c4d", nil)
+		w := httptest.NewRecorder()
+		router.ServeHTTP(w, req)
+
+		assert.Equal(t, http.StatusNotFound, w.Code)
+		assert.Contains(t, w.Body.String(), "lesson not found")
+	})
+
 	t.Run("failure_dealer_invalid_argument", func(t *testing.T) {
 		dealerClient := &mockDealerClient{}
 		decksClient := &mockDecksClient{}

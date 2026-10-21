@@ -151,6 +151,7 @@ func (s *Server) CreateCard(ctx context.Context, req *pb.CreateCardRequest) (*pb
 	}
 
 	card.GenerateUUIDs()
+	card.DeckID = deckID
 
 	err = s.Repository.StoreCard(ctx, card, deckID)
 	if err != nil {
@@ -373,6 +374,7 @@ func (s *Server) UpdateAnswer(ctx context.Context, req *pb.UpdateAnswerRequest) 
 
 	return &pb.UpdateAnswerResponse{Answer: &pb.Answer{
 		Id:        a.ID.String(),
+		CardId:    a.CardID.String(),
 		Text:      a.Text,
 		IsCorrect: a.IsCorrect,
 	}}, nil
@@ -412,6 +414,7 @@ func toGRPCCards(cards []deck.Card) []*pb.Card {
 func toGRPCCard(c deck.Card) *pb.Card {
 	return &pb.Card{
 		Id:              c.ID.String(),
+		DeckId:          c.DeckID.String(),
 		Title:           c.Title,
 		PossibleAnswers: toGRPCAnswers(c.PossibleAnswers),
 		Explanation:     c.Explanation,
@@ -425,6 +428,7 @@ func toGRPCAnswers(answers []deck.Answer) []*pb.Answer {
 	for _, a := range answers {
 		out = append(out, &pb.Answer{
 			Id:        a.ID.String(),
+			CardId:    a.CardID.String(),
 			Text:      a.Text,
 			IsCorrect: a.IsCorrect,
 		})

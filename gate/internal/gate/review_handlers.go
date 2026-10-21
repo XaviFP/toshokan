@@ -37,24 +37,62 @@ func GetReview(ctx *gin.Context, dealerClient pbDealer.DealerClient, decksClient
 		maxCards = parsedParam
 	}
 
-	var deckIDs []string
-	if deckID, ok := ctx.GetQuery("deck_id"); ok {
+	deckID, hasDeckID := ctx.GetQuery("deck_id")
+	courseID, hasCourseID := ctx.GetQuery("course_id")
+	lessonID, hasLessonID := ctx.GetQuery("lesson_id")
+
+	scopes := 0
+	for _, has := range []bool{hasDeckID, hasCourseID, hasLessonID} {
+		if has {
+			scopes++
+		}
+	}
+	if scopes > 1 {
+		slog.Error("GetReview: more than one scope", "deckId", deckID, "courseId", courseID, "lessonId", lessonID)
+		ctx.JSON(http.StatusBadRequest, gin.H{"error": "set at most one of: deck_id, course_id, lesson_id"})
+		return
+	}
+
+	req := &pbDealer.DealRequest{
+		UserId:        getUserID(ctx),
+		NumberOfCards: uint32(maxCards),
+	}
+
+	if hasDeckID {
 		if _, err := uuid.Parse(deckID); err != nil {
 			slog.Error("GetReview: failed to parse deck ID", "error", err, "deckId", deckID, "stack", errors.ErrorStack(err))
 			ctx.JSON(http.StatusBadRequest, gin.H{"error": "invalid deck id format"})
 			return
 		}
-		deckIDs = []string{deckID}
+		req.DeckIds = []string{deckID}
 	}
 
-	dealt, err := dealerClient.Deal(ctx, &pbDealer.DealRequest{
-		UserId:        getUserID(ctx),
-		DeckIds:       deckIDs,
-		NumberOfCards: uint32(maxCards),
-	})
+	if hasCourseID {
+		if _, err := uuid.Parse(courseID); err != nil {
+			slog.Error("GetReview: failed to parse course ID", "error", err, "courseId", courseID, "stack", errors.ErrorStack(err))
+			ctx.JSON(http.StatusBadRequest, gin.H{"error": "invalid course id format"})
+			return
+		}
+		req.CourseId = courseID
+	}
+
+	if hasLessonID {
+		if _, err := uuid.Parse(lessonID); err != nil {
+			slog.Error("GetReview: failed to parse lesson ID", "error", err, "lessonId", lessonID, "stack", errors.ErrorStack(err))
+			ctx.JSON(http.StatusBadRequest, gin.H{"error": "invalid lesson id format"})
+			return
+		}
+		req.LessonId = lessonID
+	}
+
+	dealt, err := dealerClient.Deal(ctx, req)
 	if err != nil {
 		if status.Code(err) == codes.InvalidArgument {
 			ctx.JSON(http.StatusBadRequest, gin.H{"error": status.Convert(err).Message()})
+			return
+		}
+		if status.Code(err) == codes.NotFound {
+			ctx.JSON(http.StatusNotFound, gin.H{"error": status.Convert(err).Message()})
 			return
 		}
 		slog.Error("GetReview: Deal failed", "error", err, "stack", errors.ErrorStack(err))

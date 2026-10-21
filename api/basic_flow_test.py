@@ -1107,6 +1107,32 @@ def run_review_tests(base_url: str) -> None:
     assert actual == expected, f"Expected {expected}, got {actual}"
     log_step("  ✓ Review without scope returns all answered cards - success")
 
+    response = get_review_response(base_url, token, {"course_id": course["id"]})
+    assert response.status_code == 200, f"Expected 200, got {response.status_code}"
+    actual = sorted(card["id"] for card in response.json()["cards"])
+    assert actual == expected, f"Expected {expected}, got {actual}"
+    actual_deck_ids = {card["deck_id"] for card in response.json()["cards"]}
+    assert actual_deck_ids == {answered_deck["id"]}, f"Expected deck_id {answered_deck['id']}, got {actual_deck_ids}"
+    log_step("  ✓ Review of the course returns its lesson's cards, with their deck ID - success")
+
+    response = get_review_response(base_url, token, {"lesson_id": lesson["id"]})
+    assert response.status_code == 200, f"Expected 200, got {response.status_code}"
+    actual = sorted(card["id"] for card in response.json()["cards"])
+    assert actual == expected, f"Expected {expected}, got {actual}"
+    log_step("  ✓ Review of the lesson returns its deck's cards - success")
+
+    response = get_review_response(base_url, token, {"course_id": "00000000-0000-0000-0000-000000000000"})
+    assert response.status_code == 404, f"Expected 404, got {response.status_code}"
+    log_step("  ✓ Review of an unknown course returns 404 - success")
+
+    response = get_review_response(base_url, token, {"lesson_id": "00000000-0000-0000-0000-000000000000"})
+    assert response.status_code == 404, f"Expected 404, got {response.status_code}"
+    log_step("  ✓ Review of an unknown lesson returns 404 - success")
+
+    response = get_review_response(base_url, token, {"deck_id": answered_deck["id"], "course_id": course["id"]})
+    assert response.status_code == 400, f"Expected 400, got {response.status_code}"
+    log_step("  ✓ Review with two scopes returns 400 - success")
+
     response = review_answers_response(base_url, token, answer_ids)
     assert response.status_code == 200, f"Expected 200, got {response.status_code}"
     log_step("  ✓ Review answers for cards in the pool - success")

@@ -1375,7 +1375,9 @@ paths:
       summary: Get cards to review
       description: |
         Deal cards the user has already answered.
-        Without `deck_id`, cards come from every deck the user has answered.
+        Set at most one of `deck_id`, `course_id` and `lesson_id`. With none of them, cards
+        come from every deck the user has answered. A course or lesson without decks
+        returns no cards.
       operationId: getReview
       security:
         - BearerAuth: []
@@ -1396,6 +1398,20 @@ paths:
           schema:
             type: string
             format: uuid
+        - name: course_id
+          in: query
+          required: false
+          description: Only review cards from this course's lessons
+          schema:
+            type: string
+            format: uuid
+        - name: lesson_id
+          in: query
+          required: false
+          description: Only review cards from this lesson's decks
+          schema:
+            type: string
+            format: uuid
       responses:
         '200':
           description: Cards to review, empty when the user has answered none
@@ -1404,7 +1420,13 @@ paths:
               schema:
                 $ref: '#/components/schemas/ReviewResponse'
         '400':
-          description: Invalid query parameters
+          description: Invalid query parameters, or more than one scope
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: The course or lesson doesn't exist
           content:
             application/json:
               schema:
@@ -2039,6 +2061,10 @@ components:
           type: string
           format: uuid
           description: Card UUID
+        deck_id:
+          type: string
+          format: uuid
+          description: UUID of the deck the card belongs to
         title:
           type: string
           description: Question or prompt text
@@ -2109,6 +2135,10 @@ components:
           type: string
           format: uuid
           description: Answer UUID
+        card_id:
+          type: string
+          format: uuid
+          description: UUID of the card the answer belongs to
         text:
           type: string
           description: Answer text

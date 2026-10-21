@@ -532,6 +532,7 @@ func (r *pgRepository) GetDeckCards(ctx context.Context, id uuid.UUID) ([]Card, 
 	rows, err := r.db.Query(`
 		SELECT
 			id,
+			deck_id,
 			title,
 			explanation,
 			kind
@@ -547,7 +548,7 @@ func (r *pgRepository) GetDeckCards(ctx context.Context, id uuid.UUID) ([]Card, 
 
 	for rows.Next() {
 		var c Card
-		if err := rows.Scan(&c.ID, &c.Title, &c.Explanation, &c.Kind); err != nil {
+		if err := rows.Scan(&c.ID, &c.DeckID, &c.Title, &c.Explanation, &c.Kind); err != nil {
 			return []Card{}, errors.Trace(err)
 		}
 
@@ -561,6 +562,7 @@ func (r *pgRepository) GetCardAnswers(ctx context.Context, id uuid.UUID) ([]Answ
 	rows, err := r.db.Query(`
 		SELECT
 			id,
+			card_id,
 			text,
 			is_correct
 		FROM answers
@@ -577,7 +579,7 @@ func (r *pgRepository) GetCardAnswers(ctx context.Context, id uuid.UUID) ([]Answ
 
 	for rows.Next() {
 		var a Answer
-		if err := rows.Scan(&a.ID, &a.Text, &a.IsCorrect); err != nil {
+		if err := rows.Scan(&a.ID, &a.CardID, &a.Text, &a.IsCorrect); err != nil {
 			return out, errors.Trace(err)
 		}
 
@@ -594,8 +596,9 @@ func (r *pgRepository) GetCards(ctx context.Context, ids []uuid.UUID) (map[uuid.
 	}
 
 	rows, err := r.db.Query(`
-		SELECT 
+		SELECT
 			id,
+			deck_id,
 			title,
 			explanation,
 			kind
@@ -614,7 +617,7 @@ func (r *pgRepository) GetCards(ctx context.Context, ids []uuid.UUID) (map[uuid.
 		var c Card
 		var explanation sql.NullString
 
-		if err := rows.Scan(&c.ID, &c.Title, &explanation, &c.Kind); err != nil {
+		if err := rows.Scan(&c.ID, &c.DeckID, &c.Title, &explanation, &c.Kind); err != nil {
 			return out, errors.Trace(err)
 		}
 
@@ -685,7 +688,7 @@ func (r *pgRepository) UpdateCard(ctx context.Context, deckID, cardID uuid.UUID,
 
 	query := fmt.Sprintf(
 		`UPDATE cards SET %s WHERE id = %s AND deck_id = %s AND deleted_at IS NULL
-		 RETURNING id, title, explanation, kind`,
+		 RETURNING id, deck_id, title, explanation, kind`,
 		strings.Join(setClauses, ", "),
 		arger.Add(cardID),
 		arger.Add(deckID),
@@ -694,7 +697,7 @@ func (r *pgRepository) UpdateCard(ctx context.Context, deckID, cardID uuid.UUID,
 	var c Card
 	var explanation sql.NullString
 	err := r.db.QueryRowContext(ctx, query, arger.Values()...).Scan(
-		&c.ID, &c.Title, &explanation, &c.Kind,
+		&c.ID, &c.DeckID, &c.Title, &explanation, &c.Kind,
 	)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
@@ -741,7 +744,7 @@ func (r *pgRepository) UpdateAnswer(ctx context.Context, deckID, cardID, answerI
 
 	query := fmt.Sprintf(
 		`UPDATE answers SET %s WHERE id = %s AND card_id = %s AND deleted_at IS NULL
-		 RETURNING id, text, is_correct`,
+		 RETURNING id, card_id, text, is_correct`,
 		strings.Join(setClauses, ", "),
 		arger.Add(answerID),
 		arger.Add(cardID),
@@ -749,7 +752,7 @@ func (r *pgRepository) UpdateAnswer(ctx context.Context, deckID, cardID, answerI
 
 	var a Answer
 	err = r.db.QueryRowContext(ctx, query, arger.Values()...).Scan(
-		&a.ID, &a.Text, &a.IsCorrect,
+		&a.ID, &a.CardID, &a.Text, &a.IsCorrect,
 	)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
