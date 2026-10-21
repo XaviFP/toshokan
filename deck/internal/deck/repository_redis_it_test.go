@@ -74,6 +74,50 @@ func TestRedisRepository_GetDeck_CacheMiss(t *testing.T) {
 	mockDB.AssertExpectations(t)
 }
 
+func TestRedisRepository_GetDeck_CachedDeckKeepsCardAndAnswerIDs(t *testing.T) {
+	h := newRedisTestHarness(t)
+	mockDB := new(RepositoryMock)
+
+	repo := NewRedisRepository(h.redisClient, mockDB)
+
+	ctx := context.Background()
+	deckID := uuid.New()
+	cardID := uuid.New()
+	answerID := uuid.New()
+	expected := Deck{
+		ID:    deckID,
+		Title: "Go Learning",
+		Cards: []Card{
+			{
+				ID:     cardID,
+				DeckID: deckID,
+				Title:  "Golang",
+				Kind:   "single_choice",
+				PossibleAnswers: []Answer{
+					{ID: answerID, CardID: cardID, Text: "Compiled", IsCorrect: true},
+				},
+			},
+		},
+	}
+
+	mockDB.On("GetDeck", ctx, deckID).Return(Deck{ID: deckID, Title: "Go Learning"}, nil).Once()
+	mockDB.On("GetDeckCards", ctx, deckID).Return([]Card{
+		{ID: cardID, DeckID: deckID, Title: "Golang", Kind: "single_choice"},
+	}, nil).Once()
+	mockDB.On("GetCardAnswers", ctx, cardID).Return([]Answer{
+		{ID: answerID, CardID: cardID, Text: "Compiled", IsCorrect: true},
+	}, nil).Once()
+
+	_, err := repo.GetDeck(ctx, deckID)
+	assert.NoError(t, err)
+
+	actual, err := repo.GetDeck(ctx, deckID)
+	assert.NoError(t, err)
+
+	assert.Equal(t, expected, actual)
+	mockDB.AssertExpectations(t)
+}
+
 func TestRedisRepository_GetDeck_DBError(t *testing.T) {
 	h := newRedisTestHarness(t)
 	mockDB := new(RepositoryMock)

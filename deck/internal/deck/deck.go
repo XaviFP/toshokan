@@ -24,6 +24,7 @@ func (d *Deck) GenerateUUIDs() {
 
 	for i := 0; i < len(d.Cards); i++ {
 		d.Cards[i].GenerateUUIDs()
+		d.Cards[i].DeckID = d.ID
 	}
 }
 
@@ -32,11 +33,13 @@ func (c *Card) GenerateUUIDs() {
 
 	for i := 0; i < len(c.PossibleAnswers); i++ {
 		c.PossibleAnswers[i].ID = uuid.New()
+		c.PossibleAnswers[i].CardID = c.ID
 	}
 }
 
 type Card struct {
 	ID              uuid.UUID `json:"id,omitempty"`
+	DeckID          uuid.UUID `json:"deckId"`
 	Title           string    `json:"title"`
 	PossibleAnswers []Answer  `json:"possibleAnswers"`
 	Explanation     string    `json:"explanation"`
@@ -45,6 +48,7 @@ type Card struct {
 
 type Answer struct {
 	ID        uuid.UUID `json:"id,omitempty"`
+	CardID    uuid.UUID `json:"cardId"`
 	Text      string    `json:"text"`
 	IsCorrect bool      `json:"isCorrect"`
 }

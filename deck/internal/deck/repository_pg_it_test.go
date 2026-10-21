@@ -232,19 +232,22 @@ func TestRepository_GetDeckCards(t *testing.T) {
 		expected := []Card{
 			{
 				ID:          uuid.MustParse("72bdff92-5bc8-4e1d-9217-d0b23e22ff33"),
+				DeckID:      id,
 				Title:       "Golang",
 				Explanation: "Go code is compiled directly to machine code, not interpreted at runtime.",
 				Kind:        "single_choice",
 			},
 			{
-				ID:    uuid.MustParse("c924f7e0-efd8-4c2d-9c43-8eafb7102ebc"),
-				Title: "Rust",
-				Kind:  "single_choice",
+				ID:     uuid.MustParse("c924f7e0-efd8-4c2d-9c43-8eafb7102ebc"),
+				DeckID: id,
+				Title:  "Rust",
+				Kind:   "single_choice",
 			},
 			{
-				ID:    uuid.MustParse("d42a90dd-818c-4eed-8e9f-9e8af1a654f4"),
-				Title: "Lua",
-				Kind:  "single_choice",
+				ID:     uuid.MustParse("d42a90dd-818c-4eed-8e9f-9e8af1a654f4"),
+				DeckID: id,
+				Title:  "Lua",
+				Kind:   "single_choice",
 			},
 		}
 
@@ -273,11 +276,13 @@ func TestRepository_GetCardAnswers(t *testing.T) {
 		expected := []Answer{
 			{
 				ID:        uuid.MustParse("7e6926da-82b2-4ae8-99b4-1b803ebf1877"),
+				CardID:    id,
 				Text:      "Compiled",
 				IsCorrect: true,
 			},
 			{
 				ID:        uuid.MustParse("dfcb1c81-f590-486e-9b7e-a44f0c436933"),
+				CardID:    id,
 				Text:      "Interpreted",
 				IsCorrect: false,
 			},
@@ -459,16 +464,19 @@ func TestPGRepository_GetCards(t *testing.T) {
 		expected := map[uuid.UUID]Card{
 			id: {
 				ID:          id,
+				DeckID:      uuid.MustParse("fb9ffe2c-ad66-4766-9b7b-46fd5d9acd72"),
 				Title:       "Golang",
 				Explanation: "Go code is compiled directly to machine code, not interpreted at runtime.",
 				PossibleAnswers: []Answer{
 					{
 						ID:        uuid.MustParse("7e6926da-82b2-4ae8-99b4-1b803ebf1877"),
+						CardID:    id,
 						Text:      "Compiled",
 						IsCorrect: true,
 					},
 					{
 						ID:        uuid.MustParse("dfcb1c81-f590-486e-9b7e-a44f0c436933"),
+						CardID:    id,
 						Text:      "Interpreted",
 						IsCorrect: false,
 					},
@@ -562,6 +570,7 @@ func TestRepository_UpdateCard(t *testing.T) {
 		c, err := repo.UpdateCard(context.Background(), deckID, cardID, updates)
 		assert.NoError(t, err)
 		assert.Equal(t, newTitle, c.Title)
+		assert.Equal(t, deckID, c.DeckID)
 		assert.Equal(t, "single_choice", c.Kind) // unchanged
 
 		cards, err := repo.GetCards(context.Background(), []uuid.UUID{cardID})
@@ -634,6 +643,7 @@ func TestRepository_UpdateAnswer(t *testing.T) {
 		a, err := repo.UpdateAnswer(context.Background(), deckID, cardID, answerID, updates)
 		assert.NoError(t, err)
 		assert.Equal(t, newText, a.Text)
+		assert.Equal(t, cardID, a.CardID)
 		assert.True(t, a.IsCorrect) // unchanged
 
 		answers, err := repo.GetCardAnswers(context.Background(), cardID)

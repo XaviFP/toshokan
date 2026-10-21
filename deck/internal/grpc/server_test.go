@@ -31,9 +31,16 @@ func TestServer_GetDeck(t *testing.T) {
 			Public:      true,
 			Cards: []deck.Card{
 				{
-					Title: "What does CSP stand for?",
+					ID:     uuid.MustParse("72bdff92-5bc8-4e1d-9217-d0b23e22ff33"),
+					DeckID: deckID,
+					Title:  "What does CSP stand for?",
 					PossibleAnswers: []deck.Answer{
-						{Text: "Communicating Sequential Processes", IsCorrect: true},
+						{
+							ID:        uuid.MustParse("7e6926da-82b2-4ae8-99b4-1b803ebf1877"),
+							CardID:    uuid.MustParse("72bdff92-5bc8-4e1d-9217-d0b23e22ff33"),
+							Text:      "Communicating Sequential Processes",
+							IsCorrect: true,
+						},
 					},
 					Kind: "single_choice",
 				},
@@ -44,9 +51,33 @@ func TestServer_GetDeck(t *testing.T) {
 			UserId: uuid.MustParse("32571d06-54fb-4d5a-8c6b-dfdc8a51e1a1").String(),
 		}
 
-		res, err := srv.GetDeck(context.Background(), &req)
-		assert.NoError(t, err)
-		assert.Equal(t, &pb.GetDeckResponse{Deck: toGRPCDeck(deck)}, res)
+		actual, err := srv.GetDeck(context.Background(), &req)
+		require.NoError(t, err)
+
+		expected := &pb.GetDeckResponse{Deck: &pb.Deck{
+			Id:          "fb9ffe2c-ad66-4766-9b7b-46fd5d9acd72",
+			AuthorId:    "f3b59a97-e678-4410-8ed2-f1094a234a01",
+			Title:       "Go Learning",
+			Description: "Polish your Go skills",
+			IsPublic:    true,
+			Cards: []*pb.Card{
+				{
+					Id:     "72bdff92-5bc8-4e1d-9217-d0b23e22ff33",
+					DeckId: "fb9ffe2c-ad66-4766-9b7b-46fd5d9acd72",
+					Title:  "What does CSP stand for?",
+					PossibleAnswers: []*pb.Answer{
+						{
+							Id:        "7e6926da-82b2-4ae8-99b4-1b803ebf1877",
+							CardId:    "72bdff92-5bc8-4e1d-9217-d0b23e22ff33",
+							Text:      "Communicating Sequential Processes",
+							IsCorrect: true,
+						},
+					},
+					Kind: "single_choice",
+				},
+			},
+		}}
+		assert.Equal(t, expected, actual)
 	})
 
 	t.Run("failure", func(t *testing.T) {
@@ -116,7 +147,7 @@ func TestServer_GetDecks(t *testing.T) {
 func TestServer_CreateDeck(t *testing.T) {
 	successTitle := "Go Learning success"
 	failureTitle := "Go Learning failure"
-	d := deck.Deck{Description: "Polish your Go skills", Cards: []deck.Card{
+	d := deck.Deck{AuthorID: uuid.MustParse("f3b59a97-e678-4410-8ed2-f1094a234a01"), Description: "Polish your Go skills", Cards: []deck.Card{
 		{
 			Title: "What does CSP stand for?",
 			PossibleAnswers: []deck.Answer{
@@ -134,12 +165,37 @@ func TestServer_CreateDeck(t *testing.T) {
 		d.Title = successTitle
 		deckReq := pb.CreateDeckRequest{Deck: toGRPCDeck(d)}
 
-		actualRes, err := srv.CreateDeck(context.Background(), &deckReq)
-		assert.NoError(t, err)
-		expectedRes := &pb.CreateDeckResponse{Deck: toGRPCDeck(d)}
-		assert.Equal(t, expectedRes.Deck.Title, actualRes.Deck.Title)
-		assert.Equal(t, expectedRes.Deck.Description, actualRes.Deck.Description)
-		assert.Equal(t, expectedRes.Deck.Cards[0].Title, actualRes.Deck.Cards[0].Title)
+		actual, err := srv.CreateDeck(context.Background(), &deckReq)
+		require.NoError(t, err)
+
+		require.NotEmpty(t, actual.Deck.Id)
+		require.Len(t, actual.Deck.Cards, 1)
+		require.NotEmpty(t, actual.Deck.Cards[0].Id)
+		require.Len(t, actual.Deck.Cards[0].PossibleAnswers, 1)
+
+		expected := &pb.CreateDeckResponse{Deck: &pb.Deck{
+			Id:          actual.Deck.Id,
+			AuthorId:    "f3b59a97-e678-4410-8ed2-f1094a234a01",
+			Title:       successTitle,
+			Description: "Polish your Go skills",
+			Cards: []*pb.Card{
+				{
+					Id:     actual.Deck.Cards[0].Id,
+					DeckId: actual.Deck.Id,
+					Title:  "What does CSP stand for?",
+					Kind:   "single_choice",
+					PossibleAnswers: []*pb.Answer{
+						{
+							Id:        actual.Deck.Cards[0].PossibleAnswers[0].Id,
+							CardId:    actual.Deck.Cards[0].Id,
+							Text:      "Communicating Sequential Processes",
+							IsCorrect: true,
+						},
+					},
+				},
+			},
+		}}
+		assert.Equal(t, expected, actual)
 	})
 
 	t.Run("failure", func(t *testing.T) {
@@ -153,6 +209,46 @@ func TestServer_CreateDeck(t *testing.T) {
 		res, err := srv.CreateDeck(context.Background(), &deckReq)
 		assert.Error(t, err)
 		assert.Equal(t, &pb.CreateDeckResponse{}, res)
+	})
+}
+
+func TestServer_CreateCard(t *testing.T) {
+	t.Run("success", func(t *testing.T) {
+		repoMock := &deck.RepositoryMock{}
+		srv := &Server{Repository: repoMock}
+
+		deckID := uuid.MustParse("fb9ffe2c-ad66-4766-9b7b-46fd5d9acd72")
+		repoMock.On("GetDeck", mock.Anything, deckID).Return(deck.Deck{ID: deckID}, nil)
+		repoMock.On("StoreCard", mock.Anything, mock.Anything, deckID).Return(nil)
+
+		actual, err := srv.CreateCard(context.Background(), &pb.CreateCardRequest{Card: &pb.Card{
+			DeckId: deckID.String(),
+			Title:  "What does CSP stand for?",
+			Kind:   "single_choice",
+			PossibleAnswers: []*pb.Answer{
+				{Text: "Communicating Sequential Processes", IsCorrect: true},
+			},
+		}})
+		require.NoError(t, err)
+
+		require.NotEmpty(t, actual.Card.Id)
+		require.Len(t, actual.Card.PossibleAnswers, 1)
+
+		expected := &pb.CreateCardResponse{Card: &pb.Card{
+			Id:     actual.Card.Id,
+			DeckId: deckID.String(),
+			Title:  "What does CSP stand for?",
+			Kind:   "single_choice",
+			PossibleAnswers: []*pb.Answer{
+				{
+					Id:        actual.Card.PossibleAnswers[0].Id,
+					CardId:    actual.Card.Id,
+					Text:      "Communicating Sequential Processes",
+					IsCorrect: true,
+				},
+			},
+		}}
+		assert.Equal(t, expected, actual)
 	})
 }
 
@@ -266,10 +362,11 @@ func TestServer_GetCards(t *testing.T) {
 
 	t.Run("success", func(t *testing.T) {
 		c := deck.Card{
-			ID:    uuid.MustParse("5ec790fb-3dcc-4ee4-8c6d-daa9e4e11598"),
-			Title: "What does CSP stand for?",
+			ID:     uuid.MustParse("5ec790fb-3dcc-4ee4-8c6d-daa9e4e11598"),
+			DeckID: uuid.MustParse("fb9ffe2c-ad66-4766-9b7b-46fd5d9acd72"),
+			Title:  "What does CSP stand for?",
 			PossibleAnswers: []deck.Answer{
-				{Text: "Communicating Sequential Processes", IsCorrect: true},
+				{CardID: uuid.MustParse("5ec790fb-3dcc-4ee4-8c6d-daa9e4e11598"), Text: "Communicating Sequential Processes", IsCorrect: true},
 			},
 			Kind: "single_choice",
 		}
@@ -285,6 +382,7 @@ func TestServer_GetCards(t *testing.T) {
 		assert.Equal(t, &pb.GetCardsResponse{Cards: map[string]*pb.Card{
 			"5ec790fb-3dcc-4ee4-8c6d-daa9e4e11598": {
 				Id:              c.ID.String(),
+				DeckId:          "fb9ffe2c-ad66-4766-9b7b-46fd5d9acd72",
 				Title:           c.Title,
 				Explanation:     c.Explanation,
 				PossibleAnswers: toGRPCAnswers(c.PossibleAnswers),
@@ -382,19 +480,27 @@ func TestServer_UpdateCard(t *testing.T) {
 		repoMock.On("UpdateCard", mock.Anything, validDeckID, validCardID, deck.CardUpdates{
 			Title: &newTitle,
 		}).Return(deck.Card{
-			ID:    validCardID,
-			Title: newTitle,
-			Kind:  "single_choice",
+			ID:     validCardID,
+			DeckID: validDeckID,
+			Title:  newTitle,
+			Kind:   "single_choice",
 		}, nil)
 
-		res, err := srv.UpdateCard(context.Background(), &pb.UpdateCardRequest{
+		actual, err := srv.UpdateCard(context.Background(), &pb.UpdateCardRequest{
 			DeckId: validDeckID.String(),
 			CardId: validCardID.String(),
 			Title:  &newTitle,
 		})
+		require.NoError(t, err)
 
-		assert.NoError(t, err)
-		assert.Equal(t, newTitle, res.Card.Title)
+		expected := &pb.UpdateCardResponse{Card: &pb.Card{
+			Id:              validCardID.String(),
+			DeckId:          validDeckID.String(),
+			Title:           newTitle,
+			Kind:            "single_choice",
+			PossibleAnswers: []*pb.Answer{},
+		}}
+		assert.Equal(t, expected, actual)
 	})
 
 	t.Run("failure_no_fields_provided", func(t *testing.T) {
@@ -457,20 +563,26 @@ func TestServer_UpdateAnswer(t *testing.T) {
 			Text: &newText,
 		}).Return(deck.Answer{
 			ID:        validAnswerID,
+			CardID:    validCardID,
 			Text:      newText,
 			IsCorrect: true,
 		}, nil)
 
-		res, err := srv.UpdateAnswer(context.Background(), &pb.UpdateAnswerRequest{
+		actual, err := srv.UpdateAnswer(context.Background(), &pb.UpdateAnswerRequest{
 			DeckId:   validDeckID.String(),
 			CardId:   validCardID.String(),
 			AnswerId: validAnswerID.String(),
 			Text:     &newText,
 		})
+		require.NoError(t, err)
 
-		assert.NoError(t, err)
-		assert.Equal(t, newText, res.Answer.Text)
-		assert.True(t, res.Answer.IsCorrect)
+		expected := &pb.UpdateAnswerResponse{Answer: &pb.Answer{
+			Id:        validAnswerID.String(),
+			CardId:    validCardID.String(),
+			Text:      newText,
+			IsCorrect: true,
+		}}
+		assert.Equal(t, expected, actual)
 	})
 
 	t.Run("success_update_is_correct", func(t *testing.T) {
@@ -482,20 +594,26 @@ func TestServer_UpdateAnswer(t *testing.T) {
 			IsCorrect: &isCorrect,
 		}).Return(deck.Answer{
 			ID:        validAnswerID,
+			CardID:    validCardID,
 			Text:      "Original text",
 			IsCorrect: isCorrect,
 		}, nil)
 
-		res, err := srv.UpdateAnswer(context.Background(), &pb.UpdateAnswerRequest{
+		actual, err := srv.UpdateAnswer(context.Background(), &pb.UpdateAnswerRequest{
 			DeckId:    validDeckID.String(),
 			CardId:    validCardID.String(),
 			AnswerId:  validAnswerID.String(),
 			IsCorrect: &isCorrect,
 		})
+		require.NoError(t, err)
 
-		assert.NoError(t, err)
-		assert.Equal(t, "Original text", res.Answer.Text)
-		assert.False(t, res.Answer.IsCorrect)
+		expected := &pb.UpdateAnswerResponse{Answer: &pb.Answer{
+			Id:        validAnswerID.String(),
+			CardId:    validCardID.String(),
+			Text:      "Original text",
+			IsCorrect: false,
+		}}
+		assert.Equal(t, expected, actual)
 	})
 
 	t.Run("failure_no_fields_provided", func(t *testing.T) {
