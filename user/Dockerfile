@@ -46,8 +46,8 @@ COPY user/ user/
 # Copy generated proto files from proto-builder
 COPY --from=proto-builder /proto/user/api/proto/v1/*.pb.go user/api/proto/v1/
 
-# Build the binary
-RUN CGO_ENABLED=0 GOOS=linux go build -o /user ./user/cmd/user/
+# Build the binary (-p 1 limits parallel compilation to reduce memory usage)
+RUN CGO_ENABLED=0 GOOS=linux go build -p 1 -o /user ./user/cmd/user/
 
 # =============================================================================
 # Stage 3: Runtime
