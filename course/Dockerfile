@@ -16,9 +16,10 @@ RUN go install google.golang.org/protobuf/cmd/protoc-gen-go@v1.36.0 && \
 
 WORKDIR /proto
 
-# Course depends on deck proto
+# Course depends on deck and dealer protos
 COPY deck/api/proto/v1/deck.proto deck/api/proto/v1/
 COPY course/api/proto/v1/course.proto course/api/proto/v1/
+COPY dealer/api/proto/v1/dealer.proto dealer/api/proto/v1/
 
 RUN protoc --proto_path=deck/api/proto/v1/ \
     --go_out=deck/api/proto/v1/ --go_opt=paths=source_relative \
@@ -32,6 +33,12 @@ RUN protoc --proto_path=course/api/proto/v1/ \
     --go-grpc_out=course/api/proto/v1/ --go-grpc_opt=paths=source_relative \
     --go-grpc_opt=require_unimplemented_servers=false \
     course.proto
+
+RUN protoc --proto_path=dealer/api/proto/v1/ \
+    --go_out=dealer/api/proto/v1/ --go_opt=paths=source_relative \
+    --go-grpc_out=dealer/api/proto/v1/ --go-grpc_opt=paths=source_relative \
+    --go-grpc_opt=require_unimplemented_servers=false \
+    dealer.proto
 
 # Use external proto-builder if provided, otherwise use local
 FROM proto-builder-local AS proto-builder
@@ -53,12 +60,14 @@ COPY common/ common/
 # Copy service code
 COPY course/ course/
 
-# Copy deck (needed for proto imports)
+# Copy deck and dealer (needed for proto imports)
 COPY deck/ deck/
+COPY dealer/ dealer/
 
 # Copy generated proto files from proto-builder
 COPY --from=proto-builder /proto/course/api/proto/v1/*.pb.go course/api/proto/v1/
 COPY --from=proto-builder /proto/deck/api/proto/v1/*.pb.go deck/api/proto/v1/
+COPY --from=proto-builder /proto/dealer/api/proto/v1/*.pb.go dealer/api/proto/v1/
 
 # Build the binary
 RUN CGO_ENABLED=0 GOOS=linux go build -o /course ./course/cmd/course/

@@ -89,6 +89,136 @@ func TestServer_GetLesson(t *testing.T) {
 	})
 }
 
+func TestServer_GetCourseDeckIDs(t *testing.T) {
+	t.Run("success", func(t *testing.T) {
+		repoMock := &course.RepositoryMock{}
+		srv := &Server{Repository: repoMock}
+
+		courseID := uuid.MustParse("fb9ffe2c-ad66-4766-9b7b-46fd5d9acd72")
+		deck1ID := uuid.MustParse("334ddbf8-1acc-405b-86d8-49f0d1ca636c")
+		deck2ID := uuid.MustParse("1f30a72f-5d7a-48da-a5c2-42efece6972a")
+		repoMock.On("GetCourse", mock.Anything, courseID).Return(course.Course{ID: courseID}, nil)
+		repoMock.On("GetCourseDeckIDs", mock.Anything, courseID).Return([]uuid.UUID{deck1ID, deck2ID}, nil)
+
+		res, err := srv.GetCourseDeckIDs(context.Background(), &pb.GetCourseDeckIDsRequest{CourseId: courseID.String()})
+		assert.NoError(t, err)
+		assert.Equal(t, []string{deck1ID.String(), deck2ID.String()}, res.DeckIds)
+	})
+
+	t.Run("success_no_decks", func(t *testing.T) {
+		repoMock := &course.RepositoryMock{}
+		srv := &Server{Repository: repoMock}
+
+		courseID := uuid.MustParse("fb9ffe2c-ad66-4766-9b7b-46fd5d9acd72")
+		repoMock.On("GetCourse", mock.Anything, courseID).Return(course.Course{ID: courseID}, nil)
+		repoMock.On("GetCourseDeckIDs", mock.Anything, courseID).Return([]uuid.UUID{}, nil)
+
+		res, err := srv.GetCourseDeckIDs(context.Background(), &pb.GetCourseDeckIDsRequest{CourseId: courseID.String()})
+		assert.NoError(t, err)
+		assert.Empty(t, res.DeckIds)
+	})
+
+	t.Run("failure_invalid_course_id", func(t *testing.T) {
+		repoMock := &course.RepositoryMock{}
+		srv := &Server{Repository: repoMock}
+
+		res, err := srv.GetCourseDeckIDs(context.Background(), &pb.GetCourseDeckIDsRequest{CourseId: "invalid-uuid"})
+		assert.Equal(t, codes.InvalidArgument, status.Code(err))
+		assert.Nil(t, res)
+	})
+
+	t.Run("failure_course_not_found", func(t *testing.T) {
+		repoMock := &course.RepositoryMock{}
+		srv := &Server{Repository: repoMock}
+
+		courseID := uuid.MustParse("fb9ffe2c-ad66-4766-9b7b-46fd5d9acd72")
+		repoMock.On("GetCourse", mock.Anything, courseID).Return(course.Course{}, errors.Trace(course.ErrCourseNotFound))
+
+		res, err := srv.GetCourseDeckIDs(context.Background(), &pb.GetCourseDeckIDsRequest{CourseId: courseID.String()})
+		assert.Equal(t, codes.NotFound, status.Code(err))
+		assert.Nil(t, res)
+		repoMock.AssertNotCalled(t, "GetCourseDeckIDs", mock.Anything, mock.Anything)
+	})
+
+	t.Run("failure_repository_error", func(t *testing.T) {
+		repoMock := &course.RepositoryMock{}
+		srv := &Server{Repository: repoMock}
+
+		courseID := uuid.MustParse("fb9ffe2c-ad66-4766-9b7b-46fd5d9acd72")
+		repoMock.On("GetCourse", mock.Anything, courseID).Return(course.Course{ID: courseID}, nil)
+		repoMock.On("GetCourseDeckIDs", mock.Anything, courseID).Return([]uuid.UUID(nil), assert.AnError)
+
+		res, err := srv.GetCourseDeckIDs(context.Background(), &pb.GetCourseDeckIDsRequest{CourseId: courseID.String()})
+		assert.ErrorIs(t, err, assert.AnError)
+		assert.Nil(t, res)
+	})
+}
+
+func TestServer_GetLessonDeckIDs(t *testing.T) {
+	t.Run("success", func(t *testing.T) {
+		repoMock := &course.RepositoryMock{}
+		srv := &Server{Repository: repoMock}
+
+		lessonID := uuid.MustParse("334ddbf8-1acc-405b-86d8-49f0d1ca636c")
+		deck1ID := uuid.MustParse("fb9ffe2c-ad66-4766-9b7b-46fd5d9acd72")
+		deck2ID := uuid.MustParse("1f30a72f-5d7a-48da-a5c2-42efece6972a")
+		repoMock.On("GetLesson", mock.Anything, lessonID).Return(course.Lesson{ID: lessonID}, nil)
+		repoMock.On("GetLessonDeckIDs", mock.Anything, lessonID).Return([]uuid.UUID{deck1ID, deck2ID}, nil)
+
+		res, err := srv.GetLessonDeckIDs(context.Background(), &pb.GetLessonDeckIDsRequest{LessonId: lessonID.String()})
+		assert.NoError(t, err)
+		assert.Equal(t, []string{deck1ID.String(), deck2ID.String()}, res.DeckIds)
+	})
+
+	t.Run("success_no_decks", func(t *testing.T) {
+		repoMock := &course.RepositoryMock{}
+		srv := &Server{Repository: repoMock}
+
+		lessonID := uuid.MustParse("334ddbf8-1acc-405b-86d8-49f0d1ca636c")
+		repoMock.On("GetLesson", mock.Anything, lessonID).Return(course.Lesson{ID: lessonID}, nil)
+		repoMock.On("GetLessonDeckIDs", mock.Anything, lessonID).Return([]uuid.UUID{}, nil)
+
+		res, err := srv.GetLessonDeckIDs(context.Background(), &pb.GetLessonDeckIDsRequest{LessonId: lessonID.String()})
+		assert.NoError(t, err)
+		assert.Empty(t, res.DeckIds)
+	})
+
+	t.Run("failure_invalid_lesson_id", func(t *testing.T) {
+		repoMock := &course.RepositoryMock{}
+		srv := &Server{Repository: repoMock}
+
+		res, err := srv.GetLessonDeckIDs(context.Background(), &pb.GetLessonDeckIDsRequest{LessonId: "invalid-uuid"})
+		assert.Equal(t, codes.InvalidArgument, status.Code(err))
+		assert.Nil(t, res)
+	})
+
+	t.Run("failure_lesson_not_found", func(t *testing.T) {
+		repoMock := &course.RepositoryMock{}
+		srv := &Server{Repository: repoMock}
+
+		lessonID := uuid.MustParse("334ddbf8-1acc-405b-86d8-49f0d1ca636c")
+		repoMock.On("GetLesson", mock.Anything, lessonID).Return(course.Lesson{}, errors.Trace(course.ErrLessonNotFound))
+
+		res, err := srv.GetLessonDeckIDs(context.Background(), &pb.GetLessonDeckIDsRequest{LessonId: lessonID.String()})
+		assert.Equal(t, codes.NotFound, status.Code(err))
+		assert.Nil(t, res)
+		repoMock.AssertNotCalled(t, "GetLessonDeckIDs", mock.Anything, mock.Anything)
+	})
+
+	t.Run("failure_repository_error", func(t *testing.T) {
+		repoMock := &course.RepositoryMock{}
+		srv := &Server{Repository: repoMock}
+
+		lessonID := uuid.MustParse("334ddbf8-1acc-405b-86d8-49f0d1ca636c")
+		repoMock.On("GetLesson", mock.Anything, lessonID).Return(course.Lesson{ID: lessonID}, nil)
+		repoMock.On("GetLessonDeckIDs", mock.Anything, lessonID).Return([]uuid.UUID(nil), assert.AnError)
+
+		res, err := srv.GetLessonDeckIDs(context.Background(), &pb.GetLessonDeckIDsRequest{LessonId: lessonID.String()})
+		assert.ErrorIs(t, err, assert.AnError)
+		assert.Nil(t, res)
+	})
+}
+
 func TestServer_CreateCourse(t *testing.T) {
 	successTitle := "Go Mastery"
 	failureTitle := "Failed Course"

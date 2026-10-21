@@ -18,6 +18,7 @@ import (
 	"github.com/XaviFP/toshokan/common/logging"
 	"github.com/XaviFP/toshokan/course/internal/course"
 	courseGRPC "github.com/XaviFP/toshokan/course/internal/grpc"
+	pbDealer "github.com/XaviFP/toshokan/dealer/api/proto/v1"
 	pbDeck "github.com/XaviFP/toshokan/deck/api/proto/v1"
 )
 
@@ -62,6 +63,21 @@ func main() {
 		deckClient = pbDeck.NewDecksAPIClient(deckConn)
 	}
 
+	// Connect to dealer service
+	dealerConn, err := grpc.Dial(
+		fmt.Sprintf("%s:%s", conf.DealerGRPCHost, conf.DealerGRPCPort),
+		grpc.WithTransportCredentials(insecure.NewCredentials()),
+	)
+	if err != nil {
+		logger.Warn("Failed to connect to dealer service", "error", err)
+	}
+	defer dealerConn.Close()
+
+	var dealerClient pbDealer.DealerClient
+	if dealerConn != nil {
+		dealerClient = pbDealer.NewDealerClient(dealerConn)
+	}
+
 	realClock := clock.Realtime()
 	srv := &courseGRPC.Server{
 		GRPCTransport:  conf.GRPCConf.TransportProtocol,
@@ -71,7 +87,7 @@ func main() {
 		Enroller:       course.NewEnroller(realClock, redisRepo, deckClient),
 		LessonsBrowser: course.NewLessonsBrowser(redisRepo, course.NewStateSyncer(redisRepo, deckClient)),
 		CoursesBrowser: course.NewCoursesBrowser(redisRepo),
-		Answerer:       course.NewAnswerer(redisRepo, deckClient),
+		Answerer:       course.NewAnswerer(redisRepo, deckClient, dealerClient),
 		StateSyncer:    course.NewStateSyncer(redisRepo, deckClient),
 		Clock:          realClock,
 	}
@@ -103,11 +119,13 @@ func exitOnTerminationSignal(logger *slog.Logger, serverError chan error) {
 }
 
 type CourseConfig struct {
-	DBConf       config.DBConfig
-	CacheConf    config.CacheConfig
-	GRPCConf     config.GRPCServerConfig
-	DeckGRPCHost string
-	DeckGRPCPort string
+	DBConf         config.DBConfig
+	CacheConf      config.CacheConfig
+	GRPCConf       config.GRPCServerConfig
+	DeckGRPCHost   string
+	DeckGRPCPort   string
+	DealerGRPCHost string
+	DealerGRPCPort string
 }
 
 func loadConfig() CourseConfig {
@@ -123,6 +141,14 @@ func loadConfig() CourseConfig {
 	courseConfig.DeckGRPCPort = os.Getenv("DECKS_GRPC_SERVER_PORT")
 	if courseConfig.DeckGRPCPort == "" {
 		courseConfig.DeckGRPCPort = "50051" // TODO: no hardcoded ports
+	}
+	courseConfig.DealerGRPCHost = os.Getenv("DEALER_GRPC_SERVER_HOST")
+	if courseConfig.DealerGRPCHost == "" {
+		courseConfig.DealerGRPCHost = "dealer"
+	}
+	courseConfig.DealerGRPCPort = os.Getenv("DEALER_GRPC_SERVER_PORT")
+	if courseConfig.DealerGRPCPort == "" {
+		courseConfig.DealerGRPCPort = "50051" // TODO: no hardcoded ports
 	}
 
 	return courseConfig

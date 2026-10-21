@@ -2,12 +2,17 @@ package course
 
 import (
 	"context"
+	"log/slog"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/juju/errors"
 
+	pbDealer "github.com/XaviFP/toshokan/dealer/api/proto/v1"
 	pbDeck "github.com/XaviFP/toshokan/deck/api/proto/v1"
 )
+
+const storeAnswersTimeout = 5 * time.Second
 
 type CardAnswer struct {
 	CardID   uuid.UUID
@@ -19,14 +24,16 @@ type Answerer interface {
 }
 
 type answerer struct {
-	repo       Repository
-	deckClient pbDeck.DecksAPIClient
+	repo         Repository
+	deckClient   pbDeck.DecksAPIClient
+	dealerClient pbDealer.DealerClient
 }
 
-func NewAnswerer(repo Repository, deckClient pbDeck.DecksAPIClient) Answerer {
+func NewAnswerer(repo Repository, deckClient pbDeck.DecksAPIClient, dealerClient pbDealer.DealerClient) Answerer {
 	return &answerer{
-		repo:       repo,
-		deckClient: deckClient,
+		repo:         repo,
+		deckClient:   deckClient,
+		dealerClient: dealerClient,
 	}
 }
 
@@ -34,7 +41,7 @@ func NewAnswerer(repo Repository, deckClient pbDeck.DecksAPIClient) Answerer {
 func (a *answerer) Answer(ctx context.Context, userID, courseID, lessonID, deckID uuid.UUID, cardAnswers []CardAnswer) error {
 	userProgress, err := a.repo.GetUserCourseProgress(ctx, userID, courseID)
 	if err != nil {
-		return err
+		return errors.Trace(err)
 	}
 
 	if userProgress.State == nil {
@@ -79,6 +86,31 @@ func (a *answerer) Answer(ctx context.Context, userID, courseID, lessonID, deckI
 	if err := a.repo.UpdateUserProgress(ctx, userProgress); err != nil {
 		return errors.Trace(err)
 	}
+
+	go func(userID uuid.UUID, cardAnswers []CardAnswer) {
+		// The context is detached to avoid being cancelled when the request context is done.
+		ctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), storeAnswersTimeout)
+		defer cancel()
+
+		if len(cardAnswers) == 0 {
+			return
+		}
+
+		answerIDs := make([]string, 0, len(cardAnswers))
+		for _, ca := range cardAnswers {
+			answerIDs = append(answerIDs, ca.AnswerID.String())
+		}
+
+		if _, err := a.dealerClient.StoreAnswers(ctx, &pbDealer.StoreAnswersRequest{
+			UserId:    userID.String(),
+			AnswerIds: answerIDs,
+		}); err != nil {
+			slog.Error("storing answers in dealer",
+				"user_id", userID,
+				"error", err,
+			)
+		}
+	}(userID, cardAnswers)
 
 	return nil
 }

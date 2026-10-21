@@ -38,6 +38,10 @@ type Repository interface {
 	StoreLesson(ctx context.Context, lesson Lesson) error
 	UpdateLesson(ctx context.Context, id uuid.UUID, updates LessonUpdates) (Lesson, error)
 
+	// Deck IDs
+	GetCourseDeckIDs(ctx context.Context, courseID uuid.UUID) ([]uuid.UUID, error)
+	GetLessonDeckIDs(ctx context.Context, lessonID uuid.UUID) ([]uuid.UUID, error)
+
 	// User Progress
 	GetUserCourseProgress(ctx context.Context, userID uuid.UUID, courseID uuid.UUID) (UserCourseProgress, error)
 	EnrollUserInCourse(ctx context.Context, userID uuid.UUID, courseID uuid.UUID, progressState ProgressState) error
@@ -217,6 +221,14 @@ func (r *redisRepository) GetLesson(ctx context.Context, id uuid.UUID) (Lesson, 
 // If bodyless is true, the body field is not fetched for faster pagination
 func (r *redisRepository) GetLessonsByCourseID(ctx context.Context, courseID uuid.UUID, p pagination.Pagination, bodyless bool) (LessonsConnection, error) {
 	return r.db.GetLessonsByCourseID(ctx, courseID, p, bodyless)
+}
+
+func (r *redisRepository) GetCourseDeckIDs(ctx context.Context, courseID uuid.UUID) ([]uuid.UUID, error) {
+	return r.db.GetCourseDeckIDs(ctx, courseID)
+}
+
+func (r *redisRepository) GetLessonDeckIDs(ctx context.Context, lessonID uuid.UUID) ([]uuid.UUID, error) {
+	return r.db.GetLessonDeckIDs(ctx, lessonID)
 }
 
 // GetEnrolledCourses retrieves enrolled courses for a user with progress
@@ -754,6 +766,72 @@ func (r *pgRepository) UpdateLesson(ctx context.Context, id uuid.UUID, updates L
 	}
 
 	return lesson, nil
+}
+
+// GetCourseDeckIDs retrieves the IDs of the decks in a course's lessons, in lesson order.
+// A deck used by several lessons is returned once.
+func (r *pgRepository) GetCourseDeckIDs(ctx context.Context, courseID uuid.UUID) ([]uuid.UUID, error) {
+	rows, err := r.db.QueryContext(ctx,
+		`SELECT ld.deck_id
+		 FROM lesson_decks ld
+		 JOIN lessons l ON l.id = ld.lesson_id
+		 JOIN courses c ON c.id = l.course_id
+		 WHERE l.course_id = $1 AND l.deleted_at IS NULL AND c.deleted_at IS NULL
+		 GROUP BY ld.deck_id
+		 ORDER BY MIN(l."order"), MIN(ld."order")`,
+		courseID,
+	)
+	if err != nil {
+		return nil, errors.Trace(err)
+	}
+	defer rows.Close()
+
+	deckIDs := []uuid.UUID{}
+	for rows.Next() {
+		var deckID uuid.UUID
+		if err := rows.Scan(&deckID); err != nil {
+			return nil, errors.Trace(err)
+		}
+		deckIDs = append(deckIDs, deckID)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, errors.Trace(err)
+	}
+
+	return deckIDs, nil
+}
+
+// GetLessonDeckIDs retrieves the IDs of a lesson's decks, in order.
+func (r *pgRepository) GetLessonDeckIDs(ctx context.Context, lessonID uuid.UUID) ([]uuid.UUID, error) {
+	rows, err := r.db.QueryContext(ctx,
+		`SELECT ld.deck_id
+		 FROM lesson_decks ld
+		 JOIN lessons l ON l.id = ld.lesson_id
+		 JOIN courses c ON c.id = l.course_id
+		 WHERE ld.lesson_id = $1 AND l.deleted_at IS NULL AND c.deleted_at IS NULL
+		 ORDER BY ld."order"`,
+		lessonID,
+	)
+	if err != nil {
+		return nil, errors.Trace(err)
+	}
+	defer rows.Close()
+
+	deckIDs := []uuid.UUID{}
+	for rows.Next() {
+		var deckID uuid.UUID
+		if err := rows.Scan(&deckID); err != nil {
+			return nil, errors.Trace(err)
+		}
+		deckIDs = append(deckIDs, deckID)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, errors.Trace(err)
+	}
+
+	return deckIDs, nil
 }
 
 // syncLessonDecksTx ensures lesson_decks are in sync with deck references in lesson body
