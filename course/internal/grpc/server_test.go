@@ -89,7 +89,7 @@ func TestServer_GetLesson(t *testing.T) {
 	})
 }
 
-func TestServer_GetCourseDeckIDs(t *testing.T) {
+func TestServer_GetCourseDeckIds(t *testing.T) {
 	t.Run("success", func(t *testing.T) {
 		repoMock := &course.RepositoryMock{}
 		srv := &Server{Repository: repoMock}
@@ -100,7 +100,7 @@ func TestServer_GetCourseDeckIDs(t *testing.T) {
 		repoMock.On("GetCourse", mock.Anything, courseID).Return(course.Course{ID: courseID}, nil)
 		repoMock.On("GetCourseDeckIDs", mock.Anything, courseID).Return([]uuid.UUID{deck1ID, deck2ID}, nil)
 
-		res, err := srv.GetCourseDeckIDs(context.Background(), &pb.GetCourseDeckIDsRequest{CourseId: courseID.String()})
+		res, err := srv.GetCourseDeckIds(context.Background(), &pb.GetCourseDeckIdsRequest{CourseId: courseID.String()})
 		assert.NoError(t, err)
 		assert.Equal(t, []string{deck1ID.String(), deck2ID.String()}, res.DeckIds)
 	})
@@ -113,7 +113,7 @@ func TestServer_GetCourseDeckIDs(t *testing.T) {
 		repoMock.On("GetCourse", mock.Anything, courseID).Return(course.Course{ID: courseID}, nil)
 		repoMock.On("GetCourseDeckIDs", mock.Anything, courseID).Return([]uuid.UUID{}, nil)
 
-		res, err := srv.GetCourseDeckIDs(context.Background(), &pb.GetCourseDeckIDsRequest{CourseId: courseID.String()})
+		res, err := srv.GetCourseDeckIds(context.Background(), &pb.GetCourseDeckIdsRequest{CourseId: courseID.String()})
 		assert.NoError(t, err)
 		assert.Empty(t, res.DeckIds)
 	})
@@ -122,7 +122,7 @@ func TestServer_GetCourseDeckIDs(t *testing.T) {
 		repoMock := &course.RepositoryMock{}
 		srv := &Server{Repository: repoMock}
 
-		res, err := srv.GetCourseDeckIDs(context.Background(), &pb.GetCourseDeckIDsRequest{CourseId: "invalid-uuid"})
+		res, err := srv.GetCourseDeckIds(context.Background(), &pb.GetCourseDeckIdsRequest{CourseId: "invalid-uuid"})
 		assert.Equal(t, codes.InvalidArgument, status.Code(err))
 		assert.Nil(t, res)
 	})
@@ -134,7 +134,7 @@ func TestServer_GetCourseDeckIDs(t *testing.T) {
 		courseID := uuid.MustParse("fb9ffe2c-ad66-4766-9b7b-46fd5d9acd72")
 		repoMock.On("GetCourse", mock.Anything, courseID).Return(course.Course{}, errors.Trace(course.ErrCourseNotFound))
 
-		res, err := srv.GetCourseDeckIDs(context.Background(), &pb.GetCourseDeckIDsRequest{CourseId: courseID.String()})
+		res, err := srv.GetCourseDeckIds(context.Background(), &pb.GetCourseDeckIdsRequest{CourseId: courseID.String()})
 		assert.Equal(t, codes.NotFound, status.Code(err))
 		assert.Nil(t, res)
 		repoMock.AssertNotCalled(t, "GetCourseDeckIDs", mock.Anything, mock.Anything)
@@ -148,13 +148,13 @@ func TestServer_GetCourseDeckIDs(t *testing.T) {
 		repoMock.On("GetCourse", mock.Anything, courseID).Return(course.Course{ID: courseID}, nil)
 		repoMock.On("GetCourseDeckIDs", mock.Anything, courseID).Return([]uuid.UUID(nil), assert.AnError)
 
-		res, err := srv.GetCourseDeckIDs(context.Background(), &pb.GetCourseDeckIDsRequest{CourseId: courseID.String()})
+		res, err := srv.GetCourseDeckIds(context.Background(), &pb.GetCourseDeckIdsRequest{CourseId: courseID.String()})
 		assert.ErrorIs(t, err, assert.AnError)
 		assert.Nil(t, res)
 	})
 }
 
-func TestServer_GetLessonDeckIDs(t *testing.T) {
+func TestServer_GetLessonDeckIds(t *testing.T) {
 	t.Run("success", func(t *testing.T) {
 		repoMock := &course.RepositoryMock{}
 		srv := &Server{Repository: repoMock}
@@ -165,7 +165,7 @@ func TestServer_GetLessonDeckIDs(t *testing.T) {
 		repoMock.On("GetLesson", mock.Anything, lessonID).Return(course.Lesson{ID: lessonID}, nil)
 		repoMock.On("GetLessonDeckIDs", mock.Anything, lessonID).Return([]uuid.UUID{deck1ID, deck2ID}, nil)
 
-		res, err := srv.GetLessonDeckIDs(context.Background(), &pb.GetLessonDeckIDsRequest{LessonId: lessonID.String()})
+		res, err := srv.GetLessonDeckIds(context.Background(), &pb.GetLessonDeckIdsRequest{LessonId: lessonID.String()})
 		assert.NoError(t, err)
 		assert.Equal(t, []string{deck1ID.String(), deck2ID.String()}, res.DeckIds)
 	})
@@ -178,7 +178,7 @@ func TestServer_GetLessonDeckIDs(t *testing.T) {
 		repoMock.On("GetLesson", mock.Anything, lessonID).Return(course.Lesson{ID: lessonID}, nil)
 		repoMock.On("GetLessonDeckIDs", mock.Anything, lessonID).Return([]uuid.UUID{}, nil)
 
-		res, err := srv.GetLessonDeckIDs(context.Background(), &pb.GetLessonDeckIDsRequest{LessonId: lessonID.String()})
+		res, err := srv.GetLessonDeckIds(context.Background(), &pb.GetLessonDeckIdsRequest{LessonId: lessonID.String()})
 		assert.NoError(t, err)
 		assert.Empty(t, res.DeckIds)
 	})
@@ -187,7 +187,7 @@ func TestServer_GetLessonDeckIDs(t *testing.T) {
 		repoMock := &course.RepositoryMock{}
 		srv := &Server{Repository: repoMock}
 
-		res, err := srv.GetLessonDeckIDs(context.Background(), &pb.GetLessonDeckIDsRequest{LessonId: "invalid-uuid"})
+		res, err := srv.GetLessonDeckIds(context.Background(), &pb.GetLessonDeckIdsRequest{LessonId: "invalid-uuid"})
 		assert.Equal(t, codes.InvalidArgument, status.Code(err))
 		assert.Nil(t, res)
 	})
@@ -199,7 +199,7 @@ func TestServer_GetLessonDeckIDs(t *testing.T) {
 		lessonID := uuid.MustParse("334ddbf8-1acc-405b-86d8-49f0d1ca636c")
 		repoMock.On("GetLesson", mock.Anything, lessonID).Return(course.Lesson{}, errors.Trace(course.ErrLessonNotFound))
 
-		res, err := srv.GetLessonDeckIDs(context.Background(), &pb.GetLessonDeckIDsRequest{LessonId: lessonID.String()})
+		res, err := srv.GetLessonDeckIds(context.Background(), &pb.GetLessonDeckIdsRequest{LessonId: lessonID.String()})
 		assert.Equal(t, codes.NotFound, status.Code(err))
 		assert.Nil(t, res)
 		repoMock.AssertNotCalled(t, "GetLessonDeckIDs", mock.Anything, mock.Anything)
@@ -213,7 +213,7 @@ func TestServer_GetLessonDeckIDs(t *testing.T) {
 		repoMock.On("GetLesson", mock.Anything, lessonID).Return(course.Lesson{ID: lessonID}, nil)
 		repoMock.On("GetLessonDeckIDs", mock.Anything, lessonID).Return([]uuid.UUID(nil), assert.AnError)
 
-		res, err := srv.GetLessonDeckIDs(context.Background(), &pb.GetLessonDeckIDsRequest{LessonId: lessonID.String()})
+		res, err := srv.GetLessonDeckIds(context.Background(), &pb.GetLessonDeckIdsRequest{LessonId: lessonID.String()})
 		assert.ErrorIs(t, err, assert.AnError)
 		assert.Nil(t, res)
 	})

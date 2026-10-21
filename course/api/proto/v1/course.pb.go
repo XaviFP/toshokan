@@ -893,27 +893,27 @@ func (x *GetLessonResponse) GetLesson() *Lesson {
 	return nil
 }
 
-type GetCourseDeckIDsRequest struct {
+type GetCourseDeckIdsRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	CourseId      string                 `protobuf:"bytes,1,opt,name=course_id,json=courseId,proto3" json:"course_id,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
-func (x *GetCourseDeckIDsRequest) Reset() {
-	*x = GetCourseDeckIDsRequest{}
+func (x *GetCourseDeckIdsRequest) Reset() {
+	*x = GetCourseDeckIdsRequest{}
 	mi := &file_course_proto_msgTypes[14]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
 
-func (x *GetCourseDeckIDsRequest) String() string {
+func (x *GetCourseDeckIdsRequest) String() string {
 	return protoimpl.X.MessageStringOf(x)
 }
 
-func (*GetCourseDeckIDsRequest) ProtoMessage() {}
+func (*GetCourseDeckIdsRequest) ProtoMessage() {}
 
-func (x *GetCourseDeckIDsRequest) ProtoReflect() protoreflect.Message {
+func (x *GetCourseDeckIdsRequest) ProtoReflect() protoreflect.Message {
 	mi := &file_course_proto_msgTypes[14]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
@@ -925,39 +925,39 @@ func (x *GetCourseDeckIDsRequest) ProtoReflect() protoreflect.Message {
 	return mi.MessageOf(x)
 }
 
-// Deprecated: Use GetCourseDeckIDsRequest.ProtoReflect.Descriptor instead.
-func (*GetCourseDeckIDsRequest) Descriptor() ([]byte, []int) {
+// Deprecated: Use GetCourseDeckIdsRequest.ProtoReflect.Descriptor instead.
+func (*GetCourseDeckIdsRequest) Descriptor() ([]byte, []int) {
 	return file_course_proto_rawDescGZIP(), []int{14}
 }
 
-func (x *GetCourseDeckIDsRequest) GetCourseId() string {
+func (x *GetCourseDeckIdsRequest) GetCourseId() string {
 	if x != nil {
 		return x.CourseId
 	}
 	return ""
 }
 
-type GetCourseDeckIDsResponse struct {
+type GetCourseDeckIdsResponse struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	DeckIds       []string               `protobuf:"bytes,1,rep,name=deck_ids,json=deckIds,proto3" json:"deck_ids,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
-func (x *GetCourseDeckIDsResponse) Reset() {
-	*x = GetCourseDeckIDsResponse{}
+func (x *GetCourseDeckIdsResponse) Reset() {
+	*x = GetCourseDeckIdsResponse{}
 	mi := &file_course_proto_msgTypes[15]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
 
-func (x *GetCourseDeckIDsResponse) String() string {
+func (x *GetCourseDeckIdsResponse) String() string {
 	return protoimpl.X.MessageStringOf(x)
 }
 
-func (*GetCourseDeckIDsResponse) ProtoMessage() {}
+func (*GetCourseDeckIdsResponse) ProtoMessage() {}
 
-func (x *GetCourseDeckIDsResponse) ProtoReflect() protoreflect.Message {
+func (x *GetCourseDeckIdsResponse) ProtoReflect() protoreflect.Message {
 	mi := &file_course_proto_msgTypes[15]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
@@ -969,39 +969,39 @@ func (x *GetCourseDeckIDsResponse) ProtoReflect() protoreflect.Message {
 	return mi.MessageOf(x)
 }
 
-// Deprecated: Use GetCourseDeckIDsResponse.ProtoReflect.Descriptor instead.
-func (*GetCourseDeckIDsResponse) Descriptor() ([]byte, []int) {
+// Deprecated: Use GetCourseDeckIdsResponse.ProtoReflect.Descriptor instead.
+func (*GetCourseDeckIdsResponse) Descriptor() ([]byte, []int) {
 	return file_course_proto_rawDescGZIP(), []int{15}
 }
 
-func (x *GetCourseDeckIDsResponse) GetDeckIds() []string {
+func (x *GetCourseDeckIdsResponse) GetDeckIds() []string {
 	if x != nil {
 		return x.DeckIds
 	}
 	return nil
 }
 
-type GetLessonDeckIDsRequest struct {
+type GetLessonDeckIdsRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	LessonId      string                 `protobuf:"bytes,1,opt,name=lesson_id,json=lessonId,proto3" json:"lesson_id,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
-func (x *GetLessonDeckIDsRequest) Reset() {
-	*x = GetLessonDeckIDsRequest{}
+func (x *GetLessonDeckIdsRequest) Reset() {
+	*x = GetLessonDeckIdsRequest{}
 	mi := &file_course_proto_msgTypes[16]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
 
-func (x *GetLessonDeckIDsRequest) String() string {
+func (x *GetLessonDeckIdsRequest) String() string {
 	return protoimpl.X.MessageStringOf(x)
 }
 
-func (*GetLessonDeckIDsRequest) ProtoMessage() {}
+func (*GetLessonDeckIdsRequest) ProtoMessage() {}
 
-func (x *GetLessonDeckIDsRequest) ProtoReflect() protoreflect.Message {
+func (x *GetLessonDeckIdsRequest) ProtoReflect() protoreflect.Message {
 	mi := &file_course_proto_msgTypes[16]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
@@ -1013,39 +1013,39 @@ func (x *GetLessonDeckIDsRequest) ProtoReflect() protoreflect.Message {
 	return mi.MessageOf(x)
 }
 
-// Deprecated: Use GetLessonDeckIDsRequest.ProtoReflect.Descriptor instead.
-func (*GetLessonDeckIDsRequest) Descriptor() ([]byte, []int) {
+// Deprecated: Use GetLessonDeckIdsRequest.ProtoReflect.Descriptor instead.
+func (*GetLessonDeckIdsRequest) Descriptor() ([]byte, []int) {
 	return file_course_proto_rawDescGZIP(), []int{16}
 }
 
-func (x *GetLessonDeckIDsRequest) GetLessonId() string {
+func (x *GetLessonDeckIdsRequest) GetLessonId() string {
 	if x != nil {
 		return x.LessonId
 	}
 	return ""
 }
 
-type GetLessonDeckIDsResponse struct {
+type GetLessonDeckIdsResponse struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	DeckIds       []string               `protobuf:"bytes,1,rep,name=deck_ids,json=deckIds,proto3" json:"deck_ids,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
-func (x *GetLessonDeckIDsResponse) Reset() {
-	*x = GetLessonDeckIDsResponse{}
+func (x *GetLessonDeckIdsResponse) Reset() {
+	*x = GetLessonDeckIdsResponse{}
 	mi := &file_course_proto_msgTypes[17]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
 
-func (x *GetLessonDeckIDsResponse) String() string {
+func (x *GetLessonDeckIdsResponse) String() string {
 	return protoimpl.X.MessageStringOf(x)
 }
 
-func (*GetLessonDeckIDsResponse) ProtoMessage() {}
+func (*GetLessonDeckIdsResponse) ProtoMessage() {}
 
-func (x *GetLessonDeckIDsResponse) ProtoReflect() protoreflect.Message {
+func (x *GetLessonDeckIdsResponse) ProtoReflect() protoreflect.Message {
 	mi := &file_course_proto_msgTypes[17]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
@@ -1057,12 +1057,12 @@ func (x *GetLessonDeckIDsResponse) ProtoReflect() protoreflect.Message {
 	return mi.MessageOf(x)
 }
 
-// Deprecated: Use GetLessonDeckIDsResponse.ProtoReflect.Descriptor instead.
-func (*GetLessonDeckIDsResponse) Descriptor() ([]byte, []int) {
+// Deprecated: Use GetLessonDeckIdsResponse.ProtoReflect.Descriptor instead.
+func (*GetLessonDeckIdsResponse) Descriptor() ([]byte, []int) {
 	return file_course_proto_rawDescGZIP(), []int{17}
 }
 
-func (x *GetLessonDeckIDsResponse) GetDeckIds() []string {
+func (x *GetLessonDeckIdsResponse) GetDeckIds() []string {
 	if x != nil {
 		return x.DeckIds
 	}
@@ -3788,18 +3788,18 @@ var file_course_proto_rawDesc = []byte{
 	0x65, 0x12, 0x29, 0x0a, 0x06, 0x6c, 0x65, 0x73, 0x73, 0x6f, 0x6e, 0x18, 0x01, 0x20, 0x01, 0x28,
 	0x0b, 0x32, 0x11, 0x2e, 0x63, 0x6f, 0x75, 0x72, 0x73, 0x65, 0x2e, 0x76, 0x31, 0x2e, 0x4c, 0x65,
 	0x73, 0x73, 0x6f, 0x6e, 0x52, 0x06, 0x6c, 0x65, 0x73, 0x73, 0x6f, 0x6e, 0x22, 0x36, 0x0a, 0x17,
-	0x47, 0x65, 0x74, 0x43, 0x6f, 0x75, 0x72, 0x73, 0x65, 0x44, 0x65, 0x63, 0x6b, 0x49, 0x44, 0x73,
+	0x47, 0x65, 0x74, 0x43, 0x6f, 0x75, 0x72, 0x73, 0x65, 0x44, 0x65, 0x63, 0x6b, 0x49, 0x64, 0x73,
 	0x52, 0x65, 0x71, 0x75, 0x65, 0x73, 0x74, 0x12, 0x1b, 0x0a, 0x09, 0x63, 0x6f, 0x75, 0x72, 0x73,
 	0x65, 0x5f, 0x69, 0x64, 0x18, 0x01, 0x20, 0x01, 0x28, 0x09, 0x52, 0x08, 0x63, 0x6f, 0x75, 0x72,
 	0x73, 0x65, 0x49, 0x64, 0x22, 0x35, 0x0a, 0x18, 0x47, 0x65, 0x74, 0x43, 0x6f, 0x75, 0x72, 0x73,
-	0x65, 0x44, 0x65, 0x63, 0x6b, 0x49, 0x44, 0x73, 0x52, 0x65, 0x73, 0x70, 0x6f, 0x6e, 0x73, 0x65,
+	0x65, 0x44, 0x65, 0x63, 0x6b, 0x49, 0x64, 0x73, 0x52, 0x65, 0x73, 0x70, 0x6f, 0x6e, 0x73, 0x65,
 	0x12, 0x19, 0x0a, 0x08, 0x64, 0x65, 0x63, 0x6b, 0x5f, 0x69, 0x64, 0x73, 0x18, 0x01, 0x20, 0x03,
 	0x28, 0x09, 0x52, 0x07, 0x64, 0x65, 0x63, 0x6b, 0x49, 0x64, 0x73, 0x22, 0x36, 0x0a, 0x17, 0x47,
-	0x65, 0x74, 0x4c, 0x65, 0x73, 0x73, 0x6f, 0x6e, 0x44, 0x65, 0x63, 0x6b, 0x49, 0x44, 0x73, 0x52,
+	0x65, 0x74, 0x4c, 0x65, 0x73, 0x73, 0x6f, 0x6e, 0x44, 0x65, 0x63, 0x6b, 0x49, 0x64, 0x73, 0x52,
 	0x65, 0x71, 0x75, 0x65, 0x73, 0x74, 0x12, 0x1b, 0x0a, 0x09, 0x6c, 0x65, 0x73, 0x73, 0x6f, 0x6e,
 	0x5f, 0x69, 0x64, 0x18, 0x01, 0x20, 0x01, 0x28, 0x09, 0x52, 0x08, 0x6c, 0x65, 0x73, 0x73, 0x6f,
 	0x6e, 0x49, 0x64, 0x22, 0x35, 0x0a, 0x18, 0x47, 0x65, 0x74, 0x4c, 0x65, 0x73, 0x73, 0x6f, 0x6e,
-	0x44, 0x65, 0x63, 0x6b, 0x49, 0x44, 0x73, 0x52, 0x65, 0x73, 0x70, 0x6f, 0x6e, 0x73, 0x65, 0x12,
+	0x44, 0x65, 0x63, 0x6b, 0x49, 0x64, 0x73, 0x52, 0x65, 0x73, 0x70, 0x6f, 0x6e, 0x73, 0x65, 0x12,
 	0x19, 0x0a, 0x08, 0x64, 0x65, 0x63, 0x6b, 0x5f, 0x69, 0x64, 0x73, 0x18, 0x01, 0x20, 0x03, 0x28,
 	0x09, 0x52, 0x07, 0x64, 0x65, 0x63, 0x6b, 0x49, 0x64, 0x73, 0x22, 0x67, 0x0a, 0x11, 0x47, 0x65,
 	0x74, 0x4c, 0x65, 0x73, 0x73, 0x6f, 0x6e, 0x73, 0x52, 0x65, 0x71, 0x75, 0x65, 0x73, 0x74, 0x12,
@@ -4225,17 +4225,17 @@ var file_course_proto_rawDesc = []byte{
 	0x75, 0x65, 0x73, 0x74, 0x1a, 0x1c, 0x2e, 0x63, 0x6f, 0x75, 0x72, 0x73, 0x65, 0x2e, 0x76, 0x31,
 	0x2e, 0x53, 0x79, 0x6e, 0x63, 0x53, 0x74, 0x61, 0x74, 0x65, 0x52, 0x65, 0x73, 0x70, 0x6f, 0x6e,
 	0x73, 0x65, 0x22, 0x00, 0x12, 0x5d, 0x0a, 0x10, 0x47, 0x65, 0x74, 0x43, 0x6f, 0x75, 0x72, 0x73,
-	0x65, 0x44, 0x65, 0x63, 0x6b, 0x49, 0x44, 0x73, 0x12, 0x22, 0x2e, 0x63, 0x6f, 0x75, 0x72, 0x73,
+	0x65, 0x44, 0x65, 0x63, 0x6b, 0x49, 0x64, 0x73, 0x12, 0x22, 0x2e, 0x63, 0x6f, 0x75, 0x72, 0x73,
 	0x65, 0x2e, 0x76, 0x31, 0x2e, 0x47, 0x65, 0x74, 0x43, 0x6f, 0x75, 0x72, 0x73, 0x65, 0x44, 0x65,
-	0x63, 0x6b, 0x49, 0x44, 0x73, 0x52, 0x65, 0x71, 0x75, 0x65, 0x73, 0x74, 0x1a, 0x23, 0x2e, 0x63,
+	0x63, 0x6b, 0x49, 0x64, 0x73, 0x52, 0x65, 0x71, 0x75, 0x65, 0x73, 0x74, 0x1a, 0x23, 0x2e, 0x63,
 	0x6f, 0x75, 0x72, 0x73, 0x65, 0x2e, 0x76, 0x31, 0x2e, 0x47, 0x65, 0x74, 0x43, 0x6f, 0x75, 0x72,
-	0x73, 0x65, 0x44, 0x65, 0x63, 0x6b, 0x49, 0x44, 0x73, 0x52, 0x65, 0x73, 0x70, 0x6f, 0x6e, 0x73,
+	0x73, 0x65, 0x44, 0x65, 0x63, 0x6b, 0x49, 0x64, 0x73, 0x52, 0x65, 0x73, 0x70, 0x6f, 0x6e, 0x73,
 	0x65, 0x22, 0x00, 0x12, 0x5d, 0x0a, 0x10, 0x47, 0x65, 0x74, 0x4c, 0x65, 0x73, 0x73, 0x6f, 0x6e,
-	0x44, 0x65, 0x63, 0x6b, 0x49, 0x44, 0x73, 0x12, 0x22, 0x2e, 0x63, 0x6f, 0x75, 0x72, 0x73, 0x65,
+	0x44, 0x65, 0x63, 0x6b, 0x49, 0x64, 0x73, 0x12, 0x22, 0x2e, 0x63, 0x6f, 0x75, 0x72, 0x73, 0x65,
 	0x2e, 0x76, 0x31, 0x2e, 0x47, 0x65, 0x74, 0x4c, 0x65, 0x73, 0x73, 0x6f, 0x6e, 0x44, 0x65, 0x63,
-	0x6b, 0x49, 0x44, 0x73, 0x52, 0x65, 0x71, 0x75, 0x65, 0x73, 0x74, 0x1a, 0x23, 0x2e, 0x63, 0x6f,
+	0x6b, 0x49, 0x64, 0x73, 0x52, 0x65, 0x71, 0x75, 0x65, 0x73, 0x74, 0x1a, 0x23, 0x2e, 0x63, 0x6f,
 	0x75, 0x72, 0x73, 0x65, 0x2e, 0x76, 0x31, 0x2e, 0x47, 0x65, 0x74, 0x4c, 0x65, 0x73, 0x73, 0x6f,
-	0x6e, 0x44, 0x65, 0x63, 0x6b, 0x49, 0x44, 0x73, 0x52, 0x65, 0x73, 0x70, 0x6f, 0x6e, 0x73, 0x65,
+	0x6e, 0x44, 0x65, 0x63, 0x6b, 0x49, 0x64, 0x73, 0x52, 0x65, 0x73, 0x70, 0x6f, 0x6e, 0x73, 0x65,
 	0x22, 0x00, 0x12, 0x66, 0x0a, 0x13, 0x47, 0x65, 0x74, 0x53, 0x74, 0x75, 0x64, 0x65, 0x6e, 0x74,
 	0x73, 0x50, 0x72, 0x6f, 0x67, 0x72, 0x65, 0x73, 0x73, 0x12, 0x25, 0x2e, 0x63, 0x6f, 0x75, 0x72,
 	0x73, 0x65, 0x2e, 0x76, 0x31, 0x2e, 0x47, 0x65, 0x74, 0x53, 0x74, 0x75, 0x64, 0x65, 0x6e, 0x74,
@@ -4292,10 +4292,10 @@ var file_course_proto_goTypes = []any{
 	(*GetCourseResponse)(nil),                  // 11: course.v1.GetCourseResponse
 	(*GetLessonRequest)(nil),                   // 12: course.v1.GetLessonRequest
 	(*GetLessonResponse)(nil),                  // 13: course.v1.GetLessonResponse
-	(*GetCourseDeckIDsRequest)(nil),            // 14: course.v1.GetCourseDeckIDsRequest
-	(*GetCourseDeckIDsResponse)(nil),           // 15: course.v1.GetCourseDeckIDsResponse
-	(*GetLessonDeckIDsRequest)(nil),            // 16: course.v1.GetLessonDeckIDsRequest
-	(*GetLessonDeckIDsResponse)(nil),           // 17: course.v1.GetLessonDeckIDsResponse
+	(*GetCourseDeckIdsRequest)(nil),            // 14: course.v1.GetCourseDeckIdsRequest
+	(*GetCourseDeckIdsResponse)(nil),           // 15: course.v1.GetCourseDeckIdsResponse
+	(*GetLessonDeckIdsRequest)(nil),            // 16: course.v1.GetLessonDeckIdsRequest
+	(*GetLessonDeckIdsResponse)(nil),           // 17: course.v1.GetLessonDeckIdsResponse
 	(*GetLessonsRequest)(nil),                  // 18: course.v1.GetLessonsRequest
 	(*GetLessonsResponse)(nil),                 // 19: course.v1.GetLessonsResponse
 	(*GetFocusedLessonsRequest)(nil),           // 20: course.v1.GetFocusedLessonsRequest
@@ -4422,8 +4422,8 @@ var file_course_proto_depIdxs = []int32{
 	42, // 71: course.v1.CourseAPI.UpdateCourse:input_type -> course.v1.UpdateCourseRequest
 	44, // 72: course.v1.CourseAPI.UpdateLesson:input_type -> course.v1.UpdateLessonRequest
 	28, // 73: course.v1.CourseAPI.SyncState:input_type -> course.v1.SyncStateRequest
-	14, // 74: course.v1.CourseAPI.GetCourseDeckIDs:input_type -> course.v1.GetCourseDeckIDsRequest
-	16, // 75: course.v1.CourseAPI.GetLessonDeckIDs:input_type -> course.v1.GetLessonDeckIDsRequest
+	14, // 74: course.v1.CourseAPI.GetCourseDeckIds:input_type -> course.v1.GetCourseDeckIdsRequest
+	16, // 75: course.v1.CourseAPI.GetLessonDeckIds:input_type -> course.v1.GetLessonDeckIdsRequest
 	49, // 76: course.v1.CourseAPI.GetStudentsProgress:input_type -> course.v1.GetStudentsProgressRequest
 	52, // 77: course.v1.CourseAPI.GetUserState:input_type -> course.v1.GetUserStateRequest
 	54, // 78: course.v1.CourseAPI.SetUserState:input_type -> course.v1.SetUserStateRequest
@@ -4442,8 +4442,8 @@ var file_course_proto_depIdxs = []int32{
 	43, // 91: course.v1.CourseAPI.UpdateCourse:output_type -> course.v1.UpdateCourseResponse
 	45, // 92: course.v1.CourseAPI.UpdateLesson:output_type -> course.v1.UpdateLessonResponse
 	29, // 93: course.v1.CourseAPI.SyncState:output_type -> course.v1.SyncStateResponse
-	15, // 94: course.v1.CourseAPI.GetCourseDeckIDs:output_type -> course.v1.GetCourseDeckIDsResponse
-	17, // 95: course.v1.CourseAPI.GetLessonDeckIDs:output_type -> course.v1.GetLessonDeckIDsResponse
+	15, // 94: course.v1.CourseAPI.GetCourseDeckIds:output_type -> course.v1.GetCourseDeckIdsResponse
+	17, // 95: course.v1.CourseAPI.GetLessonDeckIds:output_type -> course.v1.GetLessonDeckIdsResponse
 	50, // 96: course.v1.CourseAPI.GetStudentsProgress:output_type -> course.v1.GetStudentsProgressResponse
 	53, // 97: course.v1.CourseAPI.GetUserState:output_type -> course.v1.GetUserStateResponse
 	55, // 98: course.v1.CourseAPI.SetUserState:output_type -> course.v1.SetUserStateResponse

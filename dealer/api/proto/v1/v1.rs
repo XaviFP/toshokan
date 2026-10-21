@@ -3,11 +3,16 @@
 pub struct DealRequest {
     #[prost(string, tag = "1")]
     pub user_id: ::prost::alloc::string::String,
-    /// Empty means all of the user's answered cards, across every deck.
+    /// Set at most one of deck_ids, course_id and lesson_id. None means all of the user's
+    /// answered cards, across every deck.
     #[prost(string, repeated, tag = "2")]
     pub deck_ids: ::prost::alloc::vec::Vec<::prost::alloc::string::String>,
     #[prost(uint32, tag = "3")]
     pub number_of_cards: u32,
+    #[prost(string, tag = "4")]
+    pub course_id: ::prost::alloc::string::String,
+    #[prost(string, tag = "5")]
+    pub lesson_id: ::prost::alloc::string::String,
 }
 #[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Clone, PartialEq, ::prost::Message)]

@@ -3,15 +3,19 @@ FROM rust:1.85-bookworm AS builder
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
     protobuf-compiler \
+    libprotobuf-dev \
     && rm -rf /var/lib/apt/lists/*
 
-WORKDIR /app
+# Built from the repo root, so build.rs can read the course service's proto.
+WORKDIR /app/dealer
 
-COPY Cargo.toml Cargo.lock* ./
+COPY dealer/Cargo.toml dealer/Cargo.lock* ./
 
-COPY build.rs ./
+COPY dealer/build.rs ./
 
-COPY api/proto/v1/dealer.proto api/proto/v1/
+COPY dealer/api/proto/v1/dealer.proto api/proto/v1/
+
+COPY course/api/proto/v1/course.proto /app/course/api/proto/v1/
 
 # Create dummy main to cache dependencies
 RUN mkdir src && \
@@ -19,7 +23,7 @@ RUN mkdir src && \
     cargo build --release && \
     rm -rf src
 
-COPY src/ src/
+COPY dealer/src/ src/
 
 # Touch main.rs to invalidate the cached dummy build
 RUN touch src/main.rs
@@ -34,7 +38,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/* \
     && useradd -r -u 1001 appuser
 
-COPY --from=builder --chmod=755 /app/target/release/dealer /dealer
+COPY --from=builder --chmod=755 /app/dealer/target/release/dealer /dealer
 
 USER appuser
 
