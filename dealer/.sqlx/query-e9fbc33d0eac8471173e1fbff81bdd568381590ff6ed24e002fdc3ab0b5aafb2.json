@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO cards (id, deck_id, title) VALUES ($1, $3, 'c'), ($2, $3, 'd')",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "e9fbc33d0eac8471173e1fbff81bdd568381590ff6ed24e002fdc3ab0b5aafb2"
+}

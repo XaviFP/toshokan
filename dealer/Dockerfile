@@ -1,5 +1,5 @@
 # Build stage
-FROM rust:1.85-bookworm AS builder
+FROM rust:1.98.1-bookworm AS builder
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
     protobuf-compiler \
@@ -17,18 +17,33 @@ COPY dealer/api/proto/v1/dealer.proto api/proto/v1/
 
 COPY course/api/proto/v1/course.proto /app/course/api/proto/v1/
 
+# The query macros read the committed query cache (copied below) instead of connecting to Postgres.
+ENV SQLX_OFFLINE=true
+
 # Create dummy main to cache dependencies
 RUN mkdir src && \
     echo "fn main() {}" > src/main.rs && \
     cargo build --release && \
     rm -rf src
 
+COPY dealer/.sqlx/ .sqlx/
 COPY dealer/src/ src/
 
 # Touch main.rs to invalidate the cached dummy build
 RUN touch src/main.rs
 
 RUN cargo build --release
+
+# Dev stage: what `make test-dealer` and `make sqlx-prepare` run in
+FROM rust:1.98.1-bookworm AS dev
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    protobuf-compiler \
+    libprotobuf-dev \
+    && rm -rf /var/lib/apt/lists/* \
+    && cargo install sqlx-cli --version 0.8.6 --locked --no-default-features --features postgres,rustls
+
+WORKDIR /app/dealer
 
 # Runtime stage
 FROM debian:bookworm-slim

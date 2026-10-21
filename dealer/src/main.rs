@@ -1,9 +1,9 @@
 use std::collections::HashMap;
 use std::time::Duration;
 
+use sqlx::error::{DatabaseError, ErrorKind};
+use sqlx::postgres::{PgConnectOptions, PgDatabaseError, PgPool, PgPoolOptions};
 use tokio::signal::unix::{signal, SignalKind};
-use tokio_postgres::error::SqlState;
-use tokio_postgres::NoTls;
 use tokio_util::sync::CancellationToken;
 use tonic::transport::{Channel, Endpoint, Server};
 use tonic::{Code, Request, Response, Status};
@@ -41,6 +41,8 @@ const LEVEL4_PERCENTATGE: usize = 15; //2
 const LEVEL5_PERCENTATGE: usize = 10; //1
 
 const COURSE_SERVICE_TIMEOUT: Duration = Duration::from_secs(5);
+const DB_POOL_SIZE: u32 = 10;
+const DB_TIMEOUT: Duration = Duration::from_secs(5);
 
 struct Dealer {
     repo: Repository,
@@ -84,7 +86,20 @@ fn parse_deck_ids(deck_ids: &[String]) -> Result<Vec<Uuid>, Status> {
         .collect()
 }
 struct Repository {
-    client: tokio_postgres::Client,
+    pool: PgPool,
+}
+
+// `timeout` limits both waiting for a connection and each query's run time
+// (Postgres `statement_timeout`, in milliseconds).
+fn new_pool(options: PgConnectOptions, max_connections: u32, timeout: Duration) -> PgPool {
+    let statement_timeout = timeout.as_millis().to_string();
+    let options = options.options([("statement_timeout", statement_timeout.as_str())]);
+
+    PgPoolOptions::new()
+        .max_connections(max_connections)
+        .acquire_timeout(timeout)
+        .test_before_acquire(true)
+        .connect_lazy_with(options)
 }
 
 impl Repository {
@@ -94,79 +109,75 @@ impl Repository {
         user_id: &Uuid,
         deck_ids: &[Uuid],
         max: &i64,
-    ) -> Result<Vec<LeveledCard>, tokio_postgres::Error> {
-        let rows = self
-            .client
-            .query(
-                "WITH user_cards as (
-                    SELECT cards.id as card_id, user_card_level.lvl as lvl, random() as shuffle
-                    FROM cards
-                    JOIN decks
-                    ON decks.id = cards.deck_id
-                    AND decks.deleted_at IS NULL
-                    JOIN user_card_level
-                    ON user_card_level.card_id = cards.id
-                    AND user_card_level.user_id = $1
-                    WHERE (cardinality($2::uuid[]) = 0 OR cards.deck_id = ANY($2::uuid[]))
-                    AND cards.deleted_at IS NULL
-                )
+    ) -> Result<Vec<LeveledCard>, sqlx::Error> {
+        let rows = sqlx::query!(
+            r#"WITH user_cards as (
+                SELECT cards.id as card_id, user_card_level.lvl as lvl, random() as shuffle
+                FROM cards
+                JOIN decks
+                ON decks.id = cards.deck_id
+                AND decks.deleted_at IS NULL
+                JOIN user_card_level
+                ON user_card_level.card_id = cards.id
+                AND user_card_level.user_id = $1
+                WHERE (cardinality($2::uuid[]) = 0 OR cards.deck_id = ANY($2::uuid[]))
+                AND cards.deleted_at IS NULL
+            )
+            SELECT card_id AS "card_id!", lvl AS "lvl!" FROM (
                 (SELECT card_id, lvl, shuffle FROM user_cards WHERE lvl = 1 ORDER BY shuffle LIMIT $3)
                 UNION ALL (SELECT card_id, lvl, shuffle FROM user_cards WHERE lvl = 2 ORDER BY shuffle LIMIT $3)
                 UNION ALL (SELECT card_id, lvl, shuffle FROM user_cards WHERE lvl = 3 ORDER BY shuffle LIMIT $3)
                 UNION ALL (SELECT card_id, lvl, shuffle FROM user_cards WHERE lvl = 4 ORDER BY shuffle LIMIT $3)
                 UNION ALL (SELECT card_id, lvl, shuffle FROM user_cards WHERE lvl = 5 ORDER BY shuffle LIMIT $3)
-                ORDER BY lvl, shuffle",
-                &[user_id, &deck_ids, max],
-            )
-            .await?;
+            ) AS dealt
+            ORDER BY lvl, shuffle"#,
+            user_id,
+            deck_ids,
+            max,
+        )
+        .fetch_all(&self.pool)
+        .await?;
+
         Ok(rows
             .iter()
-            .map(|lvl_card| {
-                let id: Uuid = lvl_card.get(0);
-                let lvl: i32 = lvl_card.get(1);
-
-                LeveledCard {
-                    id: id.to_string(),
-                    lvl: lvl as usize,
-                }
+            .map(|row| LeveledCard {
+                id: row.card_id.to_string(),
+                lvl: row.lvl as usize,
             })
             .collect())
     }
 
-    async fn store_answers(
-        &self,
-        user_id: &Uuid,
-        answer_ids: &[Uuid],
-    ) -> Result<(), tokio_postgres::Error> {
+    async fn store_answers(&self, user_id: &Uuid, answer_ids: &[Uuid]) -> Result<(), sqlx::Error> {
         // A card answered more than once in the same call counts as correct only if every answer was.
-        self.client
-            .execute(
-                "WITH practice AS (
-                    INSERT INTO card_practice (user_id, answer_id)
-                    SELECT $1::uuid, unnest($2::uuid[])
-                ),
-                answered_cards AS (
-                    SELECT card_id, bool_and(is_correct) AS is_correct
-                    FROM answers
-                    WHERE id = ANY($2::uuid[])
-                    GROUP BY card_id
-                )
-                INSERT INTO user_card_level (user_id, card_id, lvl, updated_at)
-                SELECT $1::uuid, a.card_id,
-                    CASE WHEN a.is_correct
-                        THEN LEAST(COALESCE(l.lvl, 1) + 1, 5)
-                        ELSE GREATEST(COALESCE(l.lvl, 1) - 1, 1)
-                    END,
-                    now()
-                FROM answered_cards a
-                LEFT JOIN user_card_level l
-                ON l.card_id = a.card_id
-                AND l.user_id = $1::uuid
-                ON CONFLICT ON CONSTRAINT user_card_level_card_id_user_id_key DO UPDATE
-                SET lvl = EXCLUDED.lvl, updated_at = EXCLUDED.updated_at",
-                &[user_id, &answer_ids],
+        sqlx::query!(
+            "WITH practice AS (
+                INSERT INTO card_practice (user_id, answer_id)
+                SELECT $1::uuid, unnest($2::uuid[])
+            ),
+            answered_cards AS (
+                SELECT card_id, bool_and(is_correct) AS is_correct
+                FROM answers
+                WHERE id = ANY($2::uuid[])
+                GROUP BY card_id
             )
-            .await?;
+            INSERT INTO user_card_level (user_id, card_id, lvl, updated_at)
+            SELECT $1::uuid, a.card_id,
+                CASE WHEN a.is_correct
+                    THEN LEAST(COALESCE(l.lvl, 1) + 1, 5)
+                    ELSE GREATEST(COALESCE(l.lvl, 1) - 1, 1)
+                END,
+                now()
+            FROM answered_cards a
+            LEFT JOIN user_card_level l
+            ON l.card_id = a.card_id
+            AND l.user_id = $1::uuid
+            ON CONFLICT ON CONSTRAINT user_card_level_card_id_user_id_key DO UPDATE
+            SET lvl = EXCLUDED.lvl, updated_at = EXCLUDED.updated_at",
+            user_id,
+            answer_ids,
+        )
+        .execute(&self.pool)
+        .await?;
 
         Ok(())
     }
@@ -176,22 +187,20 @@ impl Repository {
         &self,
         user_id: &Uuid,
         answer_ids: &[Uuid],
-    ) -> Result<i64, tokio_postgres::Error> {
-        let row = self
-            .client
-            .query_one(
-                "SELECT count(*)
-                FROM unnest($2::uuid[]) AS submitted(answer_id)
-                LEFT JOIN answers a ON a.id = submitted.answer_id
-                LEFT JOIN user_card_level l
-                ON l.card_id = a.card_id
-                AND l.user_id = $1::uuid
-                WHERE l.card_id IS NULL",
-                &[user_id, &answer_ids],
-            )
-            .await?;
-
-        Ok(row.get(0))
+    ) -> Result<i64, sqlx::Error> {
+        sqlx::query_scalar!(
+            r#"SELECT count(*) AS "count!"
+            FROM unnest($2::uuid[]) AS submitted(answer_id)
+            LEFT JOIN answers a ON a.id = submitted.answer_id
+            LEFT JOIN user_card_level l
+            ON l.card_id = a.card_id
+            AND l.user_id = $1::uuid
+            WHERE l.card_id IS NULL"#,
+            user_id,
+            answer_ids,
+        )
+        .fetch_one(&self.pool)
+        .await
     }
 }
 
@@ -260,7 +269,7 @@ fn parse_deal_request(request: &DealRequest) -> Result<(Uuid, Scope), Status> {
     Ok((user_id, Scope::Decks(deck_ids)))
 }
 
-fn internal_error(operation: &str, err: tokio_postgres::Error) -> Status {
+fn internal_error(operation: &str, err: sqlx::Error) -> Status {
     eprintln!("{} failed: {}", operation, err);
     Status::internal(format!("{} failed", operation))
 }
@@ -276,9 +285,17 @@ fn course_service_error(err: Status) -> Status {
     }
 }
 
-fn is_null_card_id(err: &tokio_postgres::Error) -> bool {
-    err.code() == Some(&SqlState::NOT_NULL_VIOLATION)
-        && err.as_db_error().and_then(|db_err| db_err.column()) == Some("card_id")
+fn is_unknown_answer(err: &sqlx::Error) -> bool {
+    err.as_database_error()
+        .is_some_and(|db_err| db_err.kind() == ErrorKind::ForeignKeyViolation)
+}
+
+fn is_null_card_id(err: &sqlx::Error) -> bool {
+    err.as_database_error()
+        .and_then(|db_err| db_err.try_downcast_ref::<PgDatabaseError>())
+        .is_some_and(|db_err| {
+            db_err.kind() == ErrorKind::NotNullViolation && db_err.column() == Some("card_id")
+        })
 }
 
 #[tonic::async_trait]
@@ -292,7 +309,7 @@ impl pbDealer for Dealer {
 
         match self.repo.store_answers(&user_id, &answer_ids).await {
             Ok(()) => Ok(Response::new(StoreAnswersResponse {})),
-            Err(err) if err.code() == Some(&SqlState::FOREIGN_KEY_VIOLATION) => {
+            Err(err) if is_unknown_answer(&err) => {
                 Err(Status::invalid_argument("unknown answer_id"))
             }
             Err(err) if is_null_card_id(&err) => {
@@ -386,18 +403,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         panic!("{}", grpc_config.err().unwrap());
     }
 
-    // Stablish DB connection for ranker job
-    let (ranker_client, ranker_connection) =
-        tokio_postgres::connect(&db_config.to_string(), NoTls).await?;
+    let pool = new_pool(db_config.connect_options()?, DB_POOL_SIZE, DB_TIMEOUT);
+    let pool_to_close = pool.clone();
 
-    // Spawn connection for ranker job
-    tokio::spawn(async move {
-        if let Err(error) = ranker_connection.await {
-            eprintln!("Connection error: {}", error);
-        }
-    });
-
-    let ranker = Ranker::new(ranker_client);
+    let ranker = Ranker::new(pool.clone());
 
     // Create cancellation token for graceful shutdown
     let cancel_token = CancellationToken::new();
@@ -406,16 +415,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     tokio::spawn(async move {
         if let Err(error) = ranker.start(ranker_token).await {
             eprintln!("Ranker error: {}", error);
-        }
-    });
-
-    // Stablish DB connection
-    let (client, connection) = tokio_postgres::connect(&db_config.to_string(), NoTls).await?;
-
-    // Spawn connection
-    tokio::spawn(async move {
-        if let Err(error) = connection.await {
-            eprintln!("Connection error: {}", error);
         }
     });
 
@@ -433,7 +432,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .connect_lazy();
 
     let dealer = Dealer {
-        repo: Repository { client },
+        repo: Repository { pool },
         courses: Box::new(CourseApiClient::new(course_channel)),
     };
 
@@ -449,6 +448,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             cancel_token.cancel();
         })
         .await?;
+
+    pool_to_close.close().await;
 
     Ok(())
 }

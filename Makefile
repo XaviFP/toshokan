@@ -10,7 +10,7 @@
 # Override: BUILD_MODE=sequential make services
 # =============================================================================
 
-.PHONY: services clean rebuild test-api-schema test-api-basic-flow test test-dealer coverage dev proto migrations
+.PHONY: services clean rebuild test-api-schema test-api-basic-flow test test-dealer sqlx-prepare coverage dev proto migrations
 
 # Build all services (uses docker buildx bake for shared proto generation)
 # Auto-detects system resources and adjusts parallelism for low-end machines
@@ -52,13 +52,27 @@ test:
 		golang:1.24-bookworm \
 		go test ./... -p=1 -coverprofile=coverage.out
 
-# Run dealer (Rust) unit and integration tests in Docker; needs the db container running
-test-dealer:
-	docker run --rm -v $(PWD):/app -w /app/dealer --network host \
+# dealer's tests and query cache run in the `dev` stage of dealer/Dockerfile (Rust, protoc, sqlx-cli),
+# on the host network, against the db container. Credentials come from env/.common.
+DB_USER := $(shell sed -n 's/^DB_USER=//p' env/.common)
+DB_PASSWORD := $(shell sed -n 's/^DB_PASSWORD=//p' env/.common)
+DB_PORT := $(shell sed -n 's/^DB_PORT=//p' env/.common)
+DEALER_DATABASE_URL = postgres://$(DB_USER):$(DB_PASSWORD)@localhost:$(DB_PORT)/deck
+DEALER_DEV = docker build -q -f dealer/Dockerfile --target dev -t toshokan-dealer-dev . > /dev/null && \
+	docker run --rm -v $(PWD):/app --network host \
 		-v toshokan-dealer-cargo-registry:/usr/local/cargo/registry \
 		-v toshokan-dealer-target:/target -e CARGO_TARGET_DIR=/target \
-		rust:1.85-bookworm \
-		sh -c "apt-get update -qq && apt-get install -y -qq protobuf-compiler libprotobuf-dev > /dev/null && cargo test"
+		-e DATABASE_URL=$(DEALER_DATABASE_URL) toshokan-dealer-dev
+
+# Run dealer's unit and integration tests; needs the db container running and `make migrations`.
+# Fails first if the committed query cache (dealer/.sqlx) is out of date with the deck schema.
+# Each DB test gets its own temporary database, created through DATABASE_URL's user.
+test-dealer:
+	$(DEALER_DEV) sh -c "cargo sqlx prepare --check -- --all-targets && SQLX_OFFLINE=true cargo test"
+
+# Regenerate dealer's query cache (dealer/.sqlx) after changing a query; needs `make migrations`
+sqlx-prepare:
+	$(DEALER_DEV) sh -c "cargo sqlx prepare -- --all-targets && chown -R $(shell id -u):$(shell id -g) .sqlx"
 
 # Generate coverage report (requires test to have run first)
 coverage: test

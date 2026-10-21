@@ -29,9 +29,10 @@ features = ["serde"]
 version = "1.0"
 features = ["serde", "v4"]
 
-[dependencies.tokio-postgres]
-version = "0.7.7"
-features = ["with-uuid-1", "with-chrono-0_4"]
+[dependencies.sqlx]
+version = "0.8"
+default-features = false
+features = ["runtime-tokio", "postgres", "uuid", "chrono", "macros", "migrate"]
 
 [dependencies.async-trait]
 version = "0.1.60"

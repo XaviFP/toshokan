@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO user_card_level (user_id, card_id, lvl, updated_at) VALUES ($1, $2, $3, now())",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Int4"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "991f6f0090a2f0a897d4d8be8270e25511a1ac880f4f688e24c4b54d3b405a3b"
+}
