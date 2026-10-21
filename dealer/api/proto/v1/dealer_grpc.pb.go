@@ -19,8 +19,9 @@ import (
 const _ = grpc.SupportPackageIsVersion9
 
 const (
-	Dealer_Deal_FullMethodName         = "/v1.Dealer/Deal"
-	Dealer_StoreAnswers_FullMethodName = "/v1.Dealer/StoreAnswers"
+	Dealer_Deal_FullMethodName          = "/v1.Dealer/Deal"
+	Dealer_StoreAnswers_FullMethodName  = "/v1.Dealer/StoreAnswers"
+	Dealer_ReviewAnswers_FullMethodName = "/v1.Dealer/ReviewAnswers"
 )
 
 // DealerClient is the client API for Dealer service.
@@ -29,6 +30,8 @@ const (
 type DealerClient interface {
 	Deal(ctx context.Context, in *DealRequest, opts ...grpc.CallOption) (*DealResponse, error)
 	StoreAnswers(ctx context.Context, in *StoreAnswersRequest, opts ...grpc.CallOption) (*StoreAnswersResponse, error)
+	// Like StoreAnswers, but only for cards already in the user's pool; never adds cards.
+	ReviewAnswers(ctx context.Context, in *ReviewAnswersRequest, opts ...grpc.CallOption) (*ReviewAnswersResponse, error)
 }
 
 type dealerClient struct {
@@ -59,12 +62,24 @@ func (c *dealerClient) StoreAnswers(ctx context.Context, in *StoreAnswersRequest
 	return out, nil
 }
 
+func (c *dealerClient) ReviewAnswers(ctx context.Context, in *ReviewAnswersRequest, opts ...grpc.CallOption) (*ReviewAnswersResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ReviewAnswersResponse)
+	err := c.cc.Invoke(ctx, Dealer_ReviewAnswers_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // DealerServer is the server API for Dealer service.
 // All implementations should embed UnimplementedDealerServer
 // for forward compatibility.
 type DealerServer interface {
 	Deal(context.Context, *DealRequest) (*DealResponse, error)
 	StoreAnswers(context.Context, *StoreAnswersRequest) (*StoreAnswersResponse, error)
+	// Like StoreAnswers, but only for cards already in the user's pool; never adds cards.
+	ReviewAnswers(context.Context, *ReviewAnswersRequest) (*ReviewAnswersResponse, error)
 }
 
 // UnimplementedDealerServer should be embedded to have
@@ -79,6 +94,9 @@ func (UnimplementedDealerServer) Deal(context.Context, *DealRequest) (*DealRespo
 }
 func (UnimplementedDealerServer) StoreAnswers(context.Context, *StoreAnswersRequest) (*StoreAnswersResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method StoreAnswers not implemented")
+}
+func (UnimplementedDealerServer) ReviewAnswers(context.Context, *ReviewAnswersRequest) (*ReviewAnswersResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method ReviewAnswers not implemented")
 }
 func (UnimplementedDealerServer) testEmbeddedByValue() {}
 
@@ -136,6 +154,24 @@ func _Dealer_StoreAnswers_Handler(srv interface{}, ctx context.Context, dec func
 	return interceptor(ctx, in, info, handler)
 }
 
+func _Dealer_ReviewAnswers_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ReviewAnswersRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(DealerServer).ReviewAnswers(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: Dealer_ReviewAnswers_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(DealerServer).ReviewAnswers(ctx, req.(*ReviewAnswersRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // Dealer_ServiceDesc is the grpc.ServiceDesc for Dealer service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -150,6 +186,10 @@ var Dealer_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "StoreAnswers",
 			Handler:    _Dealer_StoreAnswers_Handler,
+		},
+		{
+			MethodName: "ReviewAnswers",
+			Handler:    _Dealer_ReviewAnswers_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

@@ -1423,7 +1423,7 @@ paths:
       tags:
         - Review
       summary: Submit review answers
-      description: Record the selected answers. A correct answer raises the card's level, a wrong one lowers it.
+      description: Record the selected answers. A correct answer raises the card's level, a wrong one lowers it. Only cards already in the user's review pool (answered in a lesson) are accepted.
       operationId: storeReviewAnswers
       security:
         - BearerAuth: []
@@ -1447,7 +1447,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/Error'
         '404':
-          description: An answer ID does not exist
+          description: An answer doesn't exist or its card isn't in the user's review pool
           content:
             application/json:
               schema:

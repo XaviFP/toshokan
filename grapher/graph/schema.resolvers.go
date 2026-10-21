@@ -50,7 +50,7 @@ func (r *mutationResolver) DeleteDeck(ctx context.Context, id string) (*model.De
 }
 
 func (r *mutationResolver) AnswerCards(ctx context.Context, input model.AnswerCardsInput) (*model.AnswerCardsResponse, error) {
-	_, err := r.DealerClient.StoreAnswers(ctx, &v1Dealer.StoreAnswersRequest{
+	_, err := r.DealerClient.ReviewAnswers(ctx, &v1Dealer.ReviewAnswersRequest{
 		UserId:    r.getUserID(ctx),
 		AnswerIds: input.AnswerIDs,
 	})
