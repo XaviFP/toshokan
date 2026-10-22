@@ -1508,7 +1508,7 @@ paths:
         - Review
       summary: Submit review answers
       description: Record the selected answers. A correct answer raises the card's level, a wrong one lowers it. Only cards already in the user's review pool (answered in a lesson) are accepted.
-      operationId: storeReviewAnswers
+      operationId: submitReviewAnswers
       security:
         - BearerAuth: []
       requestBody:
