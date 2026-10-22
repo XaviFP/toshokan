@@ -9,9 +9,11 @@ import (
 	"github.com/juju/errors"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
+	"github.com/stretchr/testify/require"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
+	"google.golang.org/protobuf/types/known/timestamppb"
 
 	"github.com/XaviFP/toshokan/common/pagination"
 	pb "github.com/XaviFP/toshokan/course/api/proto/v1"
@@ -323,90 +325,158 @@ func TestServer_EnrollUser(t *testing.T) {
 }
 
 func TestServer_GetLessons(t *testing.T) {
-	repoMock := &course.RepositoryMock{}
-	browserMock := &course.LessonsBrowserMock{}
-	srv := &Server{
-		Repository:     repoMock,
-		LessonsBrowser: browserMock,
-	}
+	courseID := uuid.MustParse("fb9ffe2c-ad66-4766-9b7b-46fd5d9acd72")
+	userID := uuid.MustParse("4acc3aa4-7684-4a64-b61c-28a599881922")
+	createdAt := time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC)
 
-	t.Run("success", func(t *testing.T) {
-		courseID := uuid.MustParse("fb9ffe2c-ad66-4766-9b7b-46fd5d9acd72")
-		lessons := []course.Lesson{
-			{
-				ID:          uuid.MustParse("334ddbf8-1acc-405b-86d8-49f0d1ca636c"),
-				CourseID:    courseID,
-				Order:       1,
-				Title:       "Introduction",
-				Description: "Getting started",
-				Body:        "Content",
-				CreatedAt:   time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC),
-			},
-		}
+	t.Run("success_returns_lessons_with_progress_without_body", func(t *testing.T) {
+		browserMock := &course.LessonsBrowserMock{}
+		srv := &Server{LessonsBrowser: browserMock}
 
-		conn := course.LessonsConnection{
-			Edges: []course.LessonEdge{
-				{
-					Lesson: lessons[0],
-					Cursor: "cursor1",
+		lessonID := uuid.MustParse("334ddbf8-1acc-405b-86d8-49f0d1ca636c")
+		browserMock.On("Browse", mock.Anything, courseID, pagination.NewOldestFirstPagination(pagination.WithFirst(10)), course.BrowseOptions{
+			UserID:   &userID,
+			Bodyless: true,
+		}).Return(course.BrowseResult{
+			ProgressLessons: &course.LessonsWithProgressConnection{
+				Edges: []course.LessonWithProgressEdge{
+					{
+						Lesson: &course.LessonWithProgress{
+							Lesson: course.Lesson{
+								ID:          lessonID,
+								CourseID:    courseID,
+								Order:       1,
+								Title:       "Introduction",
+								Description: "Getting started",
+								CreatedAt:   createdAt,
+							},
+							IsCompleted: true,
+							IsCurrent:   false,
+						},
+						Cursor: "cursor1",
+					},
+				},
+				PageInfo: pagination.PageInfo{
+					HasNextPage: true,
+					StartCursor: "cursor1",
+					EndCursor:   "cursor1",
 				},
 			},
-			PageInfo: pagination.PageInfo{
-				HasNextPage:     false,
-				HasPreviousPage: false,
-				StartCursor:     "start",
-				EndCursor:       "end",
+		}, nil)
+
+		actual, err := srv.GetLessons(context.Background(), &pb.GetLessonsRequest{
+			CourseId:   courseID.String(),
+			UserId:     userID.String(),
+			Pagination: &pb.Pagination{First: 10},
+		})
+
+		require.NoError(t, err)
+
+		expected := &pb.GetLessonsResponse{
+			Lessons: &pb.LessonsWithProgressConnection{
+				Edges: []*pb.LessonsWithProgressConnection_Edge{
+					{
+						Node: &pb.LessonWithProgress{
+							Lesson: &pb.Lesson{
+								Id:          lessonID.String(),
+								CourseId:    courseID.String(),
+								Order:       1,
+								Title:       "Introduction",
+								Description: "Getting started",
+								CreatedAt:   timestamppb.New(createdAt),
+							},
+							IsCompleted: true,
+							IsCurrent:   false,
+						},
+						Cursor: "cursor1",
+					},
+				},
+				PageInfo: &pb.PageInfo{
+					HasNextPage: true,
+					StartCursor: "cursor1",
+					EndCursor:   "cursor1",
+				},
 			},
 		}
-
-		browseResult := course.BrowseResult{
-			PublicLessons: &conn,
-		}
-
-		expectedPagination := pagination.NewOldestFirstPagination(
-			pagination.WithFirst(10),
-		)
-		expectedOpts := course.BrowseOptions{}
-
-		browserMock.On("Browse", mock.Anything, courseID, expectedPagination, expectedOpts).Return(browseResult, nil)
-
-		req := pb.GetLessonsRequest{
-			CourseId: courseID.String(),
-			Pagination: &pb.Pagination{
-				First: 10,
-			},
-		}
-
-		res, err := srv.GetLessons(context.Background(), &req)
-		assert.NoError(t, err)
-		assert.Len(t, res.Lessons.Edges, 1)
-		assert.Equal(t, lessons[0].Title, res.Lessons.Edges[0].Node.Title)
+		assert.Equal(t, expected, actual)
+		browserMock.AssertExpectations(t)
 	})
 
-	t.Run("error", func(t *testing.T) {
-		courseID := uuid.MustParse("1f30a72f-5d7a-48da-a5c2-42efece6972a")
+	t.Run("success_without_pagination", func(t *testing.T) {
+		browserMock := &course.LessonsBrowserMock{}
+		srv := &Server{LessonsBrowser: browserMock}
 
-		expectedPagination := pagination.NewOldestFirstPagination(
-			pagination.WithFirst(10),
-		)
-		expectedOpts := course.BrowseOptions{}
+		browserMock.On("Browse", mock.Anything, courseID, pagination.NewOldestFirstPagination(), course.BrowseOptions{
+			UserID:   &userID,
+			Bodyless: true,
+		}).Return(course.BrowseResult{
+			ProgressLessons: &course.LessonsWithProgressConnection{},
+		}, nil)
 
-		browserMock.On("Browse", mock.Anything, courseID, expectedPagination, expectedOpts).Return(course.BrowseResult{}, assert.AnError)
-
-		req := pb.GetLessonsRequest{
+		actual, err := srv.GetLessons(context.Background(), &pb.GetLessonsRequest{
 			CourseId: courseID.String(),
-			Pagination: &pb.Pagination{
-				First: 10,
+			UserId:   userID.String(),
+		})
+
+		require.NoError(t, err)
+
+		expected := &pb.GetLessonsResponse{
+			Lessons: &pb.LessonsWithProgressConnection{
+				PageInfo: &pb.PageInfo{},
 			},
 		}
-
-		res, err := srv.GetLessons(context.Background(), &req)
-		assert.Error(t, err)
-		assert.Nil(t, res)
+		assert.Equal(t, expected, actual)
+		browserMock.AssertExpectations(t)
 	})
 
-	browserMock.AssertExpectations(t)
-	repoMock.AssertExpectations(t)
+	t.Run("invalid_course_id", func(t *testing.T) {
+		browserMock := &course.LessonsBrowserMock{}
+		srv := &Server{LessonsBrowser: browserMock}
+
+		actual, err := srv.GetLessons(context.Background(), &pb.GetLessonsRequest{
+			CourseId:   "not-a-uuid",
+			UserId:     userID.String(),
+			Pagination: &pb.Pagination{First: 10},
+		})
+
+		require.Error(t, err)
+		assert.Nil(t, actual)
+		browserMock.AssertNotCalled(t, "Browse")
+	})
+
+	t.Run("invalid_user_id", func(t *testing.T) {
+		browserMock := &course.LessonsBrowserMock{}
+		srv := &Server{LessonsBrowser: browserMock}
+
+		actual, err := srv.GetLessons(context.Background(), &pb.GetLessonsRequest{
+			CourseId:   courseID.String(),
+			UserId:     "not-a-uuid",
+			Pagination: &pb.Pagination{First: 10},
+		})
+
+		require.Error(t, err)
+		assert.Nil(t, actual)
+		browserMock.AssertNotCalled(t, "Browse")
+	})
+
+	t.Run("browse_error", func(t *testing.T) {
+		browserMock := &course.LessonsBrowserMock{}
+		srv := &Server{LessonsBrowser: browserMock}
+
+		browserMock.On("Browse", mock.Anything, courseID, pagination.NewOldestFirstPagination(pagination.WithFirst(10)), course.BrowseOptions{
+			UserID:   &userID,
+			Bodyless: true,
+		}).Return(course.BrowseResult{}, errors.Trace(course.ErrUserProgressNotFound))
+
+		actual, err := srv.GetLessons(context.Background(), &pb.GetLessonsRequest{
+			CourseId:   courseID.String(),
+			UserId:     userID.String(),
+			Pagination: &pb.Pagination{First: 10},
+		})
+
+		require.ErrorIs(t, err, course.ErrUserProgressNotFound)
+		assert.Nil(t, actual)
+	})
 }
 
 func TestServer_GetUserProgress(t *testing.T) {

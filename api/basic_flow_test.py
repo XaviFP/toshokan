@@ -594,6 +594,7 @@ def setup_test_data(base_url: str, token: str) -> tuple[str, List[Dict[str, Any]
     log_step("Creating 5 courses...")
     courses: List[Dict[str, Any]] = []
     course_ids: List[str] = []
+    first_lesson: Dict[str, Any] = {}
     for i in range(5):
         course = create_course(
             base_url, token, f"course-{i}", f"course {i} desc", order=i)
@@ -605,6 +606,8 @@ def setup_test_data(base_url: str, token: str) -> tuple[str, List[Dict[str, Any]
         deck_id = decks[i % len(decks)]["id"]
         lesson = create_lesson(base_url, token, course["id"],
                                order=1, title=f"course-{i}-lesson-1", deck_id=deck_id)
+        if i == 0:
+            first_lesson = lesson
         log_step(f"  → Added lesson: {lesson['id']}")
 
     # Use the first course for the main test flow
@@ -615,9 +618,6 @@ def setup_test_data(base_url: str, token: str) -> tuple[str, List[Dict[str, Any]
     lessons: List[Dict[str, Any]] = []
     lesson_deck_ids: List[str] = []
 
-    # Get the first lesson we already created
-    first_lesson_response = list_lessons(base_url, token, course_id, limit=1)
-    first_lesson = first_lesson_response["edges"][0]["node"]
     lessons.append(first_lesson)
     lesson_deck_ids.append(decks[0]["id"])
 
@@ -640,6 +640,12 @@ def run_pagination_before_answering(base_url: str, token: str, course_id: str, l
     log_step(
         f"✓ Forward pagination: {len(pages)} page(s), {len(edges)} edge(s)")
     assert len(edges) >= len(lessons)
+    for edge in edges:
+        node = edge["node"]
+        assert "body" not in node, f"Lesson {node['id']} should come without body"
+        assert node["is_completed"] is False, f"Lesson {node['id']} should not be completed yet"
+        assert node["is_current"] is (node["order"] == 1), f"Only the first lesson should be current, got {node['order']}"
+    log_step("✓ Lessons come with progress and without body")
 
     log_step("")
     log_step("Testing backward pagination...")
@@ -971,6 +977,17 @@ def get_deck_response(base_url: str, token: str, deck_id: str) -> requests.Respo
         timeout=TIMEOUT,
     )
     log_response("GET /decks/{deckId}", response)
+    return response
+
+
+def get_lesson_response(base_url: str, token: str, course_id: str, lesson_id: str) -> requests.Response:
+    """Fetch a lesson by ID and return the raw response."""
+    response = requests.get(
+        f"{base_url}/courses/{course_id}/lessons/{lesson_id}",
+        headers=auth_headers(token),
+        timeout=TIMEOUT,
+    )
+    log_response("GET /courses/{courseId}/lessons/{lessonId}", response)
     return response
 
 
@@ -1438,11 +1455,10 @@ def run_update_lesson_tests(base_url: str, token: str, course_id: str, lesson: D
     log_step("  ✓ Update multiple fields - success")
 
     # Test 7: Re-fetch lesson to verify persistence
-    log_step("  Verifying persistence by re-fetching lessons...")
-    lessons_response = list_lessons(base_url, token, course_id, limit=10)
-    fetched_lesson = next(
-        (e["node"] for e in lessons_response["edges"] if e["node"]["id"] == lesson_id), None)
-    assert fetched_lesson is not None, "Lesson should be found"
+    log_step("  Verifying persistence by re-fetching the lesson...")
+    response = get_lesson_response(base_url, token, course_id, lesson_id)
+    assert response.status_code == 200, f"Expected 200, got {response.status_code}"
+    fetched_lesson = response.json()
     assert fetched_lesson["title"] == "Final Lesson Title", "Title not persisted"
     assert fetched_lesson["description"] == "Final lesson desc", "Description not persisted"
     assert fetched_lesson["order"] == 1, "Order not persisted"
@@ -1638,38 +1654,44 @@ def run_update_answer_tests(base_url: str, token: str, deck_id: str, card_id: st
     log_step("✓ UpdateAnswer tests passed")
 
 
-def run_get_lesson_tests(base_url: str, token: str, course_id: str, lesson: Dict[str, Any]) -> None:
+def run_get_lesson_tests(base_url: str, token: str, course_id: str, lesson: Dict[str, Any], other_course_id: str) -> None:
     """Test GET /courses/{courseId}/lessons/{lessonId} endpoint."""
     log_step("")
     log_step("Testing GetLesson endpoint...")
 
     # Test 1: Fetch existing lesson
-    response = requests.get(
-        f"{base_url}/courses/{course_id}/lessons/{lesson['id']}",
-        headers=auth_headers(token),
-        timeout=TIMEOUT,
-    )
+    response = get_lesson_response(base_url, token, course_id, lesson["id"])
     assert response.status_code == 200, f"Expected 200, got {response.status_code}"
-    lesson = response.json()
-    assert lesson["id"] == lesson["id"], "Lesson ID should match"
-    assert lesson["course_id"] == course_id, "Course ID should match"
-    assert lesson["body"] == lesson["body"], "Lesson body should match"
-    assert "title" in lesson
-    assert "description" in lesson
-    assert "body" in lesson
+    assert response.json() == lesson, "Fetched lesson should match the created one"
     log_step("  ✓ Get existing lesson - success")
 
     # Test 2: Fetch non-existent lesson
     fake_uuid = "00000000-0000-0000-0000-000000000000"
-    response = requests.get(
-        f"{base_url}/courses/{course_id}/lessons/{fake_uuid}",
-        headers=auth_headers(token),
-        timeout=TIMEOUT,
-    )
+    response = get_lesson_response(base_url, token, course_id, fake_uuid)
     assert response.status_code == 404, f"Expected 404 for non-existent lesson, got {response.status_code}"
     log_step("  ✓ Get non-existent lesson returns 404 - success")
 
+    # Test 3: Fetch a lesson through another course
+    response = get_lesson_response(base_url, token, other_course_id, lesson["id"])
+    assert response.status_code == 404, f"Expected 404 for a lesson from another course, got {response.status_code}"
+    log_step("  ✓ Get lesson through another course returns 404 - success")
+
     log_step("✓ GetLesson tests passed")
+
+
+def run_lessons_require_enrolment_test(base_url: str, course_id: str) -> None:
+    """Test that listing a course's lessons needs the user to be enrolled."""
+    log_step("")
+    log_step("Testing lessons list for a user who isn't enrolled...")
+
+    token = create_user(base_url)["token"]
+    response = requests.get(
+        f"{base_url}/courses/{course_id}/lessons",
+        headers=auth_headers(token),
+        timeout=TIMEOUT,
+    )
+    assert response.status_code == 404, f"Expected 404 for a user who isn't enrolled, got {response.status_code}"
+    log_step("✓ Lessons list returns 404 for a user who isn't enrolled")
 
 
 def run_backoffice_tests(base_url: str, token: str, course_id: str, created_course_ids: List[str]) -> None:
@@ -1921,7 +1943,9 @@ def test_basic_flow():
     log_step(f"✓ Enrolled in {len(all_course_ids)} courses")
 
     # Test get lesson individually
-    run_get_lesson_tests(base_url, token, course_id, lessons[0])
+    run_get_lesson_tests(base_url, token, course_id, lessons[0], all_course_ids[1])
+
+    run_lessons_require_enrolment_test(base_url, course_id)
 
     run_pagination_before_answering(base_url, token, course_id, lessons)
 

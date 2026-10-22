@@ -653,8 +653,10 @@ paths:
     get:
       tags:
         - Lessons
-      summary: Get lessons for a course
-      description: Retrieve paginated list of lessons for a specific course
+      summary: Get lessons for a course with progress
+      description: |
+        Retrieve the course's lessons, oldest first, with the user's progress on each one.
+        Lessons come without their body. Fetch a lesson's body with `GET /courses/{courseId}/lessons/{lessonId}`.
       operationId: getLessons
       security:
         - BearerAuth: []
@@ -696,13 +698,13 @@ paths:
             default: 20
       responses:
         '200':
-          description: Paginated list of lessons
+          description: Paginated list of lessons with progress, without bodies
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/LessonsConnectionResponse'
+                $ref: '#/components/schemas/BodylessLessonsWithProgressConnectionResponse'
         '400':
-          description: Missing course ID
+          description: Missing course ID or user ID
           content:
             application/json:
               schema:
@@ -710,7 +712,7 @@ paths:
         '401':
           $ref: '#/components/responses/UnauthorizedError'
         '404':
-          description: Course not found
+          description: Course not found, or the user isn't enrolled in it
           content:
             application/json:
               schema:
@@ -785,13 +787,14 @@ paths:
     get:
       tags:
         - Lessons
-      summary: Get focused lessons with progress
+      summary: Get lessons with progress (deprecated)
       description: |
-        Retrieve lessons around the user's current lesson with completion status.
-        
-        Use `bodyless=true` to paginate faster by excluding lesson body content.
-        This is useful for displaying a list of lessons where the full content isn't needed.
+        Deprecated: use `GET /courses/{courseId}/lessons`.
+
+        Retrieve the course's lessons, oldest first, with the user's progress on each one.
+        Use `bodyless=true` to leave out lesson bodies.
       operationId: getFocusedLessons
+      deprecated: true
       security:
         - BearerAuth: []
       parameters:
@@ -866,6 +869,57 @@ paths:
                 $ref: '#/components/schemas/Error'
 
   /courses/{courseId}/lessons/{lessonId}:
+    get:
+      tags:
+        - Lessons
+      summary: Get a lesson
+      description: Retrieve one lesson of the course, with its body.
+      operationId: getLesson
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: courseId
+          in: path
+          required: true
+          description: Course UUID
+          schema:
+            type: string
+            format: uuid
+        - name: lessonId
+          in: path
+          required: true
+          description: Lesson UUID
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: The lesson, with its body
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Lesson'
+        '400':
+          description: Invalid course ID or lesson ID
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '404':
+          description: Lesson not found in this course
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
     patch:
       tags:
         - Lessons
@@ -1926,18 +1980,6 @@ components:
             - is_completed
             - is_current
 
-    LessonEdge:
-      type: object
-      properties:
-        node:
-          $ref: '#/components/schemas/Lesson'
-        cursor:
-          type: string
-          description: Pagination cursor for this edge
-      required:
-        - node
-        - cursor
-
     LessonWithProgressEdge:
       type: object
       properties:
@@ -1983,19 +2025,6 @@ components:
         - has_next_page
         - start_cursor
         - end_cursor
-
-    LessonsConnectionResponse:
-      type: object
-      properties:
-        edges:
-          type: array
-          items:
-            $ref: '#/components/schemas/LessonEdge'
-        page_info:
-          $ref: '#/components/schemas/PageInfo'
-      required:
-        - edges
-        - page_info
 
     LessonsWithProgressConnectionResponse:
       type: object

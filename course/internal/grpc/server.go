@@ -248,7 +248,7 @@ func (s *Server) GetLessonDeckIds(ctx context.Context, req *pb.GetLessonDeckIdsR
 	return &pb.GetLessonDeckIdsResponse{DeckIds: out}, nil
 }
 
-// GetLessons retrieves lessons for a course with pagination
+// GetLessons retrieves a course's lessons with the user's progress, without their body
 func (s *Server) GetLessons(ctx context.Context, req *pb.GetLessonsRequest) (*pb.GetLessonsResponse, error) {
 	courseID, err := uuid.Parse(req.CourseId)
 	if err != nil {
@@ -256,34 +256,46 @@ func (s *Server) GetLessons(ctx context.Context, req *pb.GetLessonsRequest) (*pb
 		return nil, errors.Trace(err)
 	}
 
+	userID, err := uuid.Parse(req.UserId)
+	if err != nil {
+		slog.Error("GetLessons: failed to parse user ID", "error", err, "userId", req.UserId, "stack", errors.ErrorStack(err))
+		return nil, errors.Trace(err)
+	}
+
 	p := pagination.NewOldestFirstPagination(
-		pagination.WithFirst(int(req.Pagination.First)),
-		pagination.WithLast(int(req.Pagination.Last)),
-		pagination.WithAfter(pagination.Cursor(req.Pagination.After)),
-		pagination.WithBefore(pagination.Cursor(req.Pagination.Before)),
+		pagination.WithFirst(int(req.GetPagination().GetFirst())),
+		pagination.WithLast(int(req.GetPagination().GetLast())),
+		pagination.WithAfter(pagination.Cursor(req.GetPagination().GetAfter())),
+		pagination.WithBefore(pagination.Cursor(req.GetPagination().GetBefore())),
 	)
 
-	// Public endpoint - no user context
-	result, err := s.LessonsBrowser.Browse(ctx, courseID, p, course.BrowseOptions{})
+	result, err := s.LessonsBrowser.Browse(ctx, courseID, p, course.BrowseOptions{
+		UserID:   &userID,
+		Bodyless: true,
+	})
 	if err != nil {
-		slog.Error("GetLessons: failed to browse lessons", "error", err, "courseId", courseID.String(), "stack", errors.ErrorStack(err))
+		slog.Error("GetLessons: failed to browse lessons", "error", err, "courseId", courseID.String(), "userId", userID.String(), "stack", errors.ErrorStack(err))
 		return nil, errors.Trace(err)
 	}
 
 	resp := &pb.GetLessonsResponse{
-		Lessons: &pb.LessonsConnection{
+		Lessons: &pb.LessonsWithProgressConnection{
 			PageInfo: &pb.PageInfo{
-				HasPreviousPage: result.PublicLessons.PageInfo.HasPreviousPage,
-				HasNextPage:     result.PublicLessons.PageInfo.HasNextPage,
-				StartCursor:     result.PublicLessons.PageInfo.StartCursor.String(),
-				EndCursor:       result.PublicLessons.PageInfo.EndCursor.String(),
+				HasPreviousPage: result.ProgressLessons.PageInfo.HasPreviousPage,
+				HasNextPage:     result.ProgressLessons.PageInfo.HasNextPage,
+				StartCursor:     result.ProgressLessons.PageInfo.StartCursor.String(),
+				EndCursor:       result.ProgressLessons.PageInfo.EndCursor.String(),
 			},
 		},
 	}
 
-	for _, edge := range result.PublicLessons.Edges {
-		resp.Lessons.Edges = append(resp.Lessons.Edges, &pb.LessonsConnection_Edge{
-			Node:   lessonToProto(&edge.Lesson),
+	for _, edge := range result.ProgressLessons.Edges {
+		resp.Lessons.Edges = append(resp.Lessons.Edges, &pb.LessonsWithProgressConnection_Edge{
+			Node: &pb.LessonWithProgress{
+				Lesson:      lessonToProto(&edge.Lesson.Lesson),
+				IsCompleted: edge.Lesson.IsCompleted,
+				IsCurrent:   edge.Lesson.IsCurrent,
+			},
 			Cursor: string(edge.Cursor),
 		})
 	}

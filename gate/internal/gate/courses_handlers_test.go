@@ -7,10 +7,12 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
+	"github.com/stretchr/testify/require"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -1003,5 +1005,227 @@ func TestGetAllCoursesRouteRequiresAdmin(t *testing.T) {
 		router.ServeHTTP(w, req)
 
 		assert.Equal(t, http.StatusOK, w.Code)
+	})
+}
+
+func TestGetLessons(t *testing.T) {
+	t.Run("success_returns_lessons_with_progress_without_body", func(t *testing.T) {
+		client := &mockCourseAPIClient{}
+
+		client.On("GetLessons", mock.Anything, &pb.GetLessonsRequest{
+			CourseId:   "fb9ffe2c-ad66-4766-9b7b-46fd5d9acd72",
+			UserId:     "4acc3aa4-7684-4a64-b61c-28a599881922",
+			Pagination: &pb.Pagination{First: DefaultPageSize},
+		}).Return(&pb.GetLessonsResponse{
+			Lessons: &pb.LessonsWithProgressConnection{
+				Edges: []*pb.LessonsWithProgressConnection_Edge{
+					{
+						Node: &pb.LessonWithProgress{
+							Lesson: &pb.Lesson{
+								Id:          "334ddbf8-1acc-405b-86d8-49f0d1ca636c",
+								CourseId:    "fb9ffe2c-ad66-4766-9b7b-46fd5d9acd72",
+								Order:       1,
+								Title:       "Introduction",
+								Description: "Getting started",
+								Body:        "Content ![deck](1f30a72f-5d7a-48da-a5c2-42efece6972a)",
+								CreatedAt:   timestamppb.New(time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC)),
+							},
+							IsCompleted: true,
+							IsCurrent:   false,
+						},
+						Cursor: "cursor1",
+					},
+				},
+				PageInfo: &pb.PageInfo{
+					HasNextPage: true,
+					StartCursor: "cursor1",
+					EndCursor:   "cursor1",
+				},
+			},
+		}, nil)
+
+		router := gin.New()
+		router.Use(func(ctx *gin.Context) { ctx.Set("userID", "4acc3aa4-7684-4a64-b61c-28a599881922") })
+		router.GET("/courses/:courseId/lessons", func(ctx *gin.Context) {
+			GetLessons(ctx, client)
+		})
+
+		req := httptest.NewRequest(http.MethodGet, "/courses/fb9ffe2c-ad66-4766-9b7b-46fd5d9acd72/lessons", nil)
+		w := httptest.NewRecorder()
+		router.ServeHTTP(w, req)
+
+		require.Equal(t, http.StatusOK, w.Code)
+
+		expected := `{
+			"edges": [{
+				"node": {
+					"id": "334ddbf8-1acc-405b-86d8-49f0d1ca636c",
+					"course_id": "fb9ffe2c-ad66-4766-9b7b-46fd5d9acd72",
+					"order": 1,
+					"title": "Introduction",
+					"description": "Getting started",
+					"created_at": "2024-01-01T00:00:00Z",
+					"is_completed": true,
+					"is_current": false
+				},
+				"cursor": "cursor1"
+			}],
+			"page_info": {
+				"has_previous_page": false,
+				"has_next_page": true,
+				"start_cursor": "cursor1",
+				"end_cursor": "cursor1"
+			}
+		}`
+		assert.JSONEq(t, expected, w.Body.String())
+	})
+
+	t.Run("failure_missing_user_id", func(t *testing.T) {
+		client := &mockCourseAPIClient{}
+
+		router := gin.New()
+		router.GET("/courses/:courseId/lessons", func(ctx *gin.Context) {
+			GetLessons(ctx, client)
+		})
+
+		req := httptest.NewRequest(http.MethodGet, "/courses/fb9ffe2c-ad66-4766-9b7b-46fd5d9acd72/lessons", nil)
+		w := httptest.NewRecorder()
+		router.ServeHTTP(w, req)
+
+		assert.Equal(t, http.StatusBadRequest, w.Code)
+		client.AssertNotCalled(t, "GetLessons", mock.Anything, mock.Anything)
+	})
+
+	t.Run("failure_user_not_enrolled", func(t *testing.T) {
+		client := &mockCourseAPIClient{}
+
+		client.On("GetLessons", mock.Anything, mock.Anything).
+			Return(nil, status.Error(codes.Unknown, "courses: user progress not found"))
+
+		router := gin.New()
+		router.Use(func(ctx *gin.Context) { ctx.Set("userID", "4acc3aa4-7684-4a64-b61c-28a599881922") })
+		router.GET("/courses/:courseId/lessons", func(ctx *gin.Context) {
+			GetLessons(ctx, client)
+		})
+
+		req := httptest.NewRequest(http.MethodGet, "/courses/fb9ffe2c-ad66-4766-9b7b-46fd5d9acd72/lessons", nil)
+		w := httptest.NewRecorder()
+		router.ServeHTTP(w, req)
+
+		assert.Equal(t, http.StatusNotFound, w.Code)
+	})
+}
+
+func TestGetLesson(t *testing.T) {
+	lesson := &pb.Lesson{
+		Id:          "334ddbf8-1acc-405b-86d8-49f0d1ca636c",
+		CourseId:    "fb9ffe2c-ad66-4766-9b7b-46fd5d9acd72",
+		Order:       1,
+		Title:       "Introduction",
+		Description: "Getting started",
+		Body:        "Content ![deck](1f30a72f-5d7a-48da-a5c2-42efece6972a)",
+		CreatedAt:   timestamppb.New(time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC)),
+	}
+
+	t.Run("success_returns_lesson_with_body", func(t *testing.T) {
+		client := &mockCourseAPIClient{}
+
+		client.On("GetLesson", mock.Anything, &pb.GetLessonRequest{LessonId: "334ddbf8-1acc-405b-86d8-49f0d1ca636c"}).
+			Return(&pb.GetLessonResponse{Lesson: lesson}, nil)
+
+		router := gin.New()
+		router.GET("/courses/:courseId/lessons/:lessonId", func(ctx *gin.Context) {
+			GetLesson(ctx, client)
+		})
+
+		req := httptest.NewRequest(http.MethodGet, "/courses/fb9ffe2c-ad66-4766-9b7b-46fd5d9acd72/lessons/334ddbf8-1acc-405b-86d8-49f0d1ca636c", nil)
+		w := httptest.NewRecorder()
+		router.ServeHTTP(w, req)
+
+		require.Equal(t, http.StatusOK, w.Code)
+
+		var actual LessonJSON
+		require.NoError(t, json.Unmarshal(w.Body.Bytes(), &actual))
+
+		expected := LessonJSON{
+			ID:          "334ddbf8-1acc-405b-86d8-49f0d1ca636c",
+			CourseID:    "fb9ffe2c-ad66-4766-9b7b-46fd5d9acd72",
+			Order:       1,
+			Title:       "Introduction",
+			Description: "Getting started",
+			Body:        "Content ![deck](1f30a72f-5d7a-48da-a5c2-42efece6972a)",
+			CreatedAt:   "2024-01-01T00:00:00Z",
+		}
+		assert.Equal(t, expected, actual)
+	})
+
+	t.Run("success_with_course_id_in_upper_case", func(t *testing.T) {
+		client := &mockCourseAPIClient{}
+
+		client.On("GetLesson", mock.Anything, &pb.GetLessonRequest{LessonId: "334ddbf8-1acc-405b-86d8-49f0d1ca636c"}).
+			Return(&pb.GetLessonResponse{Lesson: lesson}, nil)
+
+		router := gin.New()
+		router.GET("/courses/:courseId/lessons/:lessonId", func(ctx *gin.Context) {
+			GetLesson(ctx, client)
+		})
+
+		req := httptest.NewRequest(http.MethodGet, "/courses/FB9FFE2C-AD66-4766-9B7B-46FD5D9ACD72/lessons/334ddbf8-1acc-405b-86d8-49f0d1ca636c", nil)
+		w := httptest.NewRecorder()
+		router.ServeHTTP(w, req)
+
+		assert.Equal(t, http.StatusOK, w.Code)
+	})
+
+	t.Run("failure_malformed_course_id", func(t *testing.T) {
+		client := &mockCourseAPIClient{}
+
+		router := gin.New()
+		router.GET("/courses/:courseId/lessons/:lessonId", func(ctx *gin.Context) {
+			GetLesson(ctx, client)
+		})
+
+		req := httptest.NewRequest(http.MethodGet, "/courses/not-a-uuid/lessons/334ddbf8-1acc-405b-86d8-49f0d1ca636c", nil)
+		w := httptest.NewRecorder()
+		router.ServeHTTP(w, req)
+
+		assert.Equal(t, http.StatusBadRequest, w.Code)
+		client.AssertNotCalled(t, "GetLesson", mock.Anything, mock.Anything)
+	})
+
+	t.Run("failure_lesson_from_another_course", func(t *testing.T) {
+		client := &mockCourseAPIClient{}
+
+		client.On("GetLesson", mock.Anything, &pb.GetLessonRequest{LessonId: "334ddbf8-1acc-405b-86d8-49f0d1ca636c"}).
+			Return(&pb.GetLessonResponse{Lesson: lesson}, nil)
+
+		router := gin.New()
+		router.GET("/courses/:courseId/lessons/:lessonId", func(ctx *gin.Context) {
+			GetLesson(ctx, client)
+		})
+
+		req := httptest.NewRequest(http.MethodGet, "/courses/1f30a72f-5d7a-48da-a5c2-42efece6972a/lessons/334ddbf8-1acc-405b-86d8-49f0d1ca636c", nil)
+		w := httptest.NewRecorder()
+		router.ServeHTTP(w, req)
+
+		assert.Equal(t, http.StatusNotFound, w.Code)
+	})
+
+	t.Run("failure_lesson_not_found", func(t *testing.T) {
+		client := &mockCourseAPIClient{}
+
+		client.On("GetLesson", mock.Anything, mock.Anything).
+			Return(nil, status.Error(codes.Unknown, "courses: lesson not found"))
+
+		router := gin.New()
+		router.GET("/courses/:courseId/lessons/:lessonId", func(ctx *gin.Context) {
+			GetLesson(ctx, client)
+		})
+
+		req := httptest.NewRequest(http.MethodGet, "/courses/fb9ffe2c-ad66-4766-9b7b-46fd5d9acd72/lessons/334ddbf8-1acc-405b-86d8-49f0d1ca636c", nil)
+		w := httptest.NewRecorder()
+		router.ServeHTTP(w, req)
+
+		assert.Equal(t, http.StatusNotFound, w.Code)
 	})
 }

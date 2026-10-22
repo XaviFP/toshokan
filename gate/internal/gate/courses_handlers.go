@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"github.com/google/uuid"
 	"github.com/juju/errors"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -41,20 +42,23 @@ func GetCourse(ctx *gin.Context, client pb.CourseAPIClient) {
 
 func GetLessons(ctx *gin.Context, client pb.CourseAPIClient) {
 	courseID := ctx.Param("courseId")
-	if courseID == "" {
-		ctx.JSON(http.StatusBadRequest, gin.H{"error": "missing course id"})
+	userID := getUserID(ctx)
+
+	if courseID == "" || userID == "" {
+		ctx.JSON(http.StatusBadRequest, gin.H{"error": "missing course id or user id"})
 		return
 	}
 
 	pagination, err := parsePagination(ctx)
 	if err != nil {
-		slog.Error("GetLessons: failed to parse pagination", "error", err, "courseId", courseID, "stack", errors.ErrorStack(err))
+		slog.Error("GetLessons: failed to parse pagination", "error", err, "courseId", courseID, "userId", userID, "stack", errors.ErrorStack(err))
 		ctx.JSON(http.StatusBadRequest, gin.H{"error": "invalid pagination parameters"})
 		return
 	}
 
 	req := &pb.GetLessonsRequest{
 		CourseId:   courseID,
+		UserId:     userID,
 		Pagination: pagination,
 	}
 
@@ -63,21 +67,29 @@ func GetLessons(ctx *gin.Context, client pb.CourseAPIClient) {
 		if isHandledError(ctx, err) {
 			return
 		}
-		slog.Error("GetLessons: gRPC call failed", "error", err, "courseId", courseID, "stack", errors.ErrorStack(err))
+		slog.Error("GetLessons: gRPC call failed", "error", err, "courseId", courseID, "userId", userID, "stack", errors.ErrorStack(err))
 		ctx.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
 
 	ctx.JSON(http.StatusOK, gin.H{
-		"edges":     convertLessonEdges(res.Lessons.Edges),
+		"edges":     convertBodylessLessonWithProgressEdges(res.Lessons.Edges),
 		"page_info": toPageInfoJSON(res.Lessons.PageInfo),
 	})
 }
 
 func GetLesson(ctx *gin.Context, client pb.CourseAPIClient) {
+	courseID := ctx.Param("courseId")
 	lessonID := ctx.Param("lessonId")
 	if lessonID == "" {
 		ctx.JSON(http.StatusBadRequest, gin.H{"error": "missing lesson id"})
+		return
+	}
+
+	courseUUID, err := uuid.Parse(courseID)
+	if err != nil {
+		slog.Error("GetLesson: failed to parse course ID", "error", err, "courseId", courseID, "stack", errors.ErrorStack(err))
+		ctx.JSON(http.StatusBadRequest, gin.H{"error": "invalid course id format"})
 		return
 	}
 
@@ -95,9 +107,16 @@ func GetLesson(ctx *gin.Context, client pb.CourseAPIClient) {
 		return
 	}
 
+	// GetLesson looks lessons up by ID alone, so a lesson from another course must not be served under this path.
+	if res.Lesson.CourseId != courseUUID.String() {
+		ctx.JSON(http.StatusNotFound, gin.H{"error": "lesson not found in course"})
+		return
+	}
+
 	ctx.JSON(http.StatusOK, toLessonJSON(res.Lesson))
 }
 
+// Deprecated: GET /courses/:courseId/lessons returns the same lessons with progress, without bodies.
 func GetFocusedLessons(ctx *gin.Context, client pb.CourseAPIClient) {
 	courseID := ctx.Param("courseId")
 	userID := getUserID(ctx)
@@ -787,12 +806,6 @@ type BodylessLessonJSON struct {
 	DeletedAt   *string `json:"deleted_at,omitempty"`
 }
 
-// LessonEdgeJSON represents a lesson edge for JSON response
-type LessonEdgeJSON struct {
-	Node   LessonJSON `json:"node"`
-	Cursor string     `json:"cursor"`
-}
-
 // LessonWithProgressJSON represents a lesson with progress for JSON response (flattened)
 // The base lesson fields live at the top level alongside progress flags.
 type LessonWithProgressJSON struct {
@@ -843,18 +856,6 @@ type PageInfoJSON struct {
 	HasNextPage     bool   `json:"has_next_page"`
 	StartCursor     string `json:"start_cursor"`
 	EndCursor       string `json:"end_cursor"`
-}
-
-// convertLessonEdges converts pb LessonConnection Edges to JSON format
-func convertLessonEdges(edges []*pb.LessonsConnection_Edge) []LessonEdgeJSON {
-	result := make([]LessonEdgeJSON, len(edges))
-	for i, edge := range edges {
-		result[i] = LessonEdgeJSON{
-			Node:   toLessonJSON(edge.Node),
-			Cursor: edge.Cursor,
-		}
-	}
-	return result
 }
 
 // convertLessonWithProgressEdges converts pb LessonWithProgressConnection Edges to JSON format
