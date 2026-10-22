@@ -1,0 +1,23 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT updated_at > now() - interval '1 minute' AS \"recent!\"\n            FROM user_card_level WHERE user_id = $1 AND card_id = $2",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "recent!",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "e44bcaf4bfc5a3a882ecf5e6e0d4e48a164c6b0cd5191d4df8a8f85a002c7bf9"
+}

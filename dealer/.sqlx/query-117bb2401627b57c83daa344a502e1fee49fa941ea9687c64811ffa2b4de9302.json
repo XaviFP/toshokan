@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO decks (id, author_id, title, description) VALUES ($1, $2, 'outside', 'outside')",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "117bb2401627b57c83daa344a502e1fee49fa941ea9687c64811ffa2b4de9302"
+}

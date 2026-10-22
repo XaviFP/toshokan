@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "WITH practice AS (\n                INSERT INTO card_practice (user_id, answer_id)\n                SELECT $1::uuid, unnest($2::uuid[])\n            ),\n            answered_cards AS (\n                SELECT card_id, bool_and(is_correct) AS is_correct\n                FROM answers\n                WHERE id = ANY($2::uuid[])\n                GROUP BY card_id\n            )\n            INSERT INTO user_card_level (user_id, card_id, lvl, updated_at)\n            SELECT $1::uuid, a.card_id,\n                CASE WHEN a.is_correct\n                    THEN LEAST(COALESCE(l.lvl, 1) + 1, 5)\n                    ELSE GREATEST(COALESCE(l.lvl, 1) - 1, 1)\n                END,\n                now()\n            FROM answered_cards a\n            LEFT JOIN user_card_level l\n            ON l.card_id = a.card_id\n            AND l.user_id = $1::uuid\n            ON CONFLICT ON CONSTRAINT user_card_level_card_id_user_id_key DO UPDATE\n            SET lvl = EXCLUDED.lvl, updated_at = EXCLUDED.updated_at",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "UuidArray"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "4954ea7b21a60c70ad81b272921633b77ae385da5d617a90965ccd279424bc70"
+}

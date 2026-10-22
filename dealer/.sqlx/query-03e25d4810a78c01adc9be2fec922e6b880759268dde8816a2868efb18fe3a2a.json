@@ -1,0 +1,23 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT count(*) AS \"count!\"\n            FROM unnest($2::uuid[]) AS submitted(answer_id)\n            LEFT JOIN answers a ON a.id = submitted.answer_id\n            LEFT JOIN user_card_level l\n            ON l.card_id = a.card_id\n            AND l.user_id = $1::uuid\n            WHERE l.card_id IS NULL",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "count!",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "UuidArray"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "03e25d4810a78c01adc9be2fec922e6b880759268dde8816a2868efb18fe3a2a"
+}

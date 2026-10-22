@@ -1,5 +1,7 @@
 use std::{env, fmt};
 
+use sqlx::postgres::PgConnectOptions;
+
 pub struct DBConfig {
     pub user: String,
     pub password: String,
@@ -8,13 +10,19 @@ pub struct DBConfig {
     pub port: String,
 }
 
-impl fmt::Display for DBConfig {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(
-            f,
-            "connect_timeout=5 host={} user={} password={} dbname={}",
-            self.host, self.user, self.password, self.name
-        )
+impl DBConfig {
+    pub fn connect_options(&self) -> Result<PgConnectOptions, String> {
+        let port: u16 = self
+            .port
+            .parse()
+            .map_err(|_| format!("invalid {}: {}", DB_PORT, self.port))?;
+
+        Ok(PgConnectOptions::new()
+            .host(&self.host)
+            .port(port)
+            .username(&self.user)
+            .password(&self.password)
+            .database(&self.name))
     }
 }
 
@@ -156,4 +164,24 @@ pub fn load_course_service_config() -> Result<CourseServiceConfig, String> {
     config.port = port.unwrap();
 
     Ok(config)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::DBConfig;
+
+    #[test]
+    fn connect_options_rejects_a_port_that_is_not_a_number() {
+        let config = DBConfig {
+            user: "toshokan".to_owned(),
+            password: "secret".to_owned(),
+            name: "deck".to_owned(),
+            host: "localhost".to_owned(),
+            port: "not-a-port".to_owned(),
+        };
+
+        let actual = config.connect_options().unwrap_err();
+
+        assert_eq!("invalid DB_PORT: not-a-port", actual);
+    }
 }

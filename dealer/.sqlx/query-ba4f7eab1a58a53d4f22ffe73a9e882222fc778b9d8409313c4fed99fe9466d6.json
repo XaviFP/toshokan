@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO answers (id, card_id, text, is_correct) VALUES ($1, NULL, 'orphan', true)",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "ba4f7eab1a58a53d4f22ffe73a9e882222fc778b9d8409313c4fed99fe9466d6"
+}

@@ -1,15 +1,16 @@
 use chrono::Local;
+use sqlx::postgres::PgPool;
 use std::{env, time};
 use tokio::time::{sleep, Duration};
 use tokio_util::sync::CancellationToken;
 
 pub struct Ranker {
-    client: tokio_postgres::Client,
+    pool: PgPool,
 }
 
 impl Ranker {
-    pub fn new(client: tokio_postgres::Client) -> Self {
-        Self { client }
+    pub fn new(pool: PgPool) -> Self {
+        Self { pool }
     }
 
     pub async fn start(&self, cancel_token: CancellationToken) -> Result<(), String> {
@@ -30,24 +31,22 @@ impl Ranker {
         }
 
         loop {
-            let timestamp_to_compare = Local::now().checked_sub_signed(period_res.unwrap());
-            if timestamp_to_compare.is_none() {
+            let Some(timestamp_to_compare) = Local::now().checked_sub_signed(period_res.unwrap()) else {
                 return Err("Datetime formation is wrong".to_owned());
-            }
+            };
 
-            let result = self
-                .client
-                .execute(
-                    "UPDATE user_card_level
+            let result = sqlx::query!(
+                "UPDATE user_card_level
                 SET lvl = lvl - 1, updated_at = now()
                 WHERE updated_at < $1
                 AND lvl > 1",
-                    &[&timestamp_to_compare],
-                )
-                .await;
+                timestamp_to_compare,
+            )
+            .execute(&self.pool)
+            .await;
 
-            if result.is_err() {
-                println!("{}", result.err().unwrap().to_string());
+            if let Err(err) = result {
+                eprintln!("Ranker update failed: {}", err);
             }
 
             tokio::select! {

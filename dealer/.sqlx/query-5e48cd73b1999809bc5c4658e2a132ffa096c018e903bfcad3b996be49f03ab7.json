@@ -1,0 +1,30 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "WITH user_cards as (\n                SELECT cards.id as card_id, user_card_level.lvl as lvl, random() as shuffle\n                FROM cards\n                JOIN decks\n                ON decks.id = cards.deck_id\n                AND decks.deleted_at IS NULL\n                JOIN user_card_level\n                ON user_card_level.card_id = cards.id\n                AND user_card_level.user_id = $1\n                WHERE (cardinality($2::uuid[]) = 0 OR cards.deck_id = ANY($2::uuid[]))\n                AND cards.deleted_at IS NULL\n            )\n            SELECT card_id AS \"card_id!\", lvl AS \"lvl!\" FROM (\n                (SELECT card_id, lvl, shuffle FROM user_cards WHERE lvl = 1 ORDER BY shuffle LIMIT $3)\n                UNION ALL (SELECT card_id, lvl, shuffle FROM user_cards WHERE lvl = 2 ORDER BY shuffle LIMIT $3)\n                UNION ALL (SELECT card_id, lvl, shuffle FROM user_cards WHERE lvl = 3 ORDER BY shuffle LIMIT $3)\n                UNION ALL (SELECT card_id, lvl, shuffle FROM user_cards WHERE lvl = 4 ORDER BY shuffle LIMIT $3)\n                UNION ALL (SELECT card_id, lvl, shuffle FROM user_cards WHERE lvl = 5 ORDER BY shuffle LIMIT $3)\n            ) AS dealt\n            ORDER BY lvl, shuffle",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "card_id!",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "lvl!",
+        "type_info": "Int4"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "UuidArray",
+        "Int8"
+      ]
+    },
+    "nullable": [
+      null,
+      null
+    ]
+  },
+  "hash": "5e48cd73b1999809bc5c4658e2a132ffa096c018e903bfcad3b996be49f03ab7"
+}

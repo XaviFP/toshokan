@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO user_card_level (user_id, card_id, lvl, updated_at)\n            VALUES ($1, $2, 3, now() - interval '30 days')",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "2b6c99f05c2fab69ea4a7224b524f2847e135a5d99cdadd5d7e2cc08f3463511"
+}

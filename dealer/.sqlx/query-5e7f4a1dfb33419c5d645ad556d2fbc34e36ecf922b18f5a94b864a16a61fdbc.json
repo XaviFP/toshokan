@@ -1,0 +1,18 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO answers (id, card_id, text, is_correct) VALUES\n            ($1, $4, 'right', true),\n            ($2, $4, 'wrong', false),\n            ($3, $5, 'right', true)",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Uuid",
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "5e7f4a1dfb33419c5d645ad556d2fbc34e36ecf922b18f5a94b864a16a61fdbc"
+}

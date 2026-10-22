@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE user_card_level\n                SET lvl = lvl - 1, updated_at = now()\n                WHERE updated_at < $1\n                AND lvl > 1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Timestamptz"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "3a64b66f9eee10d1168e1845ae5de66ec518f1d409c7ad8097f69c00de41fa39"
+}
