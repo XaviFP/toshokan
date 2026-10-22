@@ -404,7 +404,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
 
     let pool = new_pool(db_config.connect_options()?, DB_POOL_SIZE, DB_TIMEOUT);
-    let pool_to_close = pool.clone();
 
     let ranker = Ranker::new(pool.clone());
 
@@ -432,7 +431,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .connect_lazy();
 
     let dealer = Dealer {
-        repo: Repository { pool },
+        repo: Repository { pool: pool.clone() },
         courses: Box::new(CourseApiClient::new(course_channel)),
     };
 
@@ -449,7 +448,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         })
         .await?;
 
-    pool_to_close.close().await;
+    pool.close().await;
 
     Ok(())
 }
