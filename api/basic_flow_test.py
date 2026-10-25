@@ -1151,7 +1151,7 @@ def run_review_tests(base_url: str) -> None:
     log_step("  ✓ Review with two scopes returns 400 - success")
 
     response = review_answers_response(base_url, token, answer_ids)
-    assert response.status_code == 200, f"Expected 200, got {response.status_code}"
+    assert response.status_code == 204, f"Expected 204, got {response.status_code}"
     log_step("  ✓ Review answers for cards in the pool - success")
 
     response = get_review_response(base_url, token, {"max_cards": 1})

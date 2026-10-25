@@ -161,7 +161,7 @@ func ReviewAnswers(ctx *gin.Context, dealerClient pbDealer.DealerClient) {
 		return
 	}
 
-	ctx.JSON(http.StatusOK, gin.H{})
+	ctx.Status(http.StatusNoContent)
 }
 
 func RegisterReviewRoutes(r *gin.RouterGroup, dealerClient pbDealer.DealerClient, decksClient pbDeck.DecksAPIClient) {
