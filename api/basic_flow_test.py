@@ -160,8 +160,8 @@ def log_step(message: str) -> None:
 
 
 def log_error(label: str, response: requests.Response) -> None:
-    """Log error response to console if not 200/201."""
-    if response.status_code not in (200, 201):
+    """Log error response to console if not 200/201/204."""
+    if response.status_code not in (200, 201, 204):
         try:
             body = response.json()
         except Exception:
