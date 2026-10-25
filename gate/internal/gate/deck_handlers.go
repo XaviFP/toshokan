@@ -1,7 +1,6 @@
 package gate
 
 import (
-	"context"
 	"log/slog"
 	"net/http"
 	"strings"
@@ -417,14 +416,6 @@ func getUserID(ctx *gin.Context) string {
 	out, _ := userID.(string)
 
 	return out
-}
-
-func GinContextToContextMiddleware() gin.HandlerFunc {
-	return func(c *gin.Context) {
-		ctx := context.WithValue(c.Request.Context(), "GinContextKey", c)
-		c.Request = c.Request.WithContext(ctx)
-		c.Next()
-	}
 }
 
 type deckResponse struct {

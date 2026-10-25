@@ -65,9 +65,6 @@ RUN go mod download
 # Copy common packages
 COPY common/ common/
 
-# Copy grapher (GraphQL)
-COPY grapher/ grapher/
-
 # Copy gate service code
 COPY gate/ gate/
 
