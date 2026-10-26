@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/gin-gonic/gin"
@@ -447,6 +448,285 @@ func TestDeleteCard(t *testing.T) {
 	})
 }
 
+func TestCreateAnswer(t *testing.T) {
+	adminCfg := AdminConfig{
+		HeaderName:   "X-Admin-Token",
+		HeaderSecret: "secret123",
+	}
+	body := `{"text": "Transpiled", "is_correct": false}`
+
+	t.Run("success", func(t *testing.T) {
+		decksClient := &mockDecksClient{}
+		usersClient := &mockUsersClient{}
+
+		decksClient.On("CreateAnswer", mock.Anything, &pbDeck.CreateAnswerRequest{
+			DeckId:    "fb9ffe2c-ad66-4766-9b7b-46fd5d9acd72",
+			CardId:    "72bdff92-5bc8-4e1d-9217-d0b23e22ff33",
+			Text:      "Transpiled",
+			IsCorrect: false,
+		}).Return(&pbDeck.CreateAnswerResponse{Answer: &pbDeck.Answer{
+			Id:     "1f30a72f-5d7a-48da-a5c2-42efece6972a",
+			CardId: "72bdff92-5bc8-4e1d-9217-d0b23e22ff33",
+			Text:   "Transpiled",
+		}}, nil)
+
+		router := gin.New()
+		RegisterDeckRoutes(router.Group("/"), usersClient, decksClient, adminCfg)
+
+		req := httptest.NewRequest(http.MethodPost, "/decks/fb9ffe2c-ad66-4766-9b7b-46fd5d9acd72/cards/72bdff92-5bc8-4e1d-9217-d0b23e22ff33/answers", strings.NewReader(body))
+		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set("X-Admin-Token", "secret123")
+		w := httptest.NewRecorder()
+		router.ServeHTTP(w, req)
+
+		require.Equal(t, http.StatusCreated, w.Code)
+
+		expected := `{"id": "1f30a72f-5d7a-48da-a5c2-42efece6972a", "card_id": "72bdff92-5bc8-4e1d-9217-d0b23e22ff33", "text": "Transpiled", "is_correct": false}`
+		assert.JSONEq(t, expected, w.Body.String())
+	})
+
+	t.Run("failure_missing_admin_header", func(t *testing.T) {
+		decksClient := &mockDecksClient{}
+		usersClient := &mockUsersClient{}
+
+		router := gin.New()
+		RegisterDeckRoutes(router.Group("/"), usersClient, decksClient, adminCfg)
+
+		req := httptest.NewRequest(http.MethodPost, "/decks/fb9ffe2c-ad66-4766-9b7b-46fd5d9acd72/cards/72bdff92-5bc8-4e1d-9217-d0b23e22ff33/answers", strings.NewReader(body))
+		req.Header.Set("Content-Type", "application/json")
+		w := httptest.NewRecorder()
+		router.ServeHTTP(w, req)
+
+		assert.Equal(t, http.StatusForbidden, w.Code)
+		decksClient.AssertNotCalled(t, "CreateAnswer", mock.Anything, mock.Anything)
+	})
+
+	t.Run("failure_invalid_card_id", func(t *testing.T) {
+		decksClient := &mockDecksClient{}
+		usersClient := &mockUsersClient{}
+
+		router := gin.New()
+		RegisterDeckRoutes(router.Group("/"), usersClient, decksClient, adminCfg)
+
+		req := httptest.NewRequest(http.MethodPost, "/decks/fb9ffe2c-ad66-4766-9b7b-46fd5d9acd72/cards/invalid-uuid/answers", strings.NewReader(body))
+		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set("X-Admin-Token", "secret123")
+		w := httptest.NewRecorder()
+		router.ServeHTTP(w, req)
+
+		assert.Equal(t, http.StatusBadRequest, w.Code)
+		assert.Contains(t, w.Body.String(), "invalid card id format")
+		decksClient.AssertNotCalled(t, "CreateAnswer", mock.Anything, mock.Anything)
+	})
+
+	t.Run("failure_invalid_json", func(t *testing.T) {
+		decksClient := &mockDecksClient{}
+		usersClient := &mockUsersClient{}
+
+		router := gin.New()
+		RegisterDeckRoutes(router.Group("/"), usersClient, decksClient, adminCfg)
+
+		req := httptest.NewRequest(http.MethodPost, "/decks/fb9ffe2c-ad66-4766-9b7b-46fd5d9acd72/cards/72bdff92-5bc8-4e1d-9217-d0b23e22ff33/answers", strings.NewReader(`{"text": `))
+		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set("X-Admin-Token", "secret123")
+		w := httptest.NewRecorder()
+		router.ServeHTTP(w, req)
+
+		assert.Equal(t, http.StatusBadRequest, w.Code)
+		decksClient.AssertNotCalled(t, "CreateAnswer", mock.Anything, mock.Anything)
+	})
+
+	t.Run("failure_missing_is_correct", func(t *testing.T) {
+		decksClient := &mockDecksClient{}
+		usersClient := &mockUsersClient{}
+
+		router := gin.New()
+		RegisterDeckRoutes(router.Group("/"), usersClient, decksClient, adminCfg)
+
+		req := httptest.NewRequest(http.MethodPost, "/decks/fb9ffe2c-ad66-4766-9b7b-46fd5d9acd72/cards/72bdff92-5bc8-4e1d-9217-d0b23e22ff33/answers", strings.NewReader(`{"text": "Transpiled"}`))
+		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set("X-Admin-Token", "secret123")
+		w := httptest.NewRecorder()
+		router.ServeHTTP(w, req)
+
+		assert.Equal(t, http.StatusBadRequest, w.Code)
+		assert.Contains(t, w.Body.String(), "is_correct is required")
+		decksClient.AssertNotCalled(t, "CreateAnswer", mock.Anything, mock.Anything)
+	})
+
+	t.Run("failure_empty_text", func(t *testing.T) {
+		decksClient := &mockDecksClient{}
+		usersClient := &mockUsersClient{}
+
+		decksClient.On("CreateAnswer", mock.Anything, mock.Anything).Return(nil, status.Error(codes.InvalidArgument, "deck: all answers must have a non-empty text"))
+
+		router := gin.New()
+		RegisterDeckRoutes(router.Group("/"), usersClient, decksClient, adminCfg)
+
+		req := httptest.NewRequest(http.MethodPost, "/decks/fb9ffe2c-ad66-4766-9b7b-46fd5d9acd72/cards/72bdff92-5bc8-4e1d-9217-d0b23e22ff33/answers", strings.NewReader(`{"text": "", "is_correct": true}`))
+		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set("X-Admin-Token", "secret123")
+		w := httptest.NewRecorder()
+		router.ServeHTTP(w, req)
+
+		assert.Equal(t, http.StatusBadRequest, w.Code)
+		assert.Contains(t, w.Body.String(), "non-empty text")
+	})
+
+	t.Run("failure_card_not_found", func(t *testing.T) {
+		decksClient := &mockDecksClient{}
+		usersClient := &mockUsersClient{}
+
+		decksClient.On("CreateAnswer", mock.Anything, mock.Anything).Return(nil, status.Error(codes.NotFound, "deck: card not found"))
+
+		router := gin.New()
+		RegisterDeckRoutes(router.Group("/"), usersClient, decksClient, adminCfg)
+
+		req := httptest.NewRequest(http.MethodPost, "/decks/fb9ffe2c-ad66-4766-9b7b-46fd5d9acd72/cards/72bdff92-5bc8-4e1d-9217-d0b23e22ff33/answers", strings.NewReader(body))
+		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set("X-Admin-Token", "secret123")
+		w := httptest.NewRecorder()
+		router.ServeHTTP(w, req)
+
+		assert.Equal(t, http.StatusNotFound, w.Code)
+		assert.Contains(t, w.Body.String(), "card not found")
+	})
+
+	t.Run("failure_grpc_error", func(t *testing.T) {
+		decksClient := &mockDecksClient{}
+		usersClient := &mockUsersClient{}
+
+		decksClient.On("CreateAnswer", mock.Anything, mock.Anything).Return(nil, assert.AnError)
+
+		router := gin.New()
+		RegisterDeckRoutes(router.Group("/"), usersClient, decksClient, adminCfg)
+
+		req := httptest.NewRequest(http.MethodPost, "/decks/fb9ffe2c-ad66-4766-9b7b-46fd5d9acd72/cards/72bdff92-5bc8-4e1d-9217-d0b23e22ff33/answers", strings.NewReader(body))
+		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set("X-Admin-Token", "secret123")
+		w := httptest.NewRecorder()
+		router.ServeHTTP(w, req)
+
+		assert.Equal(t, http.StatusInternalServerError, w.Code)
+	})
+}
+
+func TestDeleteAnswer(t *testing.T) {
+	adminCfg := AdminConfig{
+		HeaderName:   "X-Admin-Token",
+		HeaderSecret: "secret123",
+	}
+	answerURL := "/decks/fb9ffe2c-ad66-4766-9b7b-46fd5d9acd72/cards/72bdff92-5bc8-4e1d-9217-d0b23e22ff33/answers/dfcb1c81-f590-486e-9b7e-a44f0c436933"
+
+	t.Run("success", func(t *testing.T) {
+		decksClient := &mockDecksClient{}
+		usersClient := &mockUsersClient{}
+
+		decksClient.On("DeleteAnswer", mock.Anything, &pbDeck.DeleteAnswerRequest{
+			DeckId:   "fb9ffe2c-ad66-4766-9b7b-46fd5d9acd72",
+			CardId:   "72bdff92-5bc8-4e1d-9217-d0b23e22ff33",
+			AnswerId: "dfcb1c81-f590-486e-9b7e-a44f0c436933",
+		}).Return(&pbDeck.DeleteAnswerResponse{}, nil)
+
+		router := gin.New()
+		RegisterDeckRoutes(router.Group("/"), usersClient, decksClient, adminCfg)
+
+		req := httptest.NewRequest(http.MethodDelete, answerURL, nil)
+		req.Header.Set("X-Admin-Token", "secret123")
+		w := httptest.NewRecorder()
+		router.ServeHTTP(w, req)
+
+		assert.Equal(t, http.StatusNoContent, w.Code)
+		assert.Empty(t, w.Body.String())
+		decksClient.AssertExpectations(t)
+	})
+
+	t.Run("failure_missing_admin_header", func(t *testing.T) {
+		decksClient := &mockDecksClient{}
+		usersClient := &mockUsersClient{}
+
+		router := gin.New()
+		RegisterDeckRoutes(router.Group("/"), usersClient, decksClient, adminCfg)
+
+		req := httptest.NewRequest(http.MethodDelete, answerURL, nil)
+		w := httptest.NewRecorder()
+		router.ServeHTTP(w, req)
+
+		assert.Equal(t, http.StatusForbidden, w.Code)
+		decksClient.AssertNotCalled(t, "DeleteAnswer", mock.Anything, mock.Anything)
+	})
+
+	t.Run("failure_invalid_answer_id", func(t *testing.T) {
+		decksClient := &mockDecksClient{}
+		usersClient := &mockUsersClient{}
+
+		router := gin.New()
+		RegisterDeckRoutes(router.Group("/"), usersClient, decksClient, adminCfg)
+
+		req := httptest.NewRequest(http.MethodDelete, "/decks/fb9ffe2c-ad66-4766-9b7b-46fd5d9acd72/cards/72bdff92-5bc8-4e1d-9217-d0b23e22ff33/answers/invalid-uuid", nil)
+		req.Header.Set("X-Admin-Token", "secret123")
+		w := httptest.NewRecorder()
+		router.ServeHTTP(w, req)
+
+		assert.Equal(t, http.StatusBadRequest, w.Code)
+		assert.Contains(t, w.Body.String(), "invalid answer id format")
+		decksClient.AssertNotCalled(t, "DeleteAnswer", mock.Anything, mock.Anything)
+	})
+
+	t.Run("failure_answer_not_found", func(t *testing.T) {
+		decksClient := &mockDecksClient{}
+		usersClient := &mockUsersClient{}
+
+		decksClient.On("DeleteAnswer", mock.Anything, mock.Anything).Return(nil, status.Error(codes.NotFound, "deck: answer not found"))
+
+		router := gin.New()
+		RegisterDeckRoutes(router.Group("/"), usersClient, decksClient, adminCfg)
+
+		req := httptest.NewRequest(http.MethodDelete, answerURL, nil)
+		req.Header.Set("X-Admin-Token", "secret123")
+		w := httptest.NewRecorder()
+		router.ServeHTTP(w, req)
+
+		assert.Equal(t, http.StatusNotFound, w.Code)
+		assert.Contains(t, w.Body.String(), "card or answer not found")
+	})
+
+	t.Run("failure_only_correct_answer", func(t *testing.T) {
+		decksClient := &mockDecksClient{}
+		usersClient := &mockUsersClient{}
+
+		decksClient.On("DeleteAnswer", mock.Anything, mock.Anything).Return(nil, status.Error(codes.InvalidArgument, "deck: at least one answer must be correct"))
+
+		router := gin.New()
+		RegisterDeckRoutes(router.Group("/"), usersClient, decksClient, adminCfg)
+
+		req := httptest.NewRequest(http.MethodDelete, answerURL, nil)
+		req.Header.Set("X-Admin-Token", "secret123")
+		w := httptest.NewRecorder()
+		router.ServeHTTP(w, req)
+
+		assert.Equal(t, http.StatusBadRequest, w.Code)
+		assert.Contains(t, w.Body.String(), "at least one answer must be correct")
+	})
+
+	t.Run("failure_grpc_error", func(t *testing.T) {
+		decksClient := &mockDecksClient{}
+		usersClient := &mockUsersClient{}
+
+		decksClient.On("DeleteAnswer", mock.Anything, mock.Anything).Return(nil, assert.AnError)
+
+		router := gin.New()
+		RegisterDeckRoutes(router.Group("/"), usersClient, decksClient, adminCfg)
+
+		req := httptest.NewRequest(http.MethodDelete, answerURL, nil)
+		req.Header.Set("X-Admin-Token", "secret123")
+		w := httptest.NewRecorder()
+		router.ServeHTTP(w, req)
+
+		assert.Equal(t, http.StatusInternalServerError, w.Code)
+	})
+}
+
 func TestUpdateDeck(t *testing.T) {
 	t.Run("success_update_title", func(t *testing.T) {
 		decksClient := &mockDecksClient{}
@@ -830,8 +1110,6 @@ func TestUpdateAnswer(t *testing.T) {
 	})
 }
 
-
-
 type mockDecksClient struct {
 	mock.Mock
 }
@@ -906,6 +1184,22 @@ func (m *mockDecksClient) UpdateCard(ctx context.Context, req *pbDeck.UpdateCard
 		return nil, args.Error(1)
 	}
 	return args.Get(0).(*pbDeck.UpdateCardResponse), args.Error(1)
+}
+
+func (m *mockDecksClient) CreateAnswer(ctx context.Context, req *pbDeck.CreateAnswerRequest, opts ...grpc.CallOption) (*pbDeck.CreateAnswerResponse, error) {
+	args := m.Called(ctx, req)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*pbDeck.CreateAnswerResponse), args.Error(1)
+}
+
+func (m *mockDecksClient) DeleteAnswer(ctx context.Context, req *pbDeck.DeleteAnswerRequest, opts ...grpc.CallOption) (*pbDeck.DeleteAnswerResponse, error) {
+	args := m.Called(ctx, req)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*pbDeck.DeleteAnswerResponse), args.Error(1)
 }
 
 func (m *mockDecksClient) DeleteCard(ctx context.Context, req *pbDeck.DeleteCardRequest, opts ...grpc.CallOption) (*pbDeck.DeleteCardResponse, error) {

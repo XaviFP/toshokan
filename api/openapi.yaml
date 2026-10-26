@@ -1639,6 +1639,83 @@ paths:
               schema:
                 $ref: '#/components/schemas/Error'
 
+  /decks/{deckId}/cards/{cardId}/answers:
+    post:
+      tags:
+        - Decks
+      summary: Add an answer to a card (Admin only)
+      description: |
+        Add an answer to an existing card of the deck.
+
+        **Requires admin access** (`X-Admin-Token` header).
+      operationId: createAnswer
+      security:
+        - BearerAuth: []
+          AdminAuth: []
+      parameters:
+        - name: deckId
+          in: path
+          required: true
+          description: Deck UUID
+          schema:
+            type: string
+            format: uuid
+        - name: cardId
+          in: path
+          required: true
+          description: Card UUID
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                text:
+                  type: string
+                  minLength: 1
+                is_correct:
+                  type: boolean
+              required:
+                - text
+                - is_correct
+      responses:
+        '201':
+          description: Answer added
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Answer'
+        '400':
+          description: Invalid deck ID, card ID or body, or empty text
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          description: Admin access required
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Card not found in this deck
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
   /decks/{deckId}/cards/{cardId}/answers/{answerId}:
     patch:
       tags:
@@ -1696,6 +1773,70 @@ paths:
           $ref: '#/components/responses/UnauthorizedError'
         '403':
           description: Admin access required (when endpoint is admin-protected)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+    delete:
+      tags:
+        - Decks
+      summary: Delete an answer (Admin only)
+      description: |
+        Delete an answer of a card. A card must keep at least one answer and one correct answer.
+
+        **Requires admin access** (`X-Admin-Token` header).
+      operationId: deleteAnswer
+      security:
+        - BearerAuth: []
+          AdminAuth: []
+      parameters:
+        - name: deckId
+          in: path
+          required: true
+          description: Deck UUID
+          schema:
+            type: string
+            format: uuid
+        - name: cardId
+          in: path
+          required: true
+          description: Card UUID
+          schema:
+            type: string
+            format: uuid
+        - name: answerId
+          in: path
+          required: true
+          description: Answer UUID
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '204':
+          description: Answer deleted
+        '400':
+          description: Invalid ID, or the card would be left without answers or without a correct answer
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          description: Admin access required
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Card not found in this deck, or answer not found in this card
           content:
             application/json:
               schema:

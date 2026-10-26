@@ -1121,6 +1121,97 @@ def run_delete_card_tests(base_url: str) -> None:
     log_step("✓ DeleteCard tests passed")
 
 
+def create_answer_response(base_url: str, headers: Dict[str, str], deck_id: str, card_id: str, body: Dict[str, Any]) -> requests.Response:
+    response = requests.post(
+        f"{base_url}/decks/{deck_id}/cards/{card_id}/answers",
+        json=body,
+        headers=headers,
+        timeout=TIMEOUT,
+    )
+    log_response("POST /decks/{deckId}/cards/{cardId}/answers", response)
+    return response
+
+
+def delete_answer(base_url: str, headers: Dict[str, str], deck_id: str, card_id: str, answer_id: str) -> requests.Response:
+    response = requests.delete(
+        f"{base_url}/decks/{deck_id}/cards/{card_id}/answers/{answer_id}",
+        headers=headers,
+        timeout=TIMEOUT,
+    )
+    log_response("DELETE /decks/{deckId}/cards/{cardId}/answers/{answerId}", response)
+    return response
+
+
+def run_answer_tests(base_url: str) -> None:
+    """Test POST /decks/{deckId}/cards/{cardId}/answers and DELETE /decks/{deckId}/cards/{cardId}/answers/{answerId}."""
+    log_step("")
+    log_step("Testing CreateAnswer and DeleteAnswer endpoints...")
+
+    token = create_user(base_url)["token"]
+    deck = create_deck(base_url, token, "deck-answers")
+    card = deck["cards"][0]
+    correct_answer = next(a for a in card["possible_answers"] if a["is_correct"])
+    wrong_answers = [a for a in card["possible_answers"] if not a["is_correct"]]
+
+    # Test 1: Without the admin header
+    response = create_answer_response(base_url, {"Authorization": f"Bearer {token}"}, deck["id"], card["id"], {"text": "added", "is_correct": False})
+    assert response.status_code == 403, f"Expected 403 without the admin header, got {response.status_code}"
+    log_step("  ✓ Add answer without admin header returns 403 - success")
+
+    # Test 2: Add an answer
+    response = create_answer_response(base_url, auth_headers(token), deck["id"], card["id"], {"text": "added", "is_correct": False})
+    assert response.status_code == 201, f"Expected 201, got {response.status_code}"
+    added = response.json()
+    assert added == {"id": added["id"], "card_id": card["id"], "text": "added", "is_correct": False}, f"Unexpected answer {added}"
+    card_after = next(c for c in get_deck(base_url, token, deck["id"])["cards"] if c["id"] == card["id"])
+    assert added in card_after["possible_answers"], "The deck should show the added answer"
+    log_step("  ✓ Add answer - success")
+
+    # Test 3: Invalid bodies and a card through another deck
+    response = create_answer_response(base_url, auth_headers(token), deck["id"], card["id"], {"text": "", "is_correct": False})
+    assert response.status_code == 400, f"Expected 400 for empty text, got {response.status_code}"
+    response = create_answer_response(base_url, auth_headers(token), deck["id"], card["id"], {"text": "no flag"})
+    assert response.status_code == 400, f"Expected 400 without is_correct, got {response.status_code}"
+    response = create_answer_response(base_url, auth_headers(token), "00000000-0000-0000-0000-000000000000", card["id"], {"text": "added", "is_correct": False})
+    assert response.status_code == 404, f"Expected 404 for a card through another deck, got {response.status_code}"
+    log_step("  ✓ Add answer with bad input returns 400 or 404 - success")
+
+    # Test 4: Delete the added answer, then again
+    response = delete_answer(base_url, auth_headers(token), deck["id"], card["id"], added["id"])
+    assert response.status_code == 204, f"Expected 204, got {response.status_code}"
+    assert response.content == b"", "Delete should answer without a body"
+    response = delete_answer(base_url, auth_headers(token), deck["id"], card["id"], added["id"])
+    assert response.status_code == 404, f"Expected 404 for a deleted answer, got {response.status_code}"
+    card_after = next(c for c in get_deck(base_url, token, deck["id"])["cards"] if c["id"] == card["id"])
+    actual = sorted(card_after["possible_answers"], key=lambda a: a["id"])
+    expected = sorted(card["possible_answers"], key=lambda a: a["id"])
+    assert actual == expected, "The card should be back to its original answers"
+    log_step("  ✓ Delete answer - success")
+
+    # Test 5: The only correct answer can't be deleted
+    response = delete_answer(base_url, auth_headers(token), deck["id"], card["id"], correct_answer["id"])
+    assert response.status_code == 400, f"Expected 400 for the only correct answer, got {response.status_code}"
+    log_step("  ✓ Delete only correct answer returns 400 - success")
+
+    # Test 6: The last answer can't be deleted
+    response = delete_answer(base_url, auth_headers(token), deck["id"], card["id"], wrong_answers[0]["id"])
+    assert response.status_code == 204, f"Expected 204, got {response.status_code}"
+    response = delete_answer(base_url, auth_headers(token), deck["id"], card["id"], wrong_answers[1]["id"])
+    assert response.status_code == 204, f"Expected 204, got {response.status_code}"
+    response = delete_answer(base_url, auth_headers(token), deck["id"], card["id"], wrong_answers[2]["id"])
+    assert response.status_code == 204, f"Expected 204, got {response.status_code}"
+    response = delete_answer(base_url, auth_headers(token), deck["id"], card["id"], correct_answer["id"])
+    assert response.status_code == 400, f"Expected 400 for the last answer, got {response.status_code}"
+    log_step("  ✓ Delete last answer returns 400 - success")
+
+    # Test 7: Without the admin header
+    response = delete_answer(base_url, {"Authorization": f"Bearer {token}"}, deck["id"], card["id"], correct_answer["id"])
+    assert response.status_code == 403, f"Expected 403 without the admin header, got {response.status_code}"
+    log_step("  ✓ Delete answer without admin header returns 403 - success")
+
+    log_step("✓ CreateAnswer and DeleteAnswer tests passed")
+
+
 def delete_course(base_url: str, headers: Dict[str, str], course_id: str) -> requests.Response:
     response = requests.delete(
         f"{base_url}/courses/{course_id}",
@@ -2298,6 +2389,8 @@ def test_basic_flow():
     run_delete_lesson_tests(base_url)
 
     run_delete_course_tests(base_url)
+
+    run_answer_tests(base_url)
 
     run_create_card_tests(base_url, token)
 

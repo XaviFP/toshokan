@@ -1362,6 +1362,22 @@ func (m *DeckClientMock) UpdateCard(ctx context.Context, in *pbDeck.UpdateCardRe
 	return args.Get(0).(*pbDeck.UpdateCardResponse), args.Error(1)
 }
 
+func (m *DeckClientMock) CreateAnswer(ctx context.Context, in *pbDeck.CreateAnswerRequest, opts ...grpc.CallOption) (*pbDeck.CreateAnswerResponse, error) {
+	args := m.Called(ctx, in)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*pbDeck.CreateAnswerResponse), args.Error(1)
+}
+
+func (m *DeckClientMock) DeleteAnswer(ctx context.Context, in *pbDeck.DeleteAnswerRequest, opts ...grpc.CallOption) (*pbDeck.DeleteAnswerResponse, error) {
+	args := m.Called(ctx, in)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*pbDeck.DeleteAnswerResponse), args.Error(1)
+}
+
 func (m *DeckClientMock) DeleteCard(ctx context.Context, in *pbDeck.DeleteCardRequest, opts ...grpc.CallOption) (*pbDeck.DeleteCardResponse, error) {
 	args := m.Called(ctx, in)
 	if args.Get(0) == nil {

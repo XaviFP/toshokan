@@ -29,6 +29,7 @@ var (
 	ErrNoDescription     = errors.New("deck: description is missing")
 	ErrNoAnswersProvided = errors.New("deck: no answers provided")
 	ErrNoCorrectAnswer   = errors.New("deck: at least one answer must be correct")
+	ErrLastAnswer        = errors.New("deck: a card must keep at least one answer")
 	ErrNoTextAnswer      = errors.New("deck: all answers must have a non-empty text")
 	ErrInvalidKind       = errors.New("deck: kind must be 'single_choice' or 'fill_in_the_blanks'")
 	ErrDeckAlreadyExists = errors.New("deck: deck already exists")
@@ -53,6 +54,8 @@ type Repository interface {
 	UpdateCard(ctx context.Context, deckID, cardID uuid.UUID, updates CardUpdates) (Card, error)
 	DeleteCard(ctx context.Context, deckID, cardID uuid.UUID) error
 	UpdateAnswer(ctx context.Context, deckID, cardID, answerID uuid.UUID, updates AnswerUpdates) (Answer, error)
+	CreateAnswer(ctx context.Context, deckID, cardID uuid.UUID, answer Answer) (Answer, error)
+	DeleteAnswer(ctx context.Context, deckID, cardID, answerID uuid.UUID) error
 }
 
 type redisRepository struct {
@@ -197,6 +200,30 @@ func (r *redisRepository) UpdateAnswer(ctx context.Context, deckID, cardID, answ
 	}
 
 	return a, nil
+}
+
+func (r *redisRepository) CreateAnswer(ctx context.Context, deckID, cardID uuid.UUID, answer Answer) (Answer, error) {
+	a, err := r.pgRepo.CreateAnswer(ctx, deckID, cardID, answer)
+	if err != nil {
+		return Answer{}, errors.Trace(err)
+	}
+
+	if err := r.delete(ctx, r.getDeckCacheKey(deckID)); err != nil {
+		return a, errors.Trace(err)
+	}
+
+	return a, nil
+}
+
+func (r *redisRepository) DeleteAnswer(ctx context.Context, deckID, cardID, answerID uuid.UUID) error {
+	err := r.pgRepo.DeleteAnswer(ctx, deckID, cardID, answerID)
+
+	// Invalidate even when the answer was already deleted, so a retry after a failed invalidation clears the stale deck.
+	if cacheErr := r.delete(ctx, r.getDeckCacheKey(deckID)); cacheErr != nil && err == nil {
+		return errors.Trace(cacheErr)
+	}
+
+	return errors.Trace(err)
 }
 
 func (r *redisRepository) getDeckFromDB(ctx context.Context, id uuid.UUID) (Deck, error) {
@@ -793,6 +820,100 @@ func (r *pgRepository) UpdateAnswer(ctx context.Context, deckID, cardID, answerI
 	}
 
 	return a, nil
+}
+
+// CreateAnswer adds an answer to a card of a deck
+func (r *pgRepository) CreateAnswer(ctx context.Context, deckID, cardID uuid.UUID, answer Answer) (Answer, error) {
+	var exists bool
+	err := r.db.QueryRowContext(ctx,
+		`SELECT EXISTS(SELECT 1 FROM cards WHERE id = $1 AND deck_id = $2 AND deleted_at IS NULL)`,
+		cardID, deckID,
+	).Scan(&exists)
+	if err != nil {
+		return Answer{}, errors.Trace(err)
+	}
+	if !exists {
+		return Answer{}, errors.Trace(ErrCardNotFound)
+	}
+
+	if answer.ID == uuid.Nil {
+		answer.ID = uuid.New()
+	}
+
+	var a Answer
+	err = r.db.QueryRowContext(ctx,
+		`INSERT INTO answers (id, card_id, text, is_correct) VALUES ($1, $2, $3, $4)
+		 RETURNING id, card_id, text, is_correct`,
+		answer.ID, cardID, answer.Text, answer.IsCorrect,
+	).Scan(&a.ID, &a.CardID, &a.Text, &a.IsCorrect)
+	if err != nil {
+		return Answer{}, errors.Trace(err)
+	}
+
+	return a, nil
+}
+
+// DeleteAnswer soft-deletes an answer of a card, as long as the card keeps at least one answer and one correct answer
+func (r *pgRepository) DeleteAnswer(ctx context.Context, deckID, cardID, answerID uuid.UUID) error {
+	var exists bool
+	err := r.db.QueryRowContext(ctx,
+		`SELECT EXISTS(SELECT 1 FROM cards WHERE id = $1 AND deck_id = $2 AND deleted_at IS NULL)`,
+		cardID, deckID,
+	).Scan(&exists)
+	if err != nil {
+		return errors.Trace(err)
+	}
+	if !exists {
+		return errors.Trace(ErrCardNotFound)
+	}
+
+	answers, err := r.GetCardAnswers(ctx, cardID)
+	if err != nil {
+		return errors.Trace(err)
+	}
+
+	found := false
+	remaining := 0
+	remainingCorrect := 0
+	for _, a := range answers {
+		if a.ID == answerID {
+			found = true
+			continue
+		}
+		remaining++
+		if a.IsCorrect {
+			remainingCorrect++
+		}
+	}
+
+	if !found {
+		return errors.Trace(ErrAnswerNotFound)
+	}
+	if remaining == 0 {
+		return errors.Trace(ErrLastAnswer)
+	}
+	if remainingCorrect == 0 {
+		return errors.Trace(ErrNoCorrectAnswer)
+	}
+
+	result, err := r.db.ExecContext(ctx,
+		`UPDATE answers SET deleted_at = NOW() WHERE id = $1 AND card_id = $2 AND deleted_at IS NULL`,
+		answerID, cardID,
+	)
+	if err != nil {
+		return errors.Trace(err)
+	}
+
+	rowsAffected, err := result.RowsAffected()
+	if err != nil {
+		return errors.Trace(err)
+	}
+
+	if rowsAffected == 0 {
+		return errors.Trace(ErrAnswerNotFound)
+	}
+
+	return nil
 }
 
 func (r *redisRepository) getDeckCacheKey(id uuid.UUID) string {

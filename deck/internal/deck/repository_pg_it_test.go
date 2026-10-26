@@ -281,6 +281,114 @@ func TestRepository_DeleteCard(t *testing.T) {
 	})
 }
 
+func TestRepository_CreateAnswer(t *testing.T) {
+	deckID := uuid.MustParse("fb9ffe2c-ad66-4766-9b7b-46fd5d9acd72")
+	cardID := uuid.MustParse("72bdff92-5bc8-4e1d-9217-d0b23e22ff33")
+
+	t.Run("success", func(t *testing.T) {
+		h := newTestHarness(t)
+		repo := NewPGRepository(h.db)
+
+		actual, err := repo.CreateAnswer(context.Background(), deckID, cardID, Answer{Text: "Transpiled", IsCorrect: false})
+		require.NoError(t, err)
+
+		expected := Answer{ID: actual.ID, CardID: cardID, Text: "Transpiled", IsCorrect: false}
+		assert.Equal(t, expected, actual)
+
+		answers, err := repo.GetCardAnswers(context.Background(), cardID)
+		require.NoError(t, err)
+
+		assert.ElementsMatch(t, []Answer{
+			{ID: uuid.MustParse("7e6926da-82b2-4ae8-99b4-1b803ebf1877"), CardID: cardID, Text: "Compiled", IsCorrect: true},
+			{ID: uuid.MustParse("dfcb1c81-f590-486e-9b7e-a44f0c436933"), CardID: cardID, Text: "Interpreted", IsCorrect: false},
+			expected,
+		}, answers)
+	})
+
+	t.Run("failure_card_of_another_deck", func(t *testing.T) {
+		h := newTestHarness(t)
+		repo := NewPGRepository(h.db)
+
+		_, err := repo.CreateAnswer(context.Background(), uuid.MustParse("334ddbf8-1acc-405b-86d8-49f0d1ca636c"), cardID, Answer{Text: "Transpiled"})
+		assert.ErrorIs(t, err, ErrCardNotFound)
+	})
+
+	t.Run("failure_card_not_found", func(t *testing.T) {
+		h := newTestHarness(t)
+		repo := NewPGRepository(h.db)
+
+		_, err := repo.CreateAnswer(context.Background(), deckID, uuid.MustParse("00000000-0000-0000-0000-000000000000"), Answer{Text: "Transpiled"})
+		assert.ErrorIs(t, err, ErrCardNotFound)
+	})
+}
+
+func TestRepository_DeleteAnswer(t *testing.T) {
+	deckID := uuid.MustParse("fb9ffe2c-ad66-4766-9b7b-46fd5d9acd72")
+	cardID := uuid.MustParse("72bdff92-5bc8-4e1d-9217-d0b23e22ff33")
+	correctAnswerID := uuid.MustParse("7e6926da-82b2-4ae8-99b4-1b803ebf1877")
+	wrongAnswerID := uuid.MustParse("dfcb1c81-f590-486e-9b7e-a44f0c436933")
+
+	t.Run("success", func(t *testing.T) {
+		h := newTestHarness(t)
+		repo := NewPGRepository(h.db)
+
+		err := repo.DeleteAnswer(context.Background(), deckID, cardID, wrongAnswerID)
+		require.NoError(t, err)
+
+		actual, err := repo.GetCardAnswers(context.Background(), cardID)
+		require.NoError(t, err)
+
+		expected := []Answer{{ID: correctAnswerID, CardID: cardID, Text: "Compiled", IsCorrect: true}}
+		assert.Equal(t, expected, actual)
+	})
+
+	t.Run("failure_only_correct_answer", func(t *testing.T) {
+		h := newTestHarness(t)
+		repo := NewPGRepository(h.db)
+
+		err := repo.DeleteAnswer(context.Background(), deckID, cardID, correctAnswerID)
+		assert.ErrorIs(t, err, ErrNoCorrectAnswer)
+	})
+
+	t.Run("failure_last_answer", func(t *testing.T) {
+		h := newTestHarness(t)
+		repo := NewPGRepository(h.db)
+
+		err := repo.DeleteAnswer(context.Background(), deckID, cardID, wrongAnswerID)
+		require.NoError(t, err)
+
+		err = repo.DeleteAnswer(context.Background(), deckID, cardID, correctAnswerID)
+		assert.ErrorIs(t, err, ErrLastAnswer)
+	})
+
+	t.Run("failure_already_deleted", func(t *testing.T) {
+		h := newTestHarness(t)
+		repo := NewPGRepository(h.db)
+
+		err := repo.DeleteAnswer(context.Background(), deckID, cardID, wrongAnswerID)
+		require.NoError(t, err)
+
+		err = repo.DeleteAnswer(context.Background(), deckID, cardID, wrongAnswerID)
+		assert.ErrorIs(t, err, ErrAnswerNotFound)
+	})
+
+	t.Run("failure_answer_of_another_card", func(t *testing.T) {
+		h := newTestHarness(t)
+		repo := NewPGRepository(h.db)
+
+		err := repo.DeleteAnswer(context.Background(), deckID, cardID, uuid.MustParse("9403ad3e-45e6-4b23-8f63-b751de8576cc"))
+		assert.ErrorIs(t, err, ErrAnswerNotFound)
+	})
+
+	t.Run("failure_card_of_another_deck", func(t *testing.T) {
+		h := newTestHarness(t)
+		repo := NewPGRepository(h.db)
+
+		err := repo.DeleteAnswer(context.Background(), uuid.MustParse("334ddbf8-1acc-405b-86d8-49f0d1ca636c"), cardID, wrongAnswerID)
+		assert.ErrorIs(t, err, ErrCardNotFound)
+	})
+}
+
 func TestRepository_GetDeckCards(t *testing.T) {
 	h := newTestHarness(t)
 
