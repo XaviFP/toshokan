@@ -328,6 +328,93 @@ paths:
               schema:
                 $ref: '#/components/schemas/Error'
 
+  /admin/courses/{courseId}/lessons:
+    get:
+      tags:
+        - Backoffice
+      summary: Get a course's lessons with their bodies (Admin only)
+      description: |
+        Retrieve the course's lessons, oldest first, with their bodies.
+
+        **Requires admin access** (`X-Admin-Token` header).
+      operationId: adminGetLessons
+      security:
+        - BearerAuth: []
+          AdminAuth: []
+      parameters:
+        - name: courseId
+          in: path
+          required: true
+          description: Course UUID
+          schema:
+            type: string
+            format: uuid
+        - name: after
+          in: query
+          required: false
+          description: Cursor for pagination (fetch lessons after this cursor)
+          schema:
+            type: string
+        - name: before
+          in: query
+          required: false
+          description: Cursor for backward pagination (fetch lessons before this cursor)
+          schema:
+            type: string
+        - name: first
+          in: query
+          required: false
+          description: Number of lessons to fetch (default 20)
+          schema:
+            type: integer
+            format: int64
+            minimum: 0
+            maximum: 1000
+            default: 20
+        - name: last
+          in: query
+          required: false
+          description: Number of lessons to fetch when paginating backward (default 20)
+          schema:
+            type: integer
+            format: int64
+            minimum: 0
+            maximum: 1000
+            default: 20
+      responses:
+        '200':
+          description: Paginated list of lessons with their bodies
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LessonsConnectionResponse'
+        '400':
+          description: Invalid course ID or pagination parameters
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          description: Admin access required
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Course not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
   /admin/courses/{courseId}/students/progress:
     get:
       tags:
@@ -1976,6 +2063,18 @@ components:
             - is_completed
             - is_current
 
+    LessonEdge:
+      type: object
+      properties:
+        node:
+          $ref: '#/components/schemas/Lesson'
+        cursor:
+          type: string
+          description: Pagination cursor for this edge
+      required:
+        - node
+        - cursor
+
     LessonWithProgressEdge:
       type: object
       properties:
@@ -2021,6 +2120,19 @@ components:
         - has_next_page
         - start_cursor
         - end_cursor
+
+    LessonsConnectionResponse:
+      type: object
+      properties:
+        edges:
+          type: array
+          items:
+            $ref: '#/components/schemas/LessonEdge'
+        page_info:
+          $ref: '#/components/schemas/PageInfo'
+      required:
+        - edges
+        - page_info
 
     LessonsWithProgressConnectionResponse:
       type: object
