@@ -92,6 +92,10 @@ func (s *stateSyncer) Sync(ctx context.Context, userID, courseID uuid.UUID) erro
 		return errors.Trace(err)
 	}
 
+	// Without completeFinished(), if pruning removed exactly the cards or decks the user hadn't answered yet,
+	// their deck or lesson would stay incomplete.
+	state.completeFinished()
+
 	// Course lessons are ordered by order already
 	// Set current lesson to the first incompleted lesson
 	// If all lessons are completed, keep/set last completed lesson as current

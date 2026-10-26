@@ -5,6 +5,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 // TestState holds a pre-configured progress state for testing
@@ -183,6 +184,221 @@ func TestProgressState_IsDeckComplete(t *testing.T) {
 
 		// Deck is still not completed - card 2 hasn't been answered correctly
 		assert.False(t, ts.State.IsDeckCompleted(ts.Lesson1ID, ts.Lesson1Deck1ID))
+	})
+
+	t.Run("no_cards", func(t *testing.T) {
+		state := NewProgressState()
+		state.Lessons[ts.Lesson1ID] = &LessonProgress{
+			Decks: map[string]*DeckProgress{
+				ts.Lesson1Deck1ID: {Cards: map[string]*CardProgress{}},
+			},
+		}
+
+		assert.True(t, state.IsDeckCompleted(ts.Lesson1ID, ts.Lesson1Deck1ID))
+	})
+}
+
+func TestProgressState_completeFinished(t *testing.T) {
+	lessonID := uuid.MustParse("fb9ffe2c-ad66-4766-9b7b-46fd5d9acd72").String()
+	deck1ID := uuid.MustParse("334ddbf8-1acc-405b-86d8-49f0d1ca636c").String()
+	deck2ID := uuid.MustParse("60766223-ff9f-4871-a497-f765c05a0c5e").String()
+	card1ID := uuid.MustParse("72bdff92-5bc8-4e1d-9217-d0b23e22ff33").String()
+	card2ID := uuid.MustParse("c924f7e0-efd8-4c2d-9c43-8eafb7102ebc").String()
+
+	t.Run("all_cards_completed_completes_deck_and_lesson", func(t *testing.T) {
+		state := NewProgressState()
+		state.Lessons[lessonID] = &LessonProgress{
+			Decks: map[string]*DeckProgress{
+				deck1ID: {
+					Cards: map[string]*CardProgress{
+						card1ID: {IsCompleted: true, CorrectAnswers: 1},
+					},
+				},
+			},
+		}
+
+		state.completeFinished()
+
+		require.NotNil(t, state.Lessons[lessonID].CompletedAt)
+		require.NotNil(t, state.Lessons[lessonID].Decks[deck1ID].CompletedAt)
+		expected := &ProgressState{
+			Lessons: map[string]*LessonProgress{
+				lessonID: {
+					IsCompleted: true,
+					CompletedAt: state.Lessons[lessonID].CompletedAt,
+					Decks: map[string]*DeckProgress{
+						deck1ID: {
+							IsCompleted: true,
+							CompletedAt: state.Lessons[lessonID].Decks[deck1ID].CompletedAt,
+							Cards: map[string]*CardProgress{
+								card1ID: {IsCompleted: true, CorrectAnswers: 1},
+							},
+						},
+					},
+				},
+			},
+		}
+		assert.Equal(t, expected, state)
+	})
+
+	t.Run("incomplete_card_leaves_deck_and_lesson_incomplete", func(t *testing.T) {
+		state := NewProgressState()
+		state.Lessons[lessonID] = &LessonProgress{
+			Decks: map[string]*DeckProgress{
+				deck1ID: {
+					Cards: map[string]*CardProgress{
+						card1ID: {IsCompleted: true, CorrectAnswers: 1},
+						card2ID: {IsCompleted: false},
+					},
+				},
+			},
+		}
+
+		state.completeFinished()
+
+		expected := &ProgressState{
+			Lessons: map[string]*LessonProgress{
+				lessonID: {
+					Decks: map[string]*DeckProgress{
+						deck1ID: {
+							Cards: map[string]*CardProgress{
+								card1ID: {IsCompleted: true, CorrectAnswers: 1},
+								card2ID: {IsCompleted: false},
+							},
+						},
+					},
+				},
+			},
+		}
+		assert.Equal(t, expected, state)
+	})
+
+	t.Run("completed_deck_completes_lesson_only_when_every_deck_is", func(t *testing.T) {
+		state := NewProgressState()
+		state.Lessons[lessonID] = &LessonProgress{
+			Decks: map[string]*DeckProgress{
+				deck1ID: {
+					Cards: map[string]*CardProgress{
+						card1ID: {IsCompleted: true, CorrectAnswers: 1},
+					},
+				},
+				deck2ID: {
+					Cards: map[string]*CardProgress{
+						card2ID: {IsCompleted: false},
+					},
+				},
+			},
+		}
+
+		state.completeFinished()
+
+		require.NotNil(t, state.Lessons[lessonID].Decks[deck1ID].CompletedAt)
+		expected := &ProgressState{
+			Lessons: map[string]*LessonProgress{
+				lessonID: {
+					Decks: map[string]*DeckProgress{
+						deck1ID: {
+							IsCompleted: true,
+							CompletedAt: state.Lessons[lessonID].Decks[deck1ID].CompletedAt,
+							Cards: map[string]*CardProgress{
+								card1ID: {IsCompleted: true, CorrectAnswers: 1},
+							},
+						},
+						deck2ID: {
+							Cards: map[string]*CardProgress{
+								card2ID: {IsCompleted: false},
+							},
+						},
+					},
+				},
+			},
+		}
+		assert.Equal(t, expected, state)
+	})
+
+	t.Run("deck_without_cards_is_completed", func(t *testing.T) {
+		state := NewProgressState()
+		state.Lessons[lessonID] = &LessonProgress{
+			Decks: map[string]*DeckProgress{
+				deck1ID: {Cards: map[string]*CardProgress{}},
+			},
+		}
+
+		state.completeFinished()
+
+		require.NotNil(t, state.Lessons[lessonID].CompletedAt)
+		require.NotNil(t, state.Lessons[lessonID].Decks[deck1ID].CompletedAt)
+		expected := &ProgressState{
+			Lessons: map[string]*LessonProgress{
+				lessonID: {
+					IsCompleted: true,
+					CompletedAt: state.Lessons[lessonID].CompletedAt,
+					Decks: map[string]*DeckProgress{
+						deck1ID: {
+							IsCompleted: true,
+							CompletedAt: state.Lessons[lessonID].Decks[deck1ID].CompletedAt,
+							Cards:       map[string]*CardProgress{},
+						},
+					},
+				},
+			},
+		}
+		assert.Equal(t, expected, state)
+	})
+
+	t.Run("lesson_without_decks_is_completed", func(t *testing.T) {
+		state := NewProgressState()
+		state.Lessons[lessonID] = &LessonProgress{
+			Decks: map[string]*DeckProgress{},
+		}
+
+		state.completeFinished()
+
+		require.NotNil(t, state.Lessons[lessonID].CompletedAt)
+		expected := &ProgressState{
+			Lessons: map[string]*LessonProgress{
+				lessonID: {
+					IsCompleted: true,
+					CompletedAt: state.Lessons[lessonID].CompletedAt,
+					Decks:       map[string]*DeckProgress{},
+				},
+			},
+		}
+		assert.Equal(t, expected, state)
+	})
+
+	t.Run("completed_lesson_and_deck_stay_completed", func(t *testing.T) {
+		state := NewProgressState()
+		state.Lessons[lessonID] = &LessonProgress{
+			IsCompleted: true,
+			Decks: map[string]*DeckProgress{
+				deck1ID: {
+					IsCompleted: true,
+					Cards: map[string]*CardProgress{
+						card1ID: {IsCompleted: false},
+					},
+				},
+			},
+		}
+
+		state.completeFinished()
+
+		expected := &ProgressState{
+			Lessons: map[string]*LessonProgress{
+				lessonID: {
+					IsCompleted: true,
+					Decks: map[string]*DeckProgress{
+						deck1ID: {
+							IsCompleted: true,
+							Cards: map[string]*CardProgress{
+								card1ID: {IsCompleted: false},
+							},
+						},
+					},
+				},
+			},
+		}
+		assert.Equal(t, expected, state)
 	})
 }
 
