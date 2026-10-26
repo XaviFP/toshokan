@@ -124,7 +124,7 @@ func (ps *ProgressState) IsCardAllAnswersCorrect(lessonID, deckID, cardID string
 }
 
 // IsDeckCompleted checks if a deck is completed based on state
-// A deck is considered completed if all tracked cards for that deck are marked completed.
+// A deck is considered completed if all tracked cards for that deck are marked completed. A deck without cards is completed.
 func (ps *ProgressState) IsDeckCompleted(lessonID, deckID string) bool {
 	if ps.Lessons == nil ||
 		ps.Lessons[lessonID] == nil ||
@@ -134,10 +134,6 @@ func (ps *ProgressState) IsDeckCompleted(lessonID, deckID string) bool {
 
 	deck := ps.Lessons[lessonID].Decks[deckID]
 
-	// Check if all tracked cards are completed
-	if len(deck.Cards) == 0 {
-		return false
-	}
 	for _, card := range deck.Cards {
 		if !card.IsCompleted {
 			return false
@@ -170,6 +166,22 @@ func (ps *ProgressState) IsLessonCompleted(lessonID string) bool {
 	lesson.CompletedAt = &now
 
 	return true
+}
+
+// completeFinished marks every deck whose cards are all completed, and every lesson whose decks are all completed, as completed.
+func (ps *ProgressState) completeFinished() {
+	for lessonID, lesson := range ps.Lessons {
+		for deckID, deck := range lesson.Decks {
+			if !deck.IsCompleted && ps.IsDeckCompleted(lessonID, deckID) {
+				deck.IsCompleted = true
+				now := time.Now()
+				deck.CompletedAt = &now
+			}
+		}
+
+		// IsLessonCompleted marks the lesson as completed when all its decks are.
+		ps.IsLessonCompleted(lessonID)
+	}
 }
 
 type LessonState map[string]LessonProgress

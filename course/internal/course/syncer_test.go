@@ -3,6 +3,7 @@ package course
 import (
 	"context"
 	"testing"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
@@ -331,6 +332,7 @@ func TestSync_RemovesRemovedDeck(t *testing.T) {
 	lessonID := uuid.New()
 	remainingDeckID := uuid.New()
 	removedDeckID := uuid.New()
+	cardID := uuid.New()
 
 	mockRepo := new(RepositoryMock)
 	mockDecksClient := new(MockDecksAPIClient)
@@ -341,7 +343,9 @@ func TestSync_RemovesRemovedDeck(t *testing.T) {
 		Decks: map[string]*DeckProgress{
 			remainingDeckID.String(): {
 				IsCompleted: false,
-				Cards:       make(map[string]*CardProgress),
+				Cards: map[string]*CardProgress{
+					cardID.String(): {IsCompleted: false},
+				},
 			},
 			removedDeckID.String(): {
 				IsCompleted: false,
@@ -381,7 +385,9 @@ func TestSync_RemovesRemovedDeck(t *testing.T) {
 					Decks: map[string]*DeckProgress{
 						remainingDeckID.String(): {
 							IsCompleted: false,
-							Cards:       map[string]*CardProgress{},
+							Cards: map[string]*CardProgress{
+								cardID.String(): {IsCompleted: false},
+							},
 						},
 					},
 				},
@@ -393,7 +399,7 @@ func TestSync_RemovesRemovedDeck(t *testing.T) {
 	mockDecksClient.On("GetDeck", ctx, mock.MatchedBy(func(req *pbDeck.GetDeckRequest) bool {
 		return req.DeckId == remainingDeckID.String()
 	})).Return(&pbDeck.GetDeckResponse{
-		Deck: &pbDeck.Deck{Id: remainingDeckID.String(), Title: "Remaining Deck", Cards: []*pbDeck.Card{}},
+		Deck: &pbDeck.Deck{Id: remainingDeckID.String(), Title: "Remaining Deck", Cards: []*pbDeck.Card{{Id: cardID.String(), Title: "Q"}}},
 	}, nil)
 
 	syncer := NewStateSyncer(mockRepo, mockDecksClient)
@@ -505,6 +511,7 @@ func TestSync_RemovesRemovedLesson(t *testing.T) {
 	remainingLessonID := uuid.New()
 	removedLessonID := uuid.New()
 	deckID := uuid.New()
+	cardID := uuid.New()
 
 	mockRepo := new(RepositoryMock)
 	mockDecksClient := new(MockDecksAPIClient)
@@ -515,7 +522,9 @@ func TestSync_RemovesRemovedLesson(t *testing.T) {
 		Decks: map[string]*DeckProgress{
 			deckID.String(): {
 				IsCompleted: false,
-				Cards:       make(map[string]*CardProgress),
+				Cards: map[string]*CardProgress{
+					cardID.String(): {IsCompleted: false},
+				},
 			},
 		},
 	}
@@ -555,7 +564,9 @@ func TestSync_RemovesRemovedLesson(t *testing.T) {
 					Decks: map[string]*DeckProgress{
 						deckID.String(): {
 							IsCompleted: false,
-							Cards:       map[string]*CardProgress{},
+							Cards: map[string]*CardProgress{
+								cardID.String(): {IsCompleted: false},
+							},
 						},
 					},
 				},
@@ -567,7 +578,7 @@ func TestSync_RemovesRemovedLesson(t *testing.T) {
 	mockDecksClient.On("GetDeck", ctx, mock.MatchedBy(func(req *pbDeck.GetDeckRequest) bool {
 		return req.DeckId == deckID.String()
 	})).Return(&pbDeck.GetDeckResponse{
-		Deck: &pbDeck.Deck{Id: deckID.String(), Title: "Test Deck", Cards: []*pbDeck.Card{}},
+		Deck: &pbDeck.Deck{Id: deckID.String(), Title: "Test Deck", Cards: []*pbDeck.Card{{Id: cardID.String(), Title: "Q"}}},
 	}, nil)
 
 	syncer := NewStateSyncer(mockRepo, mockDecksClient)
@@ -582,6 +593,328 @@ func TestSync_RemovesRemovedLesson(t *testing.T) {
 	assert.Nil(t, userProgress.State.Lessons[removedLessonID.String()])
 }
 
+func TestSync_RemovedIncompleteCardCompletesDeckAndLesson(t *testing.T) {
+	ctx := context.Background()
+	userID := uuid.New()
+	courseID := uuid.New()
+	lesson1ID := uuid.New()
+	lesson2ID := uuid.New()
+	deck1ID := uuid.New()
+	deck2ID := uuid.New()
+	answeredCardID := uuid.New()
+	removedCardID := uuid.New()
+	lesson2CardID := uuid.New()
+
+	mockRepo := new(RepositoryMock)
+	mockDecksClient := new(MockDecksAPIClient)
+
+	// The learner answered every card of lesson 1 except the one that gets removed.
+	state := NewProgressState()
+	state.CurrentLessonID = lesson1ID
+	state.Lessons[lesson1ID.String()] = &LessonProgress{
+		Decks: map[string]*DeckProgress{
+			deck1ID.String(): {
+				Cards: map[string]*CardProgress{
+					answeredCardID.String(): {IsCompleted: true, CorrectAnswers: 1},
+					removedCardID.String():  {IsCompleted: false},
+				},
+			},
+		},
+	}
+	state.Lessons[lesson2ID.String()] = &LessonProgress{
+		Decks: map[string]*DeckProgress{
+			deck2ID.String(): {
+				Cards: map[string]*CardProgress{
+					lesson2CardID.String(): {IsCompleted: false},
+				},
+			},
+		},
+	}
+
+	userProgress := UserCourseProgress{
+		CurrentLessonID: lesson1ID,
+		State:           state,
+	}
+
+	lesson1Cursor, _ := pagination.ToCursor(LessonCursor{Order: 1})
+	lesson2Cursor, _ := pagination.ToCursor(LessonCursor{Order: 2})
+	lessons := LessonsConnection{
+		Edges: []LessonEdge{
+			{
+				Lesson: Lesson{
+					ID:       lesson1ID,
+					CourseID: courseID,
+					Order:    1,
+					Title:    "Lesson 1",
+					Body:     "Content with ![deck](" + deck1ID.String() + ")",
+				},
+				Cursor: lesson1Cursor,
+			},
+			{
+				Lesson: Lesson{
+					ID:       lesson2ID,
+					CourseID: courseID,
+					Order:    2,
+					Title:    "Lesson 2",
+					Body:     "Content with ![deck](" + deck2ID.String() + ")",
+				},
+				Cursor: lesson2Cursor,
+			},
+		},
+	}
+
+	mockRepo.On("GetLessonsByCourseID", ctx, courseID, pagination.Pagination{Kind: pagination.PaginationKindOldestFirst, First: 1000}, false).Return(lessons, nil)
+	mockRepo.On("GetUserCourseProgress", ctx, userID, courseID).Return(userProgress, nil)
+	mockRepo.On("UpdateUserProgress", ctx, mock.MatchedBy(func(ucp UserCourseProgress) bool {
+		return ucp.CurrentLessonID == lesson2ID
+	})).Return(nil)
+
+	mockDecksClient.On("GetDeck", ctx, mock.MatchedBy(func(req *pbDeck.GetDeckRequest) bool {
+		return req.DeckId == deck1ID.String()
+	})).Return(&pbDeck.GetDeckResponse{
+		Deck: &pbDeck.Deck{
+			Id:    deck1ID.String(),
+			Title: "Deck 1",
+			Cards: []*pbDeck.Card{{Id: answeredCardID.String(), Title: "Q1"}},
+		},
+	}, nil)
+	mockDecksClient.On("GetDeck", ctx, mock.MatchedBy(func(req *pbDeck.GetDeckRequest) bool {
+		return req.DeckId == deck2ID.String()
+	})).Return(&pbDeck.GetDeckResponse{
+		Deck: &pbDeck.Deck{
+			Id:    deck2ID.String(),
+			Title: "Deck 2",
+			Cards: []*pbDeck.Card{{Id: lesson2CardID.String(), Title: "Q2"}},
+		},
+	}, nil)
+
+	syncer := NewStateSyncer(mockRepo, mockDecksClient)
+
+	err := syncer.Sync(ctx, userID, courseID)
+	require.NoError(t, err)
+	mockRepo.AssertExpectations(t)
+	mockDecksClient.AssertExpectations(t)
+
+	actual := userProgress.State
+	require.NotNil(t, actual.Lessons[lesson1ID.String()].CompletedAt)
+	require.NotNil(t, actual.Lessons[lesson1ID.String()].Decks[deck1ID.String()].CompletedAt)
+	expected := &ProgressState{
+		CurrentLessonID: lesson2ID,
+		Lessons: map[string]*LessonProgress{
+			lesson1ID.String(): {
+				IsCompleted: true,
+				CompletedAt: actual.Lessons[lesson1ID.String()].CompletedAt,
+				Decks: map[string]*DeckProgress{
+					deck1ID.String(): {
+						IsCompleted: true,
+						CompletedAt: actual.Lessons[lesson1ID.String()].Decks[deck1ID.String()].CompletedAt,
+						Cards: map[string]*CardProgress{
+							answeredCardID.String(): {IsCompleted: true, CorrectAnswers: 1},
+						},
+					},
+				},
+			},
+			lesson2ID.String(): {
+				Decks: map[string]*DeckProgress{
+					deck2ID.String(): {
+						Cards: map[string]*CardProgress{
+							lesson2CardID.String(): {IsCompleted: false},
+						},
+					},
+				},
+			},
+		},
+	}
+	assert.Equal(t, expected, actual)
+}
+
+func TestSync_RemovedCompletedCardKeepsDeckIncomplete(t *testing.T) {
+	ctx := context.Background()
+	userID := uuid.New()
+	courseID := uuid.New()
+	lessonID := uuid.New()
+	deckID := uuid.New()
+	removedCardID := uuid.New()
+	remainingCardID := uuid.New()
+
+	mockRepo := new(RepositoryMock)
+	mockDecksClient := new(MockDecksAPIClient)
+
+	state := NewProgressState()
+	state.CurrentLessonID = lessonID
+	state.Lessons[lessonID.String()] = &LessonProgress{
+		Decks: map[string]*DeckProgress{
+			deckID.String(): {
+				Cards: map[string]*CardProgress{
+					removedCardID.String():   {IsCompleted: true, CorrectAnswers: 1},
+					remainingCardID.String(): {IsCompleted: false},
+				},
+			},
+		},
+	}
+
+	userProgress := UserCourseProgress{
+		CurrentLessonID: lessonID,
+		State:           state,
+	}
+
+	lessonCursor, _ := pagination.ToCursor(LessonCursor{Order: 1})
+	lessons := LessonsConnection{
+		Edges: []LessonEdge{
+			{
+				Lesson: Lesson{
+					ID:       lessonID,
+					CourseID: courseID,
+					Order:    1,
+					Title:    "Lesson 1",
+					Body:     "Content with ![deck](" + deckID.String() + ")",
+				},
+				Cursor: lessonCursor,
+			},
+		},
+	}
+
+	mockRepo.On("GetLessonsByCourseID", ctx, courseID, pagination.Pagination{Kind: pagination.PaginationKindOldestFirst, First: 1000}, false).Return(lessons, nil)
+	mockRepo.On("GetUserCourseProgress", ctx, userID, courseID).Return(userProgress, nil)
+	mockRepo.On("UpdateUserProgress", ctx, mock.MatchedBy(func(ucp UserCourseProgress) bool {
+		return ucp.CurrentLessonID == lessonID
+	})).Return(nil)
+
+	mockDecksClient.On("GetDeck", ctx, mock.MatchedBy(func(req *pbDeck.GetDeckRequest) bool {
+		return req.DeckId == deckID.String()
+	})).Return(&pbDeck.GetDeckResponse{
+		Deck: &pbDeck.Deck{
+			Id:    deckID.String(),
+			Title: "Deck",
+			Cards: []*pbDeck.Card{{Id: remainingCardID.String(), Title: "Q"}},
+		},
+	}, nil)
+
+	syncer := NewStateSyncer(mockRepo, mockDecksClient)
+
+	err := syncer.Sync(ctx, userID, courseID)
+	require.NoError(t, err)
+	mockRepo.AssertExpectations(t)
+	mockDecksClient.AssertExpectations(t)
+
+	expected := &ProgressState{
+		CurrentLessonID: lessonID,
+		Lessons: map[string]*LessonProgress{
+			lessonID.String(): {
+				Decks: map[string]*DeckProgress{
+					deckID.String(): {
+						Cards: map[string]*CardProgress{
+							remainingCardID.String(): {IsCompleted: false},
+						},
+					},
+				},
+			},
+		},
+	}
+	assert.Equal(t, expected, userProgress.State)
+}
+
+func TestSync_RemovedDeckEmbedCompletesLesson(t *testing.T) {
+	ctx := context.Background()
+	userID := uuid.New()
+	courseID := uuid.New()
+	lessonID := uuid.New()
+	finishedDeckID := uuid.New()
+	removedDeckID := uuid.New()
+	finishedCardID := uuid.New()
+	unansweredCardID := uuid.New()
+
+	mockRepo := new(RepositoryMock)
+	mockDecksClient := new(MockDecksAPIClient)
+
+	// The learner finished one deck; the lesson body then stops embedding the other one.
+	finishedAt := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+	state := NewProgressState()
+	state.CurrentLessonID = lessonID
+	state.Lessons[lessonID.String()] = &LessonProgress{
+		Decks: map[string]*DeckProgress{
+			finishedDeckID.String(): {
+				IsCompleted: true,
+				CompletedAt: &finishedAt,
+				Cards: map[string]*CardProgress{
+					finishedCardID.String(): {IsCompleted: true, CorrectAnswers: 1},
+				},
+			},
+			removedDeckID.String(): {
+				Cards: map[string]*CardProgress{
+					unansweredCardID.String(): {IsCompleted: false},
+				},
+			},
+		},
+	}
+
+	userProgress := UserCourseProgress{
+		CurrentLessonID: lessonID,
+		State:           state,
+	}
+
+	lessonCursor, _ := pagination.ToCursor(LessonCursor{Order: 1})
+	lessons := LessonsConnection{
+		Edges: []LessonEdge{
+			{
+				Lesson: Lesson{
+					ID:       lessonID,
+					CourseID: courseID,
+					Order:    1,
+					Title:    "Lesson 1",
+					Body:     "Content with ![deck](" + finishedDeckID.String() + ")",
+				},
+				Cursor: lessonCursor,
+			},
+		},
+	}
+
+	mockRepo.On("GetLessonsByCourseID", ctx, courseID, pagination.Pagination{Kind: pagination.PaginationKindOldestFirst, First: 1000}, false).Return(lessons, nil)
+	mockRepo.On("GetUserCourseProgress", ctx, userID, courseID).Return(userProgress, nil)
+	mockRepo.On("UpdateUserProgress", ctx, mock.MatchedBy(func(ucp UserCourseProgress) bool {
+		return ucp.CurrentLessonID == lessonID
+	})).Return(nil)
+
+	mockDecksClient.On("GetDeck", ctx, mock.MatchedBy(func(req *pbDeck.GetDeckRequest) bool {
+		return req.DeckId == finishedDeckID.String()
+	})).Return(&pbDeck.GetDeckResponse{
+		Deck: &pbDeck.Deck{
+			Id:    finishedDeckID.String(),
+			Title: "Finished Deck",
+			Cards: []*pbDeck.Card{{Id: finishedCardID.String(), Title: "Q"}},
+		},
+	}, nil)
+
+	syncer := NewStateSyncer(mockRepo, mockDecksClient)
+
+	err := syncer.Sync(ctx, userID, courseID)
+	require.NoError(t, err)
+	mockRepo.AssertExpectations(t)
+	mockDecksClient.AssertExpectations(t)
+
+	actual := userProgress.State
+	require.NotNil(t, actual.Lessons[lessonID.String()].CompletedAt)
+	expected := &ProgressState{
+		CurrentLessonID: lessonID,
+		Lessons: map[string]*LessonProgress{
+			lessonID.String(): {
+				IsCompleted: true,
+				CompletedAt: actual.Lessons[lessonID.String()].CompletedAt,
+				Decks: map[string]*DeckProgress{
+					finishedDeckID.String(): {
+						IsCompleted: true,
+						CompletedAt: &finishedAt,
+						Cards: map[string]*CardProgress{
+							finishedCardID.String(): {IsCompleted: true, CorrectAnswers: 1},
+						},
+					},
+				},
+			},
+		},
+	}
+	assert.Equal(t, expected, actual)
+}
+
 func TestSync_SetsCurrrentLessonToFirstIncomplete(t *testing.T) {
 	ctx := context.Background()
 	userID := uuid.New()
@@ -589,6 +922,7 @@ func TestSync_SetsCurrrentLessonToFirstIncomplete(t *testing.T) {
 	lesson1ID := uuid.New()
 	lesson2ID := uuid.New()
 	deckID := uuid.New()
+	cardID := uuid.New()
 
 	mockRepo := new(RepositoryMock)
 	mockDecksClient := new(MockDecksAPIClient)
@@ -599,7 +933,9 @@ func TestSync_SetsCurrrentLessonToFirstIncomplete(t *testing.T) {
 		Decks: map[string]*DeckProgress{
 			deckID.String(): {
 				IsCompleted: true,
-				Cards:       make(map[string]*CardProgress),
+				Cards: map[string]*CardProgress{
+					cardID.String(): {IsCompleted: true, CorrectAnswers: 1},
+				},
 			},
 		},
 	}
@@ -608,7 +944,9 @@ func TestSync_SetsCurrrentLessonToFirstIncomplete(t *testing.T) {
 		Decks: map[string]*DeckProgress{
 			deckID.String(): {
 				IsCompleted: false,
-				Cards:       make(map[string]*CardProgress),
+				Cards: map[string]*CardProgress{
+					cardID.String(): {IsCompleted: false},
+				},
 			},
 		},
 	}
@@ -655,7 +993,9 @@ func TestSync_SetsCurrrentLessonToFirstIncomplete(t *testing.T) {
 					Decks: map[string]*DeckProgress{
 						deckID.String(): {
 							IsCompleted: true,
-							Cards:       map[string]*CardProgress{},
+							Cards: map[string]*CardProgress{
+								cardID.String(): {IsCompleted: true, CorrectAnswers: 1},
+							},
 						},
 					},
 				},
@@ -664,7 +1004,9 @@ func TestSync_SetsCurrrentLessonToFirstIncomplete(t *testing.T) {
 					Decks: map[string]*DeckProgress{
 						deckID.String(): {
 							IsCompleted: false,
-							Cards:       map[string]*CardProgress{},
+							Cards: map[string]*CardProgress{
+								cardID.String(): {IsCompleted: false},
+							},
 						},
 					},
 				},
@@ -676,7 +1018,7 @@ func TestSync_SetsCurrrentLessonToFirstIncomplete(t *testing.T) {
 	mockDecksClient.On("GetDeck", ctx, mock.MatchedBy(func(req *pbDeck.GetDeckRequest) bool {
 		return req.DeckId == deckID.String()
 	})).Return(&pbDeck.GetDeckResponse{
-		Deck: &pbDeck.Deck{Id: deckID.String(), Title: "Test Deck", Cards: []*pbDeck.Card{}},
+		Deck: &pbDeck.Deck{Id: deckID.String(), Title: "Test Deck", Cards: []*pbDeck.Card{{Id: cardID.String(), Title: "Q"}}},
 	}, nil)
 
 	syncer := NewStateSyncer(mockRepo, mockDecksClient)
