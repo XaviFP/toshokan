@@ -288,6 +288,16 @@ func (m *MockDecksAPIClient) UpdateCard(ctx context.Context, in *pbDeck.UpdateCa
 	return args.Get(0).(*pbDeck.UpdateCardResponse), args.Error(1)
 }
 
+func (m *MockDecksAPIClient) CreateAnswer(ctx context.Context, in *pbDeck.CreateAnswerRequest, opts ...grpc.CallOption) (*pbDeck.CreateAnswerResponse, error) {
+	args := m.Called(ctx, in)
+	return args.Get(0).(*pbDeck.CreateAnswerResponse), args.Error(1)
+}
+
+func (m *MockDecksAPIClient) DeleteAnswer(ctx context.Context, in *pbDeck.DeleteAnswerRequest, opts ...grpc.CallOption) (*pbDeck.DeleteAnswerResponse, error) {
+	args := m.Called(ctx, in)
+	return args.Get(0).(*pbDeck.DeleteAnswerResponse), args.Error(1)
+}
+
 func (m *MockDecksAPIClient) DeleteCard(ctx context.Context, in *pbDeck.DeleteCardRequest, opts ...grpc.CallOption) (*pbDeck.DeleteCardResponse, error) {
 	args := m.Called(ctx, in)
 	return args.Get(0).(*pbDeck.DeleteCardResponse), args.Error(1)

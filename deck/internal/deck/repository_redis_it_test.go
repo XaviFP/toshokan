@@ -256,6 +256,71 @@ func TestRedisRepository_DeleteCard_InvalidatesCacheWhenAlreadyDeleted(t *testin
 	mockDB.AssertExpectations(t)
 }
 
+func TestRedisRepository_CreateAnswer_InvalidatesCache(t *testing.T) {
+	h := newRedisTestHarness(t)
+	mockDB := new(RepositoryMock)
+
+	repo := NewRedisRepository(h.redisClient, mockDB)
+
+	ctx := context.Background()
+	deckID := uuid.New()
+	cardID := uuid.New()
+	answer := Answer{Text: "Transpiled", IsCorrect: false}
+	created := Answer{ID: uuid.New(), CardID: cardID, Text: "Transpiled", IsCorrect: false}
+
+	deckJSON, err := json.Marshal(Deck{ID: deckID, Title: "Test Deck"})
+	require.NoError(t, err)
+	key := "cache:deck:" + deckID.String()
+	err = h.redisClient.Do(ctx, radix.FlatCmd(nil, "SETEX", key, 3600, string(deckJSON)))
+	require.NoError(t, err)
+
+	mockDB.On("CreateAnswer", ctx, deckID, cardID, answer).Return(created, nil)
+
+	actual, err := repo.CreateAnswer(ctx, deckID, cardID, answer)
+	require.NoError(t, err)
+
+	assert.Equal(t, created, actual)
+
+	var cached string
+	mb := radix.Maybe{Rcv: &cached}
+	err = h.redisClient.Do(ctx, radix.Cmd(&mb, "GET", key))
+	require.NoError(t, err)
+
+	assert.True(t, mb.Null)
+	mockDB.AssertExpectations(t)
+}
+
+func TestRedisRepository_DeleteAnswer_InvalidatesCacheWhenAlreadyDeleted(t *testing.T) {
+	h := newRedisTestHarness(t)
+	mockDB := new(RepositoryMock)
+
+	repo := NewRedisRepository(h.redisClient, mockDB)
+
+	ctx := context.Background()
+	deckID := uuid.New()
+	cardID := uuid.New()
+	answerID := uuid.New()
+
+	deckJSON, err := json.Marshal(Deck{ID: deckID, Title: "Test Deck"})
+	require.NoError(t, err)
+	key := "cache:deck:" + deckID.String()
+	err = h.redisClient.Do(ctx, radix.FlatCmd(nil, "SETEX", key, 3600, string(deckJSON)))
+	require.NoError(t, err)
+
+	mockDB.On("DeleteAnswer", ctx, deckID, cardID, answerID).Return(ErrAnswerNotFound)
+
+	err = repo.DeleteAnswer(ctx, deckID, cardID, answerID)
+	assert.ErrorIs(t, err, ErrAnswerNotFound)
+
+	var cached string
+	mb := radix.Maybe{Rcv: &cached}
+	err = h.redisClient.Do(ctx, radix.Cmd(&mb, "GET", key))
+	require.NoError(t, err)
+
+	assert.True(t, mb.Null)
+	mockDB.AssertExpectations(t)
+}
+
 func TestRedisRepository_StoreCard_InvalidatesCache(t *testing.T) {
 	h := newRedisTestHarness(t)
 	mockDB := new(RepositoryMock)

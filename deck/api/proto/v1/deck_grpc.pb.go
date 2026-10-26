@@ -30,6 +30,8 @@ const (
 	DecksAPI_UpdateCard_FullMethodName      = "/deck.v1.DecksAPI/UpdateCard"
 	DecksAPI_DeleteCard_FullMethodName      = "/deck.v1.DecksAPI/DeleteCard"
 	DecksAPI_UpdateAnswer_FullMethodName    = "/deck.v1.DecksAPI/UpdateAnswer"
+	DecksAPI_CreateAnswer_FullMethodName    = "/deck.v1.DecksAPI/CreateAnswer"
+	DecksAPI_DeleteAnswer_FullMethodName    = "/deck.v1.DecksAPI/DeleteAnswer"
 )
 
 // DecksAPIClient is the client API for DecksAPI service.
@@ -47,6 +49,8 @@ type DecksAPIClient interface {
 	UpdateCard(ctx context.Context, in *UpdateCardRequest, opts ...grpc.CallOption) (*UpdateCardResponse, error)
 	DeleteCard(ctx context.Context, in *DeleteCardRequest, opts ...grpc.CallOption) (*DeleteCardResponse, error)
 	UpdateAnswer(ctx context.Context, in *UpdateAnswerRequest, opts ...grpc.CallOption) (*UpdateAnswerResponse, error)
+	CreateAnswer(ctx context.Context, in *CreateAnswerRequest, opts ...grpc.CallOption) (*CreateAnswerResponse, error)
+	DeleteAnswer(ctx context.Context, in *DeleteAnswerRequest, opts ...grpc.CallOption) (*DeleteAnswerResponse, error)
 }
 
 type decksAPIClient struct {
@@ -167,6 +171,26 @@ func (c *decksAPIClient) UpdateAnswer(ctx context.Context, in *UpdateAnswerReque
 	return out, nil
 }
 
+func (c *decksAPIClient) CreateAnswer(ctx context.Context, in *CreateAnswerRequest, opts ...grpc.CallOption) (*CreateAnswerResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(CreateAnswerResponse)
+	err := c.cc.Invoke(ctx, DecksAPI_CreateAnswer_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *decksAPIClient) DeleteAnswer(ctx context.Context, in *DeleteAnswerRequest, opts ...grpc.CallOption) (*DeleteAnswerResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(DeleteAnswerResponse)
+	err := c.cc.Invoke(ctx, DecksAPI_DeleteAnswer_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // DecksAPIServer is the server API for DecksAPI service.
 // All implementations should embed UnimplementedDecksAPIServer
 // for forward compatibility.
@@ -182,6 +206,8 @@ type DecksAPIServer interface {
 	UpdateCard(context.Context, *UpdateCardRequest) (*UpdateCardResponse, error)
 	DeleteCard(context.Context, *DeleteCardRequest) (*DeleteCardResponse, error)
 	UpdateAnswer(context.Context, *UpdateAnswerRequest) (*UpdateAnswerResponse, error)
+	CreateAnswer(context.Context, *CreateAnswerRequest) (*CreateAnswerResponse, error)
+	DeleteAnswer(context.Context, *DeleteAnswerRequest) (*DeleteAnswerResponse, error)
 }
 
 // UnimplementedDecksAPIServer should be embedded to have
@@ -223,6 +249,12 @@ func (UnimplementedDecksAPIServer) DeleteCard(context.Context, *DeleteCardReques
 }
 func (UnimplementedDecksAPIServer) UpdateAnswer(context.Context, *UpdateAnswerRequest) (*UpdateAnswerResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method UpdateAnswer not implemented")
+}
+func (UnimplementedDecksAPIServer) CreateAnswer(context.Context, *CreateAnswerRequest) (*CreateAnswerResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method CreateAnswer not implemented")
+}
+func (UnimplementedDecksAPIServer) DeleteAnswer(context.Context, *DeleteAnswerRequest) (*DeleteAnswerResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method DeleteAnswer not implemented")
 }
 func (UnimplementedDecksAPIServer) testEmbeddedByValue() {}
 
@@ -442,6 +474,42 @@ func _DecksAPI_UpdateAnswer_Handler(srv interface{}, ctx context.Context, dec fu
 	return interceptor(ctx, in, info, handler)
 }
 
+func _DecksAPI_CreateAnswer_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(CreateAnswerRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(DecksAPIServer).CreateAnswer(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: DecksAPI_CreateAnswer_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(DecksAPIServer).CreateAnswer(ctx, req.(*CreateAnswerRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _DecksAPI_DeleteAnswer_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(DeleteAnswerRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(DecksAPIServer).DeleteAnswer(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: DecksAPI_DeleteAnswer_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(DecksAPIServer).DeleteAnswer(ctx, req.(*DeleteAnswerRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // DecksAPI_ServiceDesc is the grpc.ServiceDesc for DecksAPI service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -492,6 +560,14 @@ var DecksAPI_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "UpdateAnswer",
 			Handler:    _DecksAPI_UpdateAnswer_Handler,
+		},
+		{
+			MethodName: "CreateAnswer",
+			Handler:    _DecksAPI_CreateAnswer_Handler,
+		},
+		{
+			MethodName: "DeleteAnswer",
+			Handler:    _DecksAPI_DeleteAnswer_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

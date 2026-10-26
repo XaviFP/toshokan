@@ -363,6 +363,103 @@ func UpdateAnswer(ctx *gin.Context, usersClient pbUser.UserAPIClient, decksClien
 	ctx.JSON(http.StatusOK, toAnswerResponse(res.Answer))
 }
 
+func CreateAnswer(ctx *gin.Context, usersClient pbUser.UserAPIClient, decksClient pbDeck.DecksAPIClient) {
+	deckID := ctx.Param("deckId")
+	cardID := ctx.Param("cardId")
+
+	if _, err := uuid.Parse(deckID); err != nil {
+		slog.Error("CreateAnswer: failed to parse deck ID", "error", err, "deckId", deckID, "stack", errors.ErrorStack(err))
+		ctx.JSON(http.StatusBadRequest, gin.H{"error": "invalid deck id format"})
+		return
+	}
+	if _, err := uuid.Parse(cardID); err != nil {
+		slog.Error("CreateAnswer: failed to parse card ID", "error", err, "cardId", cardID, "stack", errors.ErrorStack(err))
+		ctx.JSON(http.StatusBadRequest, gin.H{"error": "invalid card id format"})
+		return
+	}
+
+	var req struct {
+		Text      string `json:"text"`
+		IsCorrect *bool  `json:"is_correct"`
+	}
+
+	if err := ctx.ShouldBindJSON(&req); err != nil {
+		slog.Error("CreateAnswer: failed to bind JSON", "error", err, "deckId", deckID, "cardId", cardID, "stack", errors.ErrorStack(err))
+		ctx.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	if req.IsCorrect == nil {
+		slog.Error("CreateAnswer: missing is_correct", "deckId", deckID, "cardId", cardID)
+		ctx.JSON(http.StatusBadRequest, gin.H{"error": "is_correct is required"})
+		return
+	}
+
+	res, err := decksClient.CreateAnswer(ctx, &pbDeck.CreateAnswerRequest{
+		DeckId:    deckID,
+		CardId:    cardID,
+		Text:      req.Text,
+		IsCorrect: *req.IsCorrect,
+	})
+	if err != nil {
+		switch status.Code(err) {
+		case codes.NotFound:
+			ctx.JSON(http.StatusNotFound, gin.H{"error": "card not found"})
+			return
+		case codes.InvalidArgument:
+			ctx.JSON(http.StatusBadRequest, gin.H{"error": status.Convert(err).Message()})
+			return
+		}
+		slog.Error("CreateAnswer: gRPC call failed", "error", err, "deckId", deckID, "cardId", cardID, "stack", errors.ErrorStack(err))
+		ctx.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	ctx.JSON(http.StatusCreated, toAnswerResponse(res.Answer))
+}
+
+func DeleteAnswer(ctx *gin.Context, usersClient pbUser.UserAPIClient, decksClient pbDeck.DecksAPIClient) {
+	deckID := ctx.Param("deckId")
+	cardID := ctx.Param("cardId")
+	answerID := ctx.Param("answerId")
+
+	if _, err := uuid.Parse(deckID); err != nil {
+		slog.Error("DeleteAnswer: failed to parse deck ID", "error", err, "deckId", deckID, "stack", errors.ErrorStack(err))
+		ctx.JSON(http.StatusBadRequest, gin.H{"error": "invalid deck id format"})
+		return
+	}
+	if _, err := uuid.Parse(cardID); err != nil {
+		slog.Error("DeleteAnswer: failed to parse card ID", "error", err, "cardId", cardID, "stack", errors.ErrorStack(err))
+		ctx.JSON(http.StatusBadRequest, gin.H{"error": "invalid card id format"})
+		return
+	}
+	if _, err := uuid.Parse(answerID); err != nil {
+		slog.Error("DeleteAnswer: failed to parse answer ID", "error", err, "answerId", answerID, "stack", errors.ErrorStack(err))
+		ctx.JSON(http.StatusBadRequest, gin.H{"error": "invalid answer id format"})
+		return
+	}
+
+	if _, err := decksClient.DeleteAnswer(ctx, &pbDeck.DeleteAnswerRequest{
+		DeckId:   deckID,
+		CardId:   cardID,
+		AnswerId: answerID,
+	}); err != nil {
+		switch status.Code(err) {
+		case codes.NotFound:
+			ctx.JSON(http.StatusNotFound, gin.H{"error": "card or answer not found"})
+			return
+		case codes.InvalidArgument:
+			ctx.JSON(http.StatusBadRequest, gin.H{"error": status.Convert(err).Message()})
+			return
+		}
+		slog.Error("DeleteAnswer: gRPC call failed", "error", err, "deckId", deckID, "cardId", cardID, "answerId", answerID, "stack", errors.ErrorStack(err))
+		ctx.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	ctx.Status(http.StatusNoContent)
+}
+
 func RegisterDeckRoutes(r *gin.RouterGroup, usersClient pbUser.UserAPIClient, decksClient pbDeck.DecksAPIClient, adminCfg AdminConfig) {
 	r.POST("/decks", RequireAdmin(adminCfg, adminCfg.CreateDeckAdminOnly), func(ctx *gin.Context) {
 		CreateDeck(ctx, usersClient, decksClient)
@@ -394,6 +491,14 @@ func RegisterDeckRoutes(r *gin.RouterGroup, usersClient pbUser.UserAPIClient, de
 
 	r.PATCH("/decks/:deckId/cards/:cardId/answers/:answerId", RequireAdmin(adminCfg, adminCfg.UpdateAnswerAdminOnly), func(ctx *gin.Context) {
 		UpdateAnswer(ctx, usersClient, decksClient)
+	})
+
+	r.POST("/decks/:deckId/cards/:cardId/answers", RequireAdmin(adminCfg, true), func(ctx *gin.Context) {
+		CreateAnswer(ctx, usersClient, decksClient)
+	})
+
+	r.DELETE("/decks/:deckId/cards/:cardId/answers/:answerId", RequireAdmin(adminCfg, true), func(ctx *gin.Context) {
+		DeleteAnswer(ctx, usersClient, decksClient)
 	})
 }
 

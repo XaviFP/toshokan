@@ -563,6 +563,163 @@ func TestServer_DeleteCard(t *testing.T) {
 	})
 }
 
+func TestServer_CreateAnswer(t *testing.T) {
+	deckID := uuid.MustParse("fb9ffe2c-ad66-4766-9b7b-46fd5d9acd72")
+	cardID := uuid.MustParse("72bdff92-5bc8-4e1d-9217-d0b23e22ff33")
+	answerID := uuid.MustParse("7e6926da-82b2-4ae8-99b4-1b803ebf1877")
+
+	t.Run("success", func(t *testing.T) {
+		repoMock := &deck.RepositoryMock{}
+		srv := &Server{Repository: repoMock}
+		repoMock.On("CreateAnswer", mock.Anything, deckID, cardID, deck.Answer{Text: "Compiled", IsCorrect: true}).
+			Return(deck.Answer{ID: answerID, CardID: cardID, Text: "Compiled", IsCorrect: true}, nil)
+
+		actual, err := srv.CreateAnswer(context.Background(), &pb.CreateAnswerRequest{DeckId: deckID.String(), CardId: cardID.String(), Text: "Compiled", IsCorrect: true})
+
+		require.NoError(t, err)
+
+		expected := &pb.CreateAnswerResponse{Answer: &pb.Answer{Id: answerID.String(), CardId: cardID.String(), Text: "Compiled", IsCorrect: true}}
+		assert.Equal(t, expected, actual)
+	})
+
+	t.Run("failure_empty_text", func(t *testing.T) {
+		repoMock := &deck.RepositoryMock{}
+		srv := &Server{Repository: repoMock}
+
+		actual, err := srv.CreateAnswer(context.Background(), &pb.CreateAnswerRequest{DeckId: deckID.String(), CardId: cardID.String(), Text: ""})
+
+		assert.Equal(t, codes.InvalidArgument, status.Code(err))
+		assert.Nil(t, actual)
+		repoMock.AssertNotCalled(t, "CreateAnswer", mock.Anything, mock.Anything, mock.Anything, mock.Anything)
+	})
+
+	t.Run("failure_invalid_deck_id", func(t *testing.T) {
+		repoMock := &deck.RepositoryMock{}
+		srv := &Server{Repository: repoMock}
+
+		actual, err := srv.CreateAnswer(context.Background(), &pb.CreateAnswerRequest{DeckId: "invalid", CardId: cardID.String(), Text: "Compiled"})
+
+		assert.Error(t, err)
+		assert.Nil(t, actual)
+	})
+
+	t.Run("failure_invalid_card_id", func(t *testing.T) {
+		repoMock := &deck.RepositoryMock{}
+		srv := &Server{Repository: repoMock}
+
+		actual, err := srv.CreateAnswer(context.Background(), &pb.CreateAnswerRequest{DeckId: deckID.String(), CardId: "invalid", Text: "Compiled"})
+
+		assert.Error(t, err)
+		assert.Nil(t, actual)
+	})
+
+	t.Run("failure_card_not_found", func(t *testing.T) {
+		repoMock := &deck.RepositoryMock{}
+		srv := &Server{Repository: repoMock}
+		repoMock.On("CreateAnswer", mock.Anything, deckID, cardID, deck.Answer{Text: "Compiled"}).Return(deck.Answer{}, errors.Trace(deck.ErrCardNotFound))
+
+		actual, err := srv.CreateAnswer(context.Background(), &pb.CreateAnswerRequest{DeckId: deckID.String(), CardId: cardID.String(), Text: "Compiled"})
+
+		assert.Equal(t, codes.NotFound, status.Code(err))
+		assert.Nil(t, actual)
+	})
+
+	t.Run("failure_repository_error", func(t *testing.T) {
+		repoMock := &deck.RepositoryMock{}
+		srv := &Server{Repository: repoMock}
+		repoMock.On("CreateAnswer", mock.Anything, deckID, cardID, deck.Answer{Text: "Compiled"}).Return(deck.Answer{}, assert.AnError)
+
+		actual, err := srv.CreateAnswer(context.Background(), &pb.CreateAnswerRequest{DeckId: deckID.String(), CardId: cardID.String(), Text: "Compiled"})
+
+		assert.ErrorIs(t, err, assert.AnError)
+		assert.Nil(t, actual)
+	})
+}
+
+func TestServer_DeleteAnswer(t *testing.T) {
+	deckID := uuid.MustParse("fb9ffe2c-ad66-4766-9b7b-46fd5d9acd72")
+	cardID := uuid.MustParse("72bdff92-5bc8-4e1d-9217-d0b23e22ff33")
+	answerID := uuid.MustParse("dfcb1c81-f590-486e-9b7e-a44f0c436933")
+
+	t.Run("success", func(t *testing.T) {
+		repoMock := &deck.RepositoryMock{}
+		srv := &Server{Repository: repoMock}
+		repoMock.On("DeleteAnswer", mock.Anything, deckID, cardID, answerID).Return(nil)
+
+		actual, err := srv.DeleteAnswer(context.Background(), &pb.DeleteAnswerRequest{DeckId: deckID.String(), CardId: cardID.String(), AnswerId: answerID.String()})
+
+		require.NoError(t, err)
+		assert.Equal(t, &pb.DeleteAnswerResponse{}, actual)
+		repoMock.AssertExpectations(t)
+	})
+
+	t.Run("failure_invalid_answer_id", func(t *testing.T) {
+		repoMock := &deck.RepositoryMock{}
+		srv := &Server{Repository: repoMock}
+
+		actual, err := srv.DeleteAnswer(context.Background(), &pb.DeleteAnswerRequest{DeckId: deckID.String(), CardId: cardID.String(), AnswerId: "invalid"})
+
+		assert.Error(t, err)
+		assert.Nil(t, actual)
+		repoMock.AssertNotCalled(t, "DeleteAnswer", mock.Anything, mock.Anything, mock.Anything, mock.Anything)
+	})
+
+	t.Run("failure_answer_not_found", func(t *testing.T) {
+		repoMock := &deck.RepositoryMock{}
+		srv := &Server{Repository: repoMock}
+		repoMock.On("DeleteAnswer", mock.Anything, deckID, cardID, answerID).Return(errors.Trace(deck.ErrAnswerNotFound))
+
+		actual, err := srv.DeleteAnswer(context.Background(), &pb.DeleteAnswerRequest{DeckId: deckID.String(), CardId: cardID.String(), AnswerId: answerID.String()})
+
+		assert.Equal(t, codes.NotFound, status.Code(err))
+		assert.Nil(t, actual)
+	})
+
+	t.Run("failure_card_not_found", func(t *testing.T) {
+		repoMock := &deck.RepositoryMock{}
+		srv := &Server{Repository: repoMock}
+		repoMock.On("DeleteAnswer", mock.Anything, deckID, cardID, answerID).Return(errors.Trace(deck.ErrCardNotFound))
+
+		actual, err := srv.DeleteAnswer(context.Background(), &pb.DeleteAnswerRequest{DeckId: deckID.String(), CardId: cardID.String(), AnswerId: answerID.String()})
+
+		assert.Equal(t, codes.NotFound, status.Code(err))
+		assert.Nil(t, actual)
+	})
+
+	t.Run("failure_last_answer", func(t *testing.T) {
+		repoMock := &deck.RepositoryMock{}
+		srv := &Server{Repository: repoMock}
+		repoMock.On("DeleteAnswer", mock.Anything, deckID, cardID, answerID).Return(errors.Trace(deck.ErrLastAnswer))
+
+		actual, err := srv.DeleteAnswer(context.Background(), &pb.DeleteAnswerRequest{DeckId: deckID.String(), CardId: cardID.String(), AnswerId: answerID.String()})
+
+		assert.Equal(t, status.Error(codes.InvalidArgument, deck.ErrLastAnswer.Error()), err)
+		assert.Nil(t, actual)
+	})
+
+	t.Run("failure_only_correct_answer", func(t *testing.T) {
+		repoMock := &deck.RepositoryMock{}
+		srv := &Server{Repository: repoMock}
+		repoMock.On("DeleteAnswer", mock.Anything, deckID, cardID, answerID).Return(errors.Trace(deck.ErrNoCorrectAnswer))
+
+		actual, err := srv.DeleteAnswer(context.Background(), &pb.DeleteAnswerRequest{DeckId: deckID.String(), CardId: cardID.String(), AnswerId: answerID.String()})
+
+		assert.Equal(t, status.Error(codes.InvalidArgument, deck.ErrNoCorrectAnswer.Error()), err)
+		assert.Nil(t, actual)
+	})
+
+	t.Run("failure_repository_error", func(t *testing.T) {
+		repoMock := &deck.RepositoryMock{}
+		srv := &Server{Repository: repoMock}
+		repoMock.On("DeleteAnswer", mock.Anything, deckID, cardID, answerID).Return(assert.AnError)
+
+		actual, err := srv.DeleteAnswer(context.Background(), &pb.DeleteAnswerRequest{DeckId: deckID.String(), CardId: cardID.String(), AnswerId: answerID.String()})
+
+		assert.ErrorIs(t, err, assert.AnError)
+		assert.Nil(t, actual)
+	})
+}
+
 func TestServer_UpdateCard(t *testing.T) {
 	validDeckID := uuid.MustParse("fb9ffe2c-ad66-4766-9b7b-46fd5d9acd72")
 	validCardID := uuid.MustParse("1f30a72f-5d7a-48da-a5c2-42efece6972a")

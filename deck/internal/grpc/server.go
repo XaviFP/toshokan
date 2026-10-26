@@ -406,6 +406,77 @@ func (s *Server) UpdateAnswer(ctx context.Context, req *pb.UpdateAnswerRequest) 
 	}}, nil
 }
 
+func (s *Server) CreateAnswer(ctx context.Context, req *pb.CreateAnswerRequest) (*pb.CreateAnswerResponse, error) {
+	deckID, err := uuid.Parse(req.DeckId)
+	if err != nil {
+		slog.Error("CreateAnswer: failed to parse deck ID", "error", err, "deckId", req.DeckId, "stack", errors.ErrorStack(err))
+		return nil, errors.Trace(err)
+	}
+
+	cardID, err := uuid.Parse(req.CardId)
+	if err != nil {
+		slog.Error("CreateAnswer: failed to parse card ID", "error", err, "cardId", req.CardId, "stack", errors.ErrorStack(err))
+		return nil, errors.Trace(err)
+	}
+
+	if req.Text == "" {
+		slog.Error("CreateAnswer: empty text", "error", deck.ErrNoTextAnswer, "cardId", cardID.String())
+		return nil, status.Error(codes.InvalidArgument, deck.ErrNoTextAnswer.Error())
+	}
+
+	a, err := s.Repository.CreateAnswer(ctx, deckID, cardID, deck.Answer{Text: req.Text, IsCorrect: req.IsCorrect})
+	if err != nil {
+		if errors.Cause(err) == deck.ErrCardNotFound {
+			slog.Error("CreateAnswer: card not found", "error", err, "deckId", deckID.String(), "cardId", cardID.String())
+			return nil, status.Error(codes.NotFound, errors.Trace(err).Error())
+		}
+		slog.Error("CreateAnswer: failed to create answer", "error", err, "deckId", deckID.String(), "cardId", cardID.String(), "stack", errors.ErrorStack(err))
+		return nil, errors.Trace(err)
+	}
+
+	return &pb.CreateAnswerResponse{Answer: &pb.Answer{
+		Id:        a.ID.String(),
+		CardId:    a.CardID.String(),
+		Text:      a.Text,
+		IsCorrect: a.IsCorrect,
+	}}, nil
+}
+
+func (s *Server) DeleteAnswer(ctx context.Context, req *pb.DeleteAnswerRequest) (*pb.DeleteAnswerResponse, error) {
+	deckID, err := uuid.Parse(req.DeckId)
+	if err != nil {
+		slog.Error("DeleteAnswer: failed to parse deck ID", "error", err, "deckId", req.DeckId, "stack", errors.ErrorStack(err))
+		return nil, errors.Trace(err)
+	}
+
+	cardID, err := uuid.Parse(req.CardId)
+	if err != nil {
+		slog.Error("DeleteAnswer: failed to parse card ID", "error", err, "cardId", req.CardId, "stack", errors.ErrorStack(err))
+		return nil, errors.Trace(err)
+	}
+
+	answerID, err := uuid.Parse(req.AnswerId)
+	if err != nil {
+		slog.Error("DeleteAnswer: failed to parse answer ID", "error", err, "answerId", req.AnswerId, "stack", errors.ErrorStack(err))
+		return nil, errors.Trace(err)
+	}
+
+	if err := s.Repository.DeleteAnswer(ctx, deckID, cardID, answerID); err != nil {
+		switch errors.Cause(err) {
+		case deck.ErrCardNotFound, deck.ErrAnswerNotFound:
+			slog.Error("DeleteAnswer: card or answer not found", "error", err, "deckId", deckID.String(), "cardId", cardID.String(), "answerId", answerID.String())
+			return nil, status.Error(codes.NotFound, errors.Trace(err).Error())
+		case deck.ErrLastAnswer, deck.ErrNoCorrectAnswer:
+			slog.Error("DeleteAnswer: card would be left invalid", "error", err, "cardId", cardID.String(), "answerId", answerID.String())
+			return nil, status.Error(codes.InvalidArgument, errors.Cause(err).Error())
+		}
+		slog.Error("DeleteAnswer: failed to delete answer", "error", err, "deckId", deckID.String(), "cardId", cardID.String(), "answerId", answerID.String(), "stack", errors.ErrorStack(err))
+		return nil, errors.Trace(err)
+	}
+
+	return &pb.DeleteAnswerResponse{}, nil
+}
+
 func toGRPCDecks(decks []deck.Deck) []*pb.Deck {
 	var out = make([]*pb.Deck, 0, len(decks))
 
