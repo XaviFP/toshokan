@@ -11,6 +11,7 @@ import (
 	"github.com/juju/errors"
 	"github.com/mediocregopher/radix/v4"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"github.com/XaviFP/toshokan/common/pagination"
 )
@@ -355,6 +356,144 @@ func TestRedisRepository_UpdateLesson(t *testing.T) {
 	assert.True(t, mb.Null, "Cache should be invalidated after update")
 
 	mockDB.AssertExpectations(t)
+}
+
+func TestRedisRepository_DeleteCourse(t *testing.T) {
+	t.Run("success_invalidates_cache", func(t *testing.T) {
+		h := newTestHarness(t)
+		mockDB := new(RepositoryMock)
+
+		repo := NewRedisRepository(h.redisClient, mockDB)
+
+		ctx := context.Background()
+		courseID := uuid.New()
+
+		courseJSON, err := json.Marshal(Course{ID: courseID, Title: "Go Fundamentals"})
+		require.NoError(t, err)
+		key := "course:" + courseID.String()
+		err = h.redisClient.Do(ctx, radix.FlatCmd(nil, "SETEX", key, 3600, string(courseJSON)))
+		require.NoError(t, err)
+
+		lessonID := uuid.New()
+		lessonJSON, err := json.Marshal(Lesson{ID: lessonID, CourseID: courseID, Title: "Introduction"})
+		require.NoError(t, err)
+		lessonKey := "lesson:" + lessonID.String()
+		err = h.redisClient.Do(ctx, radix.FlatCmd(nil, "SETEX", lessonKey, 3600, string(lessonJSON)))
+		require.NoError(t, err)
+
+		mockDB.On("DeleteCourse", ctx, courseID).Return([]uuid.UUID{lessonID}, nil)
+
+		actual, err := repo.DeleteCourse(ctx, courseID)
+		require.NoError(t, err)
+
+		assert.Equal(t, []uuid.UUID{lessonID}, actual)
+
+		var cachedCourse string
+		courseMaybe := radix.Maybe{Rcv: &cachedCourse}
+		err = h.redisClient.Do(ctx, radix.Cmd(&courseMaybe, "GET", key))
+		require.NoError(t, err)
+
+		assert.True(t, courseMaybe.Null)
+
+		var cachedLesson string
+		lessonMaybe := radix.Maybe{Rcv: &cachedLesson}
+		err = h.redisClient.Do(ctx, radix.Cmd(&lessonMaybe, "GET", lessonKey))
+		require.NoError(t, err)
+
+		assert.True(t, lessonMaybe.Null)
+		mockDB.AssertExpectations(t)
+	})
+
+	t.Run("failure_already_deleted_invalidates_cache", func(t *testing.T) {
+		h := newTestHarness(t)
+		mockDB := new(RepositoryMock)
+
+		repo := NewRedisRepository(h.redisClient, mockDB)
+
+		ctx := context.Background()
+		courseID := uuid.New()
+
+		courseJSON, err := json.Marshal(Course{ID: courseID, Title: "Go Fundamentals"})
+		require.NoError(t, err)
+		key := "course:" + courseID.String()
+		err = h.redisClient.Do(ctx, radix.FlatCmd(nil, "SETEX", key, 3600, string(courseJSON)))
+		require.NoError(t, err)
+
+		mockDB.On("DeleteCourse", ctx, courseID).Return([]uuid.UUID(nil), ErrCourseNotFound)
+
+		_, err = repo.DeleteCourse(ctx, courseID)
+		assert.ErrorIs(t, err, ErrCourseNotFound)
+
+		var cached string
+		mb := radix.Maybe{Rcv: &cached}
+		err = h.redisClient.Do(ctx, radix.Cmd(&mb, "GET", key))
+		require.NoError(t, err)
+
+		assert.True(t, mb.Null)
+		mockDB.AssertExpectations(t)
+	})
+}
+
+func TestRedisRepository_DeleteLesson(t *testing.T) {
+	t.Run("success_invalidates_cache", func(t *testing.T) {
+		h := newTestHarness(t)
+		mockDB := new(RepositoryMock)
+
+		repo := NewRedisRepository(h.redisClient, mockDB)
+
+		ctx := context.Background()
+		courseID := uuid.New()
+		lessonID := uuid.New()
+
+		lessonJSON, err := json.Marshal(Lesson{ID: lessonID, CourseID: courseID, Title: "Introduction"})
+		require.NoError(t, err)
+		key := "lesson:" + lessonID.String()
+		err = h.redisClient.Do(ctx, radix.FlatCmd(nil, "SETEX", key, 3600, string(lessonJSON)))
+		require.NoError(t, err)
+
+		mockDB.On("DeleteLesson", ctx, courseID, lessonID).Return(nil)
+
+		err = repo.DeleteLesson(ctx, courseID, lessonID)
+		require.NoError(t, err)
+
+		var cached string
+		mb := radix.Maybe{Rcv: &cached}
+		err = h.redisClient.Do(ctx, radix.Cmd(&mb, "GET", key))
+		require.NoError(t, err)
+
+		assert.True(t, mb.Null)
+		mockDB.AssertExpectations(t)
+	})
+
+	t.Run("failure_already_deleted_invalidates_cache", func(t *testing.T) {
+		h := newTestHarness(t)
+		mockDB := new(RepositoryMock)
+
+		repo := NewRedisRepository(h.redisClient, mockDB)
+
+		ctx := context.Background()
+		courseID := uuid.New()
+		lessonID := uuid.New()
+
+		lessonJSON, err := json.Marshal(Lesson{ID: lessonID, CourseID: courseID, Title: "Introduction"})
+		require.NoError(t, err)
+		key := "lesson:" + lessonID.String()
+		err = h.redisClient.Do(ctx, radix.FlatCmd(nil, "SETEX", key, 3600, string(lessonJSON)))
+		require.NoError(t, err)
+
+		mockDB.On("DeleteLesson", ctx, courseID, lessonID).Return(ErrLessonNotFound)
+
+		err = repo.DeleteLesson(ctx, courseID, lessonID)
+		assert.ErrorIs(t, err, ErrLessonNotFound)
+
+		var cached string
+		mb := radix.Maybe{Rcv: &cached}
+		err = h.redisClient.Do(ctx, radix.Cmd(&mb, "GET", key))
+		require.NoError(t, err)
+
+		assert.True(t, mb.Null)
+		mockDB.AssertExpectations(t)
+	})
 }
 
 func TestRedisRepository_GetUserCourseProgress_CacheHit(t *testing.T) {

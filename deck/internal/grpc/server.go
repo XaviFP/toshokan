@@ -337,6 +337,31 @@ func (s *Server) UpdateCard(ctx context.Context, req *pb.UpdateCardRequest) (*pb
 	return &pb.UpdateCardResponse{Card: toGRPCCard(c)}, nil
 }
 
+func (s *Server) DeleteCard(ctx context.Context, req *pb.DeleteCardRequest) (*pb.DeleteCardResponse, error) {
+	deckID, err := uuid.Parse(req.DeckId)
+	if err != nil {
+		slog.Error("DeleteCard: failed to parse deck ID", "error", err, "deckId", req.DeckId, "stack", errors.ErrorStack(err))
+		return nil, errors.Trace(err)
+	}
+
+	cardID, err := uuid.Parse(req.CardId)
+	if err != nil {
+		slog.Error("DeleteCard: failed to parse card ID", "error", err, "cardId", req.CardId, "stack", errors.ErrorStack(err))
+		return nil, errors.Trace(err)
+	}
+
+	if err := s.Repository.DeleteCard(ctx, deckID, cardID); err != nil {
+		if errors.Cause(err) == deck.ErrCardNotFound {
+			slog.Error("DeleteCard: card not found", "error", err, "deckId", deckID.String(), "cardId", cardID.String())
+			return nil, status.Error(codes.NotFound, errors.Trace(err).Error())
+		}
+		slog.Error("DeleteCard: failed to delete card", "error", err, "deckId", deckID.String(), "cardId", cardID.String(), "stack", errors.ErrorStack(err))
+		return nil, errors.Trace(err)
+	}
+
+	return &pb.DeleteCardResponse{}, nil
+}
+
 func (s *Server) UpdateAnswer(ctx context.Context, req *pb.UpdateAnswerRequest) (*pb.UpdateAnswerResponse, error) {
 	deckID, err := uuid.Parse(req.DeckId)
 	if err != nil {

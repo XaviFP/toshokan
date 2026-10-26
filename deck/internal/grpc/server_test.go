@@ -7,6 +7,7 @@ import (
 	"github.com/stretchr/testify/mock"
 
 	"github.com/google/uuid"
+	"github.com/juju/errors"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/grpc/codes"
@@ -498,6 +499,67 @@ func TestServer_UpdateDeck(t *testing.T) {
 		})
 
 		assert.Error(t, err)
+	})
+}
+
+func TestServer_DeleteCard(t *testing.T) {
+	deckID := uuid.MustParse("fb9ffe2c-ad66-4766-9b7b-46fd5d9acd72")
+	cardID := uuid.MustParse("72bdff92-5bc8-4e1d-9217-d0b23e22ff33")
+
+	t.Run("success", func(t *testing.T) {
+		repoMock := &deck.RepositoryMock{}
+		srv := &Server{Repository: repoMock}
+		repoMock.On("DeleteCard", mock.Anything, deckID, cardID).Return(nil)
+
+		actual, err := srv.DeleteCard(context.Background(), &pb.DeleteCardRequest{DeckId: deckID.String(), CardId: cardID.String()})
+
+		require.NoError(t, err)
+		assert.Equal(t, &pb.DeleteCardResponse{}, actual)
+		repoMock.AssertExpectations(t)
+	})
+
+	t.Run("failure_invalid_deck_id", func(t *testing.T) {
+		repoMock := &deck.RepositoryMock{}
+		srv := &Server{Repository: repoMock}
+
+		actual, err := srv.DeleteCard(context.Background(), &pb.DeleteCardRequest{DeckId: "invalid", CardId: cardID.String()})
+
+		assert.Error(t, err)
+		assert.Nil(t, actual)
+		repoMock.AssertNotCalled(t, "DeleteCard", mock.Anything, mock.Anything, mock.Anything)
+	})
+
+	t.Run("failure_invalid_card_id", func(t *testing.T) {
+		repoMock := &deck.RepositoryMock{}
+		srv := &Server{Repository: repoMock}
+
+		actual, err := srv.DeleteCard(context.Background(), &pb.DeleteCardRequest{DeckId: deckID.String(), CardId: "invalid"})
+
+		assert.Error(t, err)
+		assert.Nil(t, actual)
+		repoMock.AssertNotCalled(t, "DeleteCard", mock.Anything, mock.Anything, mock.Anything)
+	})
+
+	t.Run("failure_not_found", func(t *testing.T) {
+		repoMock := &deck.RepositoryMock{}
+		srv := &Server{Repository: repoMock}
+		repoMock.On("DeleteCard", mock.Anything, deckID, cardID).Return(errors.Trace(deck.ErrCardNotFound))
+
+		actual, err := srv.DeleteCard(context.Background(), &pb.DeleteCardRequest{DeckId: deckID.String(), CardId: cardID.String()})
+
+		assert.Equal(t, codes.NotFound, status.Code(err))
+		assert.Nil(t, actual)
+	})
+
+	t.Run("failure_repository_error", func(t *testing.T) {
+		repoMock := &deck.RepositoryMock{}
+		srv := &Server{Repository: repoMock}
+		repoMock.On("DeleteCard", mock.Anything, deckID, cardID).Return(assert.AnError)
+
+		actual, err := srv.DeleteCard(context.Background(), &pb.DeleteCardRequest{DeckId: deckID.String(), CardId: cardID.String()})
+
+		assert.ErrorIs(t, err, assert.AnError)
+		assert.Nil(t, actual)
 	})
 }
 

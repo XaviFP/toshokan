@@ -492,6 +492,57 @@ func UpdateLesson(ctx *gin.Context, client pb.CourseAPIClient) {
 	ctx.JSON(http.StatusOK, toLessonJSON(res.Lesson))
 }
 
+func DeleteCourse(ctx *gin.Context, client pb.CourseAPIClient) {
+	courseID := ctx.Param("courseId")
+
+	if _, err := uuid.Parse(courseID); err != nil {
+		slog.Error("DeleteCourse: failed to parse course ID", "error", err, "courseId", courseID, "stack", errors.ErrorStack(err))
+		ctx.JSON(http.StatusBadRequest, gin.H{"error": "invalid course id format"})
+		return
+	}
+
+	if _, err := client.DeleteCourse(ctx, &pb.DeleteCourseRequest{CourseId: courseID}); err != nil {
+		if isHandledError(ctx, err) {
+			return
+		}
+		slog.Error("DeleteCourse: gRPC call failed", "error", err, "courseId", courseID, "stack", errors.ErrorStack(err))
+		ctx.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	ctx.Status(http.StatusNoContent)
+}
+
+func DeleteLesson(ctx *gin.Context, client pb.CourseAPIClient) {
+	courseID := ctx.Param("courseId")
+	lessonID := ctx.Param("lessonId")
+
+	if _, err := uuid.Parse(courseID); err != nil {
+		slog.Error("DeleteLesson: failed to parse course ID", "error", err, "courseId", courseID, "stack", errors.ErrorStack(err))
+		ctx.JSON(http.StatusBadRequest, gin.H{"error": "invalid course id format"})
+		return
+	}
+	if _, err := uuid.Parse(lessonID); err != nil {
+		slog.Error("DeleteLesson: failed to parse lesson ID", "error", err, "lessonId", lessonID, "stack", errors.ErrorStack(err))
+		ctx.JSON(http.StatusBadRequest, gin.H{"error": "invalid lesson id format"})
+		return
+	}
+
+	if _, err := client.DeleteLesson(ctx, &pb.DeleteLessonRequest{
+		CourseId: courseID,
+		LessonId: lessonID,
+	}); err != nil {
+		if isHandledError(ctx, err) {
+			return
+		}
+		slog.Error("DeleteLesson: gRPC call failed", "error", err, "courseId", courseID, "lessonId", lessonID, "stack", errors.ErrorStack(err))
+		ctx.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	ctx.Status(http.StatusNoContent)
+}
+
 func SyncState(ctx *gin.Context, client pb.CourseAPIClient) {
 	userID := getUserID(ctx)
 
@@ -761,6 +812,9 @@ func RegisterCoursesRoutes(r *gin.RouterGroup, client pb.CourseAPIClient, userCl
 		course.PATCH("/:courseId", RequireAdmin(adminCfg, adminCfg.UpdateCourseAdminOnly), func(ctx *gin.Context) {
 			UpdateCourse(ctx, client)
 		})
+		course.DELETE("/:courseId", RequireAdmin(adminCfg, true), func(ctx *gin.Context) {
+			DeleteCourse(ctx, client)
+		})
 		course.POST("/:courseId/enroll", RequireAdmin(adminCfg, adminCfg.EnrollAdminOnly), func(ctx *gin.Context) {
 			EnrollCourse(ctx, client)
 		})
@@ -781,6 +835,9 @@ func RegisterCoursesRoutes(r *gin.RouterGroup, client pb.CourseAPIClient, userCl
 		})
 		course.PATCH("/:courseId/lessons/:lessonId", RequireAdmin(adminCfg, adminCfg.UpdateLessonAdminOnly), func(ctx *gin.Context) {
 			UpdateLesson(ctx, client)
+		})
+		course.DELETE("/:courseId/lessons/:lessonId", RequireAdmin(adminCfg, true), func(ctx *gin.Context) {
+			DeleteLesson(ctx, client)
 		})
 		course.POST("/:courseId/lessons/:lessonId/decks/:deckId/answer", func(ctx *gin.Context) {
 			AnswerCards(ctx, client)

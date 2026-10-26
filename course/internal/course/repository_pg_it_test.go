@@ -354,6 +354,130 @@ func TestRepository_GetLesson(t *testing.T) {
 	})
 }
 
+func TestRepository_DeleteCourse(t *testing.T) {
+	courseID := uuid.MustParse("fb9ffe2c-ad66-4766-9b7b-46fd5d9acd72")
+
+	t.Run("success_deletes_course_and_its_lessons", func(t *testing.T) {
+		h := newTestHarness(t)
+		repo := NewPGRepository(slog.Default(), h.db)
+
+		actual, err := repo.DeleteCourse(context.Background(), courseID)
+		require.NoError(t, err)
+
+		expected := []uuid.UUID{
+			uuid.MustParse("334ddbf8-1acc-405b-86d8-49f0d1ca636c"),
+			uuid.MustParse("60766223-ff9f-4871-a497-f765c05a0c5e"),
+			uuid.MustParse("11111111-1111-1111-1111-111111111111"),
+			uuid.MustParse("22222222-2222-2222-2222-222222222222"),
+			uuid.MustParse("33333333-3333-3333-3333-333333333333"),
+		}
+		assert.ElementsMatch(t, expected, actual)
+
+		_, err = repo.GetCourse(context.Background(), courseID)
+		assert.ErrorIs(t, err, ErrCourseNotFound)
+
+		var undeletedLessons int
+		err = h.db.QueryRow(`SELECT COUNT(*) FROM lessons WHERE course_id = $1 AND deleted_at IS NULL`, courseID).Scan(&undeletedLessons)
+		require.NoError(t, err)
+
+		assert.Equal(t, 0, undeletedLessons)
+	})
+
+	t.Run("success_skips_lessons_already_deleted", func(t *testing.T) {
+		h := newTestHarness(t)
+		repo := NewPGRepository(slog.Default(), h.db)
+
+		err := repo.DeleteLesson(context.Background(), courseID, uuid.MustParse("33333333-3333-3333-3333-333333333333"))
+		require.NoError(t, err)
+
+		actual, err := repo.DeleteCourse(context.Background(), courseID)
+		require.NoError(t, err)
+
+		expected := []uuid.UUID{
+			uuid.MustParse("334ddbf8-1acc-405b-86d8-49f0d1ca636c"),
+			uuid.MustParse("60766223-ff9f-4871-a497-f765c05a0c5e"),
+			uuid.MustParse("11111111-1111-1111-1111-111111111111"),
+			uuid.MustParse("22222222-2222-2222-2222-222222222222"),
+		}
+		assert.ElementsMatch(t, expected, actual)
+	})
+
+	t.Run("failure_already_deleted", func(t *testing.T) {
+		h := newTestHarness(t)
+		repo := NewPGRepository(slog.Default(), h.db)
+
+		_, err := repo.DeleteCourse(context.Background(), courseID)
+		require.NoError(t, err)
+
+		actual, err := repo.DeleteCourse(context.Background(), courseID)
+		assert.ErrorIs(t, err, ErrCourseNotFound)
+		assert.Empty(t, actual)
+	})
+
+	t.Run("failure_not_found", func(t *testing.T) {
+		h := newTestHarness(t)
+		repo := NewPGRepository(slog.Default(), h.db)
+
+		actual, err := repo.DeleteCourse(context.Background(), uuid.MustParse("00000000-0000-0000-0000-000000000000"))
+		assert.ErrorIs(t, err, ErrCourseNotFound)
+		assert.Empty(t, actual)
+	})
+}
+
+func TestRepository_DeleteLesson(t *testing.T) {
+	courseID := uuid.MustParse("fb9ffe2c-ad66-4766-9b7b-46fd5d9acd72")
+
+	t.Run("success", func(t *testing.T) {
+		h := newTestHarness(t)
+		repo := NewPGRepository(slog.Default(), h.db)
+
+		lessonID := uuid.MustParse("33333333-3333-3333-3333-333333333333")
+
+		err := repo.DeleteLesson(context.Background(), courseID, lessonID)
+		require.NoError(t, err)
+
+		_, err = repo.GetLesson(context.Background(), lessonID)
+		assert.ErrorIs(t, err, ErrLessonNotFound)
+	})
+
+	t.Run("failure_already_deleted", func(t *testing.T) {
+		h := newTestHarness(t)
+		repo := NewPGRepository(slog.Default(), h.db)
+
+		lessonID := uuid.MustParse("11111111-1111-1111-1111-111111111111")
+		err := repo.DeleteLesson(context.Background(), courseID, lessonID)
+		require.NoError(t, err)
+
+		err = repo.DeleteLesson(context.Background(), courseID, lessonID)
+		assert.ErrorIs(t, err, ErrLessonNotFound)
+	})
+
+	t.Run("failure_not_found", func(t *testing.T) {
+		h := newTestHarness(t)
+		repo := NewPGRepository(slog.Default(), h.db)
+
+		err := repo.DeleteLesson(context.Background(), courseID, uuid.MustParse("00000000-0000-0000-0000-000000000000"))
+		assert.ErrorIs(t, err, ErrLessonNotFound)
+	})
+
+	t.Run("failure_lesson_of_another_course", func(t *testing.T) {
+		h := newTestHarness(t)
+		repo := NewPGRepository(slog.Default(), h.db)
+
+		lessonID := uuid.MustParse("22222222-2222-2222-2222-222222222222")
+		expected, err := repo.GetLesson(context.Background(), lessonID)
+		require.NoError(t, err)
+
+		err = repo.DeleteLesson(context.Background(), uuid.MustParse("1f30a72f-5d7a-48da-a5c2-42efece6972a"), lessonID)
+		assert.ErrorIs(t, err, ErrLessonNotFound)
+
+		actual, err := repo.GetLesson(context.Background(), lessonID)
+		require.NoError(t, err)
+
+		assert.Equal(t, expected, actual)
+	})
+}
+
 func TestRepository_GetCourseDeckIDs(t *testing.T) {
 	h := newTestHarness(t)
 	repo := NewPGRepository(slog.Default(), h.db)

@@ -1013,23 +1013,244 @@ def run_delete_deck_tests(base_url: str, token: str) -> None:
     deck_id = deck["id"]
     log_step(f"  Created test deck: {deck_id}")
 
-    # Test 1: Successfully delete the deck
+    # Test 1: Without the admin header
+    response = requests.delete(
+        f"{base_url}/decks/{deck_id}",
+        headers={"Authorization": f"Bearer {token}"},
+        timeout=TIMEOUT,
+    )
+    log_response("DELETE /decks/{deckId}", response)
+    assert response.status_code == 403, f"Expected 403 without the admin header, got {response.status_code}"
+    log_step("  ✓ Delete without admin header returns 403 - success")
+
+    # Test 2: Successfully delete the deck
     response = delete_deck(base_url, token, deck_id)
-    assert response.status_code == 200, f"Expected 200, got {response.status_code}"
+    assert response.status_code == 204, f"Expected 204, got {response.status_code}"
+    assert response.content == b"", "Delete should answer without a body"
     log_step("  ✓ Delete existing deck - success")
 
-    # Test 2: Verify deck is gone (should 404)
+    # Test 3: Verify deck is gone (should 404)
     get_response = get_deck_response(base_url, token, deck_id)
     assert get_response.status_code == 404, f"Expected 404 for deleted deck, got {get_response.status_code}"
     log_step("  ✓ Get deleted deck returns 404 - success")
 
-    # Test 3: Delete non-existent deck (should 404)
+    # Test 4: Delete non-existent deck (should 404)
     fake_uuid = "00000000-0000-0000-0000-000000000000"
     response = delete_deck(base_url, token, fake_uuid)
     assert response.status_code == 404, f"Expected 404 for non-existent deck, got {response.status_code}"
     log_step("  ✓ Delete non-existent deck returns 404 - success")
 
     log_step("✓ DeleteDeck tests passed")
+
+
+def delete_card(base_url: str, headers: Dict[str, str], deck_id: str, card_id: str) -> requests.Response:
+    response = requests.delete(
+        f"{base_url}/decks/{deck_id}/cards/{card_id}",
+        headers=headers,
+        timeout=TIMEOUT,
+    )
+    log_response("DELETE /decks/{deckId}/cards/{cardId}", response)
+    return response
+
+
+def run_delete_card_tests(base_url: str) -> None:
+    """Test DELETE /decks/{deckId}/cards/{cardId}, and that deleting the only unanswered card completes the lesson."""
+    log_step("")
+    log_step("Testing DeleteCard endpoint...")
+
+    token = create_user(base_url)["token"]
+    deck = create_deck(base_url, token, "deck-card-delete")
+    course = create_course(base_url, token, "card-delete-course", "card-delete-course description")
+    lesson = create_lesson(base_url, token, course["id"], 1, "card-delete-lesson", deck["id"])
+    enroll_course(base_url, token, course["id"])
+
+    answered_cards = deck["cards"][0:3]
+    unanswered_card = deck["cards"][3]
+    answers = [
+        {"card_id": card["id"], "answer_id": next(a for a in card["possible_answers"] if a["is_correct"])["id"]}
+        for card in answered_cards
+    ]
+    response = requests.post(
+        f"{base_url}/courses/{course['id']}/lessons/{lesson['id']}/decks/{deck['id']}/answer",
+        json=answers,
+        headers=auth_headers(token),
+        timeout=TIMEOUT,
+    )
+    log_response("POST /courses/{courseId}/lessons/{lessonId}/decks/{deckId}/answer", response)
+    response.raise_for_status()
+
+    lesson_progress = get_lesson_state(base_url, token, course["id"], lesson["id"])["lesson_state"][lesson["id"]]
+    assert lesson_progress["is_completed"] is False, "Lesson should be incomplete while a card is unanswered"
+    log_step("  ✓ Lesson is incomplete with one card unanswered - success")
+
+    # Test 1: Without the admin header
+    response = delete_card(base_url, {"Authorization": f"Bearer {token}"}, deck["id"], unanswered_card["id"])
+    assert response.status_code == 403, f"Expected 403 without the admin header, got {response.status_code}"
+    log_step("  ✓ Delete without admin header returns 403 - success")
+
+    # Test 2: Delete the unanswered card
+    response = delete_card(base_url, auth_headers(token), deck["id"], unanswered_card["id"])
+    assert response.status_code == 204, f"Expected 204, got {response.status_code}"
+    assert response.content == b"", "Delete should answer without a body"
+    log_step("  ✓ Delete card - success")
+
+    # Test 3: The deck no longer has the card
+    deck_after = get_deck(base_url, token, deck["id"])
+    assert [c["id"] for c in deck_after["cards"]] == [c["id"] for c in answered_cards], "Deck should keep only the answered cards"
+    log_step("  ✓ Deleted card is gone from the deck - success")
+
+    # Test 4: Deleting it again
+    response = delete_card(base_url, auth_headers(token), deck["id"], unanswered_card["id"])
+    assert response.status_code == 404, f"Expected 404 for a deleted card, got {response.status_code}"
+    log_step("  ✓ Delete deleted card returns 404 - success")
+
+    # Test 5: A card through another deck
+    response = delete_card(base_url, auth_headers(token), "00000000-0000-0000-0000-000000000000", answered_cards[0]["id"])
+    assert response.status_code == 404, f"Expected 404 for a card through another deck, got {response.status_code}"
+    log_step("  ✓ Delete card through another deck returns 404 - success")
+
+    # Test 6: The learner's lesson is now complete
+    sync_state(base_url, token, course["id"])
+    lesson_progress = get_lesson_state(base_url, token, course["id"], lesson["id"])["lesson_state"][lesson["id"]]
+    assert lesson_progress["is_completed"] is True, "Lesson should be completed once its only unanswered card is deleted"
+    deck_progress = lesson_progress["decks"][deck["id"]]
+    assert deck_progress["is_completed"] is True, "Deck should be completed once its only unanswered card is deleted"
+    assert unanswered_card["id"] not in deck_progress["cards"], "Deleted card should be gone from the learner's progress"
+    log_step("  ✓ Lesson completes after deleting its only unanswered card - success")
+
+    log_step("✓ DeleteCard tests passed")
+
+
+def delete_course(base_url: str, headers: Dict[str, str], course_id: str) -> requests.Response:
+    response = requests.delete(
+        f"{base_url}/courses/{course_id}",
+        headers=headers,
+        timeout=TIMEOUT,
+    )
+    log_response("DELETE /courses/{courseId}", response)
+    return response
+
+
+def run_delete_course_tests(base_url: str) -> None:
+    """Test DELETE /courses/{courseId}, and what an enrolled learner sees afterwards."""
+    log_step("")
+    log_step("Testing DeleteCourse endpoint...")
+
+    token = create_user(base_url)["token"]
+    deck = create_deck(base_url, token, "deck-course-delete")
+    course = create_course(base_url, token, "course-delete-course", "course-delete-course description")
+    lesson = create_lesson(base_url, token, course["id"], 1, "course-delete-lesson", deck["id"])
+    enroll_course(base_url, token, course["id"])
+    answer_deck(base_url, token, course["id"], lesson["id"], deck)
+
+    # Test 1: Without the admin header
+    response = delete_course(base_url, {"Authorization": f"Bearer {token}"}, course["id"])
+    assert response.status_code == 403, f"Expected 403 without the admin header, got {response.status_code}"
+    log_step("  ✓ Delete without admin header returns 403 - success")
+
+    # Test 2: Delete the course
+    response = delete_course(base_url, auth_headers(token), course["id"])
+    assert response.status_code == 204, f"Expected 204, got {response.status_code}"
+    assert response.content == b"", "Delete should answer without a body"
+    log_step("  ✓ Delete course - success")
+
+    # Test 3: Deleting it again
+    response = delete_course(base_url, auth_headers(token), course["id"])
+    assert response.status_code == 404, f"Expected 404 for a deleted course, got {response.status_code}"
+    log_step("  ✓ Delete deleted course returns 404 - success")
+
+    # Test 4: The course is gone from the learner's enrolled courses
+    enrolled = list_enrolled_courses(base_url, token, limit=100)
+    assert course["id"] not in [e["node"]["id"] for e in enrolled["edges"]], "Deleted course should be gone from enrolled courses"
+    log_step("  ✓ Deleted course is gone from enrolled courses - success")
+
+    # Test 5: The course, its lessons list and its lesson answer 404
+    response = requests.get(f"{base_url}/courses/{course['id']}", headers=auth_headers(token), timeout=TIMEOUT)
+    log_response("GET /courses/{courseId}", response)
+    assert response.status_code == 404, f"Expected 404 for a deleted course, got {response.status_code}"
+    response = requests.get(f"{base_url}/courses/{course['id']}/lessons", headers=auth_headers(token), timeout=TIMEOUT)
+    log_response("GET /courses/{courseId}/lessons", response)
+    assert response.status_code == 404, f"Expected 404 for a deleted course's lessons, got {response.status_code}"
+    response = get_lesson_response(base_url, token, course["id"], lesson["id"])
+    assert response.status_code == 404, f"Expected 404 for a deleted course's lesson, got {response.status_code}"
+    log_step("  ✓ Deleted course, its lessons and its lesson return 404 - success")
+
+    # Test 6: Adding a lesson to the deleted course answers 404
+    response = requests.post(
+        f"{base_url}/courses/{course['id']}/lessons",
+        json={"order": 2, "title": "late-lesson", "description": "desc late-lesson", "body": f"Late lesson ![deck]({deck['id']})"},
+        headers=auth_headers(token),
+        timeout=TIMEOUT,
+    )
+    log_response("POST /courses/{courseId}/lessons", response)
+    assert response.status_code == 404, f"Expected 404 for a lesson in a deleted course, got {response.status_code}"
+    log_step("  ✓ Adding a lesson to a deleted course returns 404 - success")
+
+    # Test 7: Review scoped to the deleted course answers 404
+    response = get_review_response(base_url, token, {"course_id": course["id"]})
+    assert response.status_code == 404, f"Expected 404 for review of a deleted course, got {response.status_code}"
+    log_step("  ✓ Review of a deleted course returns 404 - success")
+
+    log_step("✓ DeleteCourse tests passed")
+
+
+def delete_lesson(base_url: str, headers: Dict[str, str], course_id: str, lesson_id: str) -> requests.Response:
+    response = requests.delete(
+        f"{base_url}/courses/{course_id}/lessons/{lesson_id}",
+        headers=headers,
+        timeout=TIMEOUT,
+    )
+    log_response("DELETE /courses/{courseId}/lessons/{lessonId}", response)
+    return response
+
+
+def run_delete_lesson_tests(base_url: str) -> None:
+    """Test DELETE /courses/{courseId}/lessons/{lessonId}, and the learner's lessons afterwards."""
+    log_step("")
+    log_step("Testing DeleteLesson endpoint...")
+
+    token = create_user(base_url)["token"]
+    deck = create_deck(base_url, token, "deck-lesson-delete")
+    course = create_course(base_url, token, "lesson-delete-course", "lesson-delete-course description")
+    other_course = create_course(base_url, token, "lesson-delete-other-course", "lesson-delete-other-course description")
+    first_lesson = create_lesson(base_url, token, course["id"], 1, "lesson-delete-first", deck["id"])
+    second_lesson = create_lesson(base_url, token, course["id"], 2, "lesson-delete-second", deck["id"])
+    enroll_course(base_url, token, course["id"])
+
+    # Test 1: Without the admin header
+    response = delete_lesson(base_url, {"Authorization": f"Bearer {token}"}, course["id"], first_lesson["id"])
+    assert response.status_code == 403, f"Expected 403 without the admin header, got {response.status_code}"
+    log_step("  ✓ Delete without admin header returns 403 - success")
+
+    # Test 2: Through another course
+    response = delete_lesson(base_url, auth_headers(token), other_course["id"], first_lesson["id"])
+    assert response.status_code == 404, f"Expected 404 for a lesson through another course, got {response.status_code}"
+    log_step("  ✓ Delete lesson through another course returns 404 - success")
+
+    # Test 3: Delete the first lesson
+    response = delete_lesson(base_url, auth_headers(token), course["id"], first_lesson["id"])
+    assert response.status_code == 204, f"Expected 204, got {response.status_code}"
+    assert response.content == b"", "Delete should answer without a body"
+    log_step("  ✓ Delete lesson - success")
+
+    # Test 4: The lesson is gone
+    response = get_lesson_response(base_url, token, course["id"], first_lesson["id"])
+    assert response.status_code == 404, f"Expected 404 for a deleted lesson, got {response.status_code}"
+    log_step("  ✓ Get deleted lesson returns 404 - success")
+
+    # Test 5: Deleting it again
+    response = delete_lesson(base_url, auth_headers(token), course["id"], first_lesson["id"])
+    assert response.status_code == 404, f"Expected 404 for a deleted lesson, got {response.status_code}"
+    log_step("  ✓ Delete deleted lesson returns 404 - success")
+
+    # Test 6: The learner's lessons hold only the second lesson, now current
+    sync_state(base_url, token, course["id"])
+    page = list_lessons(base_url, token, course["id"], limit=20)
+    actual = [(e["node"]["id"], e["node"]["is_current"]) for e in page["edges"]]
+    assert actual == [(second_lesson["id"], True)], f"Expected only the second lesson, current, got {actual}"
+    log_step("  ✓ Learner's lessons drop the deleted lesson - success")
+
+    log_step("✓ DeleteLesson tests passed")
 
 
 def get_review_response(base_url: str, token: str, params: Dict[str, Any]) -> requests.Response:
@@ -2071,6 +2292,12 @@ def test_basic_flow():
 
     # Test delete deck endpoint (creates its own deck)
     run_delete_deck_tests(base_url, token)
+
+    run_delete_card_tests(base_url)
+
+    run_delete_lesson_tests(base_url)
+
+    run_delete_course_tests(base_url)
 
     run_create_card_tests(base_url, token)
 

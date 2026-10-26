@@ -135,6 +135,22 @@ func (m *mockCourseAPIClient) UpdateLesson(ctx context.Context, req *pb.UpdateLe
 	return args.Get(0).(*pb.UpdateLessonResponse), args.Error(1)
 }
 
+func (m *mockCourseAPIClient) DeleteCourse(ctx context.Context, req *pb.DeleteCourseRequest, opts ...grpc.CallOption) (*pb.DeleteCourseResponse, error) {
+	args := m.Called(ctx, req)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*pb.DeleteCourseResponse), args.Error(1)
+}
+
+func (m *mockCourseAPIClient) DeleteLesson(ctx context.Context, req *pb.DeleteLessonRequest, opts ...grpc.CallOption) (*pb.DeleteLessonResponse, error) {
+	args := m.Called(ctx, req)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*pb.DeleteLessonResponse), args.Error(1)
+}
+
 func (m *mockCourseAPIClient) SyncState(ctx context.Context, req *pb.SyncStateRequest, opts ...grpc.CallOption) (*pb.SyncStateResponse, error) {
 	args := m.Called(ctx, req)
 	if args.Get(0) == nil {
@@ -1173,6 +1189,219 @@ func TestGetLessons(t *testing.T) {
 		router.ServeHTTP(w, req)
 
 		assert.Equal(t, http.StatusNotFound, w.Code)
+	})
+}
+
+func TestDeleteCourse(t *testing.T) {
+	adminCfg := AdminConfig{
+		HeaderName:   "X-Admin-Token",
+		HeaderSecret: "secret123",
+	}
+
+	t.Run("success", func(t *testing.T) {
+		client := &mockCourseAPIClient{}
+		userClient := &mockUserAPIClient{}
+
+		client.On("DeleteCourse", mock.Anything, &pb.DeleteCourseRequest{CourseId: "fb9ffe2c-ad66-4766-9b7b-46fd5d9acd72"}).Return(&pb.DeleteCourseResponse{}, nil)
+
+		router := gin.New()
+		RegisterCoursesRoutes(router.Group("/"), client, userClient, adminCfg)
+
+		req := httptest.NewRequest(http.MethodDelete, "/courses/fb9ffe2c-ad66-4766-9b7b-46fd5d9acd72", nil)
+		req.Header.Set("X-Admin-Token", "secret123")
+		w := httptest.NewRecorder()
+		router.ServeHTTP(w, req)
+
+		assert.Equal(t, http.StatusNoContent, w.Code)
+		assert.Empty(t, w.Body.String())
+		client.AssertExpectations(t)
+	})
+
+	t.Run("failure_missing_admin_header", func(t *testing.T) {
+		client := &mockCourseAPIClient{}
+		userClient := &mockUserAPIClient{}
+
+		router := gin.New()
+		RegisterCoursesRoutes(router.Group("/"), client, userClient, adminCfg)
+
+		req := httptest.NewRequest(http.MethodDelete, "/courses/fb9ffe2c-ad66-4766-9b7b-46fd5d9acd72", nil)
+		w := httptest.NewRecorder()
+		router.ServeHTTP(w, req)
+
+		assert.Equal(t, http.StatusForbidden, w.Code)
+		client.AssertNotCalled(t, "DeleteCourse", mock.Anything, mock.Anything)
+	})
+
+	t.Run("failure_invalid_course_id", func(t *testing.T) {
+		client := &mockCourseAPIClient{}
+		userClient := &mockUserAPIClient{}
+
+		router := gin.New()
+		RegisterCoursesRoutes(router.Group("/"), client, userClient, adminCfg)
+
+		req := httptest.NewRequest(http.MethodDelete, "/courses/not-a-uuid", nil)
+		req.Header.Set("X-Admin-Token", "secret123")
+		w := httptest.NewRecorder()
+		router.ServeHTTP(w, req)
+
+		assert.Equal(t, http.StatusBadRequest, w.Code)
+		client.AssertNotCalled(t, "DeleteCourse", mock.Anything, mock.Anything)
+	})
+
+	t.Run("failure_course_not_found", func(t *testing.T) {
+		client := &mockCourseAPIClient{}
+		userClient := &mockUserAPIClient{}
+
+		client.On("DeleteCourse", mock.Anything, mock.Anything).
+			Return(nil, status.Error(codes.NotFound, "courses: course not found"))
+
+		router := gin.New()
+		RegisterCoursesRoutes(router.Group("/"), client, userClient, adminCfg)
+
+		req := httptest.NewRequest(http.MethodDelete, "/courses/00000000-0000-0000-0000-000000000000", nil)
+		req.Header.Set("X-Admin-Token", "secret123")
+		w := httptest.NewRecorder()
+		router.ServeHTTP(w, req)
+
+		assert.Equal(t, http.StatusNotFound, w.Code)
+		assert.Contains(t, w.Body.String(), "course not found")
+		client.AssertExpectations(t)
+	})
+
+	t.Run("failure_grpc_error", func(t *testing.T) {
+		client := &mockCourseAPIClient{}
+		userClient := &mockUserAPIClient{}
+
+		client.On("DeleteCourse", mock.Anything, mock.Anything).
+			Return(nil, status.Error(codes.Internal, "database unavailable"))
+
+		router := gin.New()
+		RegisterCoursesRoutes(router.Group("/"), client, userClient, adminCfg)
+
+		req := httptest.NewRequest(http.MethodDelete, "/courses/fb9ffe2c-ad66-4766-9b7b-46fd5d9acd72", nil)
+		req.Header.Set("X-Admin-Token", "secret123")
+		w := httptest.NewRecorder()
+		router.ServeHTTP(w, req)
+
+		assert.Equal(t, http.StatusInternalServerError, w.Code)
+		assert.Contains(t, w.Body.String(), "database unavailable")
+		client.AssertExpectations(t)
+	})
+}
+
+func TestDeleteLesson(t *testing.T) {
+	adminCfg := AdminConfig{
+		HeaderName:   "X-Admin-Token",
+		HeaderSecret: "secret123",
+	}
+
+	t.Run("success", func(t *testing.T) {
+		client := &mockCourseAPIClient{}
+		userClient := &mockUserAPIClient{}
+
+		client.On("DeleteLesson", mock.Anything, &pb.DeleteLessonRequest{
+			CourseId: "fb9ffe2c-ad66-4766-9b7b-46fd5d9acd72",
+			LessonId: "334ddbf8-1acc-405b-86d8-49f0d1ca636c",
+		}).Return(&pb.DeleteLessonResponse{}, nil)
+
+		router := gin.New()
+		RegisterCoursesRoutes(router.Group("/"), client, userClient, adminCfg)
+
+		req := httptest.NewRequest(http.MethodDelete, "/courses/fb9ffe2c-ad66-4766-9b7b-46fd5d9acd72/lessons/334ddbf8-1acc-405b-86d8-49f0d1ca636c", nil)
+		req.Header.Set("X-Admin-Token", "secret123")
+		w := httptest.NewRecorder()
+		router.ServeHTTP(w, req)
+
+		assert.Equal(t, http.StatusNoContent, w.Code)
+		assert.Empty(t, w.Body.String())
+		client.AssertExpectations(t)
+	})
+
+	t.Run("failure_missing_admin_header", func(t *testing.T) {
+		client := &mockCourseAPIClient{}
+		userClient := &mockUserAPIClient{}
+
+		router := gin.New()
+		RegisterCoursesRoutes(router.Group("/"), client, userClient, adminCfg)
+
+		req := httptest.NewRequest(http.MethodDelete, "/courses/fb9ffe2c-ad66-4766-9b7b-46fd5d9acd72/lessons/334ddbf8-1acc-405b-86d8-49f0d1ca636c", nil)
+		w := httptest.NewRecorder()
+		router.ServeHTTP(w, req)
+
+		assert.Equal(t, http.StatusForbidden, w.Code)
+		client.AssertNotCalled(t, "DeleteLesson", mock.Anything, mock.Anything)
+	})
+
+	t.Run("failure_invalid_course_id", func(t *testing.T) {
+		client := &mockCourseAPIClient{}
+		userClient := &mockUserAPIClient{}
+
+		router := gin.New()
+		RegisterCoursesRoutes(router.Group("/"), client, userClient, adminCfg)
+
+		req := httptest.NewRequest(http.MethodDelete, "/courses/not-a-uuid/lessons/334ddbf8-1acc-405b-86d8-49f0d1ca636c", nil)
+		req.Header.Set("X-Admin-Token", "secret123")
+		w := httptest.NewRecorder()
+		router.ServeHTTP(w, req)
+
+		assert.Equal(t, http.StatusBadRequest, w.Code)
+		client.AssertNotCalled(t, "DeleteLesson", mock.Anything, mock.Anything)
+	})
+
+	t.Run("failure_invalid_lesson_id", func(t *testing.T) {
+		client := &mockCourseAPIClient{}
+		userClient := &mockUserAPIClient{}
+
+		router := gin.New()
+		RegisterCoursesRoutes(router.Group("/"), client, userClient, adminCfg)
+
+		req := httptest.NewRequest(http.MethodDelete, "/courses/fb9ffe2c-ad66-4766-9b7b-46fd5d9acd72/lessons/not-a-uuid", nil)
+		req.Header.Set("X-Admin-Token", "secret123")
+		w := httptest.NewRecorder()
+		router.ServeHTTP(w, req)
+
+		assert.Equal(t, http.StatusBadRequest, w.Code)
+		client.AssertNotCalled(t, "DeleteLesson", mock.Anything, mock.Anything)
+	})
+
+	t.Run("failure_lesson_not_found", func(t *testing.T) {
+		client := &mockCourseAPIClient{}
+		userClient := &mockUserAPIClient{}
+
+		client.On("DeleteLesson", mock.Anything, mock.Anything).
+			Return(nil, status.Error(codes.NotFound, "courses: lesson not found"))
+
+		router := gin.New()
+		RegisterCoursesRoutes(router.Group("/"), client, userClient, adminCfg)
+
+		req := httptest.NewRequest(http.MethodDelete, "/courses/fb9ffe2c-ad66-4766-9b7b-46fd5d9acd72/lessons/00000000-0000-0000-0000-000000000000", nil)
+		req.Header.Set("X-Admin-Token", "secret123")
+		w := httptest.NewRecorder()
+		router.ServeHTTP(w, req)
+
+		assert.Equal(t, http.StatusNotFound, w.Code)
+		assert.Contains(t, w.Body.String(), "lesson not found")
+		client.AssertExpectations(t)
+	})
+
+	t.Run("failure_grpc_error", func(t *testing.T) {
+		client := &mockCourseAPIClient{}
+		userClient := &mockUserAPIClient{}
+
+		client.On("DeleteLesson", mock.Anything, mock.Anything).
+			Return(nil, status.Error(codes.Internal, "database unavailable"))
+
+		router := gin.New()
+		RegisterCoursesRoutes(router.Group("/"), client, userClient, adminCfg)
+
+		req := httptest.NewRequest(http.MethodDelete, "/courses/fb9ffe2c-ad66-4766-9b7b-46fd5d9acd72/lessons/334ddbf8-1acc-405b-86d8-49f0d1ca636c", nil)
+		req.Header.Set("X-Admin-Token", "secret123")
+		w := httptest.NewRecorder()
+		router.ServeHTTP(w, req)
+
+		assert.Equal(t, http.StatusInternalServerError, w.Code)
+		assert.Contains(t, w.Body.String(), "database unavailable")
+		client.AssertExpectations(t)
 	})
 }
 

@@ -26,6 +26,8 @@ type Repository interface {
 	GetCourse(ctx context.Context, id uuid.UUID) (Course, error)
 	StoreCourse(ctx context.Context, course Course) error
 	UpdateCourse(ctx context.Context, id uuid.UUID, updates CourseUpdates) (Course, error)
+	// DeleteCourse deletes a course and its lessons, and returns the IDs of the lessons it deleted
+	DeleteCourse(ctx context.Context, id uuid.UUID) ([]uuid.UUID, error)
 	GetEnrolledCourses(ctx context.Context, userID uuid.UUID, p pagination.Pagination) (CoursesWithProgressConnection, error)
 
 	// Lessons
@@ -37,6 +39,7 @@ type Repository interface {
 	GetLessonsByCourseID(ctx context.Context, courseID uuid.UUID, p pagination.Pagination, bodyless bool) (LessonsConnection, error)
 	StoreLesson(ctx context.Context, lesson Lesson) error
 	UpdateLesson(ctx context.Context, id uuid.UUID, updates LessonUpdates) (Lesson, error)
+	DeleteLesson(ctx context.Context, courseID, lessonID uuid.UUID) error
 
 	// Deck IDs
 	GetCourseDeckIDs(ctx context.Context, courseID uuid.UUID) ([]uuid.UUID, error)
@@ -185,6 +188,24 @@ func (r *redisRepository) UpdateCourse(ctx context.Context, id uuid.UUID, update
 	return course, nil
 }
 
+func (r *redisRepository) DeleteCourse(ctx context.Context, id uuid.UUID) ([]uuid.UUID, error) {
+	lessonIDs, err := r.db.DeleteCourse(ctx, id)
+
+	// Clear the course key even when the course was already deleted, so a retry fixes a failed clear.
+	// A retry can't do the same for lessons: it gets no lesson IDs back, so a lesson key that failed to clear waits for its TTL.
+	if cacheErr := r.cache.Delete(ctx, r.courseKey(id)); cacheErr != nil {
+		slog.Warn("cache delete failed for course", "courseID", id, "error", cacheErr)
+	}
+
+	for _, lessonID := range lessonIDs {
+		if cacheErr := r.cache.Delete(ctx, r.lessonKey(lessonID)); cacheErr != nil {
+			slog.Warn("cache delete failed for lesson", "lessonID", lessonID, "error", cacheErr)
+		}
+	}
+
+	return lessonIDs, errors.Trace(err)
+}
+
 // GetLesson retrieves a lesson, checking cache first
 func (r *redisRepository) GetLesson(ctx context.Context, id uuid.UUID) (Lesson, error) {
 	key := r.lessonKey(id)
@@ -266,6 +287,17 @@ func (r *redisRepository) UpdateLesson(ctx context.Context, id uuid.UUID, update
 	}
 
 	return lesson, nil
+}
+
+func (r *redisRepository) DeleteLesson(ctx context.Context, courseID, lessonID uuid.UUID) error {
+	err := r.db.DeleteLesson(ctx, courseID, lessonID)
+
+	// Invalidate even when the lesson was already deleted, so a retry after a failed invalidation clears the stale lesson.
+	if cacheErr := r.cache.Delete(ctx, r.lessonKey(lessonID)); cacheErr != nil {
+		slog.Warn("cache delete failed for lesson", "lessonID", lessonID, "error", cacheErr)
+	}
+
+	return errors.Trace(err)
 }
 
 // GetUserCourseProgress retrieves user progress, checking cache first
@@ -399,6 +431,67 @@ func (r *pgRepository) StoreCourse(ctx context.Context, course Course) error {
 	)
 
 	return errors.Trace(err)
+}
+
+// DeleteCourse soft-deletes a course and its lessons in one transaction
+func (r *pgRepository) DeleteCourse(ctx context.Context, id uuid.UUID) ([]uuid.UUID, error) {
+	tx, err := r.db.BeginTx(ctx, nil)
+	if err != nil {
+		return nil, errors.Trace(err)
+	}
+	defer func() {
+		if err != nil {
+			if errTx := tx.Rollback(); errTx != nil {
+				r.logger.Error("rolling back transaction", "error", errTx, "course_id", id, "source_error", err)
+			}
+		}
+	}()
+
+	result, err := tx.ExecContext(ctx,
+		`UPDATE courses SET deleted_at = NOW() WHERE id = $1 AND deleted_at IS NULL`,
+		id,
+	)
+	if err != nil {
+		return nil, errors.Trace(err)
+	}
+
+	rowsAffected, err := result.RowsAffected()
+	if err != nil {
+		return nil, errors.Trace(err)
+	}
+
+	if rowsAffected == 0 {
+		err = ErrCourseNotFound
+		return nil, errors.Trace(err)
+	}
+
+	rows, err := tx.QueryContext(ctx,
+		`UPDATE lessons SET deleted_at = NOW() WHERE course_id = $1 AND deleted_at IS NULL RETURNING id`,
+		id,
+	)
+	if err != nil {
+		return nil, errors.Trace(err)
+	}
+	defer rows.Close()
+
+	lessonIDs := []uuid.UUID{}
+	for rows.Next() {
+		var lessonID uuid.UUID
+		if err = rows.Scan(&lessonID); err != nil {
+			return nil, errors.Trace(err)
+		}
+		lessonIDs = append(lessonIDs, lessonID)
+	}
+	if err = rows.Err(); err != nil {
+		return nil, errors.Trace(err)
+	}
+	rows.Close()
+
+	if err = tx.Commit(); err != nil {
+		return nil, errors.Trace(err)
+	}
+
+	return lessonIDs, nil
 }
 
 // UpdateCourse updates a course with the provided fields
@@ -703,6 +796,28 @@ func (r *pgRepository) StoreLesson(ctx context.Context, lesson Lesson) error {
 
 	if err := syncLessonDecksTx(ctx, tx, lesson); err != nil {
 		return errors.Trace(err)
+	}
+
+	return nil
+}
+
+// DeleteLesson soft-deletes a lesson of a course
+func (r *pgRepository) DeleteLesson(ctx context.Context, courseID, lessonID uuid.UUID) error {
+	result, err := r.db.ExecContext(ctx,
+		`UPDATE lessons SET deleted_at = NOW() WHERE id = $1 AND course_id = $2 AND deleted_at IS NULL`,
+		lessonID, courseID,
+	)
+	if err != nil {
+		return errors.Trace(err)
+	}
+
+	rowsAffected, err := result.RowsAffected()
+	if err != nil {
+		return errors.Trace(err)
+	}
+
+	if rowsAffected == 0 {
+		return errors.Trace(ErrLessonNotFound)
 	}
 
 	return nil
