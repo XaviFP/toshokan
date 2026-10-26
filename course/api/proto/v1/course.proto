@@ -28,6 +28,7 @@ service CourseAPI {
   rpc GetUserState (GetUserStateRequest) returns (GetUserStateResponse) {}
   rpc SetUserState (SetUserStateRequest) returns (SetUserStateResponse) {}
   rpc GetAllCourses (GetAllCoursesRequest) returns (GetAllCoursesResponse) {}
+  rpc AdminGetLessons (AdminGetLessonsRequest) returns (AdminGetLessonsResponse) {}
 }
 
 message Course {
@@ -81,6 +82,16 @@ message LessonWithProgress {
   Lesson lesson = 1;
   bool is_completed = 2;
   bool is_current = 3;
+}
+
+message LessonsConnection {
+  message Edge {
+    Lesson node = 1;
+    string cursor = 2;
+  }
+
+  repeated Edge edges = 1;
+  PageInfo page_info = 2;
 }
 
 message LessonsWithProgressConnection {
@@ -388,4 +399,14 @@ message GetAllCoursesRequest {
 message GetAllCoursesResponse {
   CoursesConnection courses = 1;
   int32 total_count = 2;
+}
+
+message AdminGetLessonsRequest {
+  string course_id = 1;
+  Pagination pagination = 2;
+}
+
+// Lessons come with their body and without any user's progress.
+message AdminGetLessonsResponse {
+  LessonsConnection lessons = 1;
 }

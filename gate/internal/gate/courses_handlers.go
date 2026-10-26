@@ -708,6 +708,44 @@ func GetAllCourses(ctx *gin.Context, client pb.CourseAPIClient) {
 	})
 }
 
+// AdminGetLessons retrieves a course's lessons with their bodies, without any user's progress
+func AdminGetLessons(ctx *gin.Context, client pb.CourseAPIClient) {
+	courseID := ctx.Param("courseId")
+
+	if _, err := uuid.Parse(courseID); err != nil {
+		slog.Error("AdminGetLessons: failed to parse course ID", "error", err, "courseId", courseID, "stack", errors.ErrorStack(err))
+		ctx.JSON(http.StatusBadRequest, gin.H{"error": "invalid course id format"})
+		return
+	}
+
+	pagination, err := parsePagination(ctx)
+	if err != nil {
+		slog.Error("AdminGetLessons: failed to parse pagination", "error", err, "courseId", courseID, "stack", errors.ErrorStack(err))
+		ctx.JSON(http.StatusBadRequest, gin.H{"error": "invalid pagination parameters"})
+		return
+	}
+
+	req := &pb.AdminGetLessonsRequest{
+		CourseId:   courseID,
+		Pagination: pagination,
+	}
+
+	res, err := client.AdminGetLessons(ctx, req)
+	if err != nil {
+		if isHandledError(ctx, err) {
+			return
+		}
+		slog.Error("AdminGetLessons: gRPC call failed", "error", err, "courseId", courseID, "stack", errors.ErrorStack(err))
+		ctx.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	ctx.JSON(http.StatusOK, gin.H{
+		"edges":     convertLessonEdges(res.Lessons.Edges),
+		"page_info": toPageInfoJSON(res.Lessons.PageInfo),
+	})
+}
+
 func RegisterCoursesRoutes(r *gin.RouterGroup, client pb.CourseAPIClient, userClient userPb.UserAPIClient, adminCfg AdminConfig) {
 	course := r.Group("/courses")
 	{
@@ -758,6 +796,9 @@ func RegisterCoursesRoutes(r *gin.RouterGroup, client pb.CourseAPIClient, userCl
 		admin.GET("/courses", RequireAdmin(adminCfg, true), func(ctx *gin.Context) {
 			GetAllCourses(ctx, client)
 		})
+		admin.GET("/courses/:courseId/lessons", RequireAdmin(adminCfg, true), func(ctx *gin.Context) {
+			AdminGetLessons(ctx, client)
+		})
 		admin.GET("/courses/:courseId/students/progress", RequireAdmin(adminCfg, true), func(ctx *gin.Context) {
 			GetStudentsProgress(ctx, client, userClient)
 		})
@@ -804,6 +845,12 @@ type BodylessLessonJSON struct {
 	CreatedAt   string  `json:"created_at"`
 	UpdatedAt   *string `json:"updated_at,omitempty"`
 	DeletedAt   *string `json:"deleted_at,omitempty"`
+}
+
+// LessonEdgeJSON represents a lesson edge for JSON response
+type LessonEdgeJSON struct {
+	Node   LessonJSON `json:"node"`
+	Cursor string     `json:"cursor"`
 }
 
 // LessonWithProgressJSON represents a lesson with progress for JSON response (flattened)
@@ -856,6 +903,18 @@ type PageInfoJSON struct {
 	HasNextPage     bool   `json:"has_next_page"`
 	StartCursor     string `json:"start_cursor"`
 	EndCursor       string `json:"end_cursor"`
+}
+
+// convertLessonEdges converts pb LessonsConnection Edges to JSON format
+func convertLessonEdges(edges []*pb.LessonsConnection_Edge) []LessonEdgeJSON {
+	result := make([]LessonEdgeJSON, len(edges))
+	for i, edge := range edges {
+		result[i] = LessonEdgeJSON{
+			Node:   toLessonJSON(edge.Node),
+			Cursor: edge.Cursor,
+		}
+	}
+	return result
 }
 
 // convertLessonWithProgressEdges converts pb LessonWithProgressConnection Edges to JSON format

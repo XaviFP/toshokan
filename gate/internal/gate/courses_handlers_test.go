@@ -191,6 +191,14 @@ func (m *mockCourseAPIClient) GetAllCourses(ctx context.Context, req *pb.GetAllC
 	return args.Get(0).(*pb.GetAllCoursesResponse), args.Error(1)
 }
 
+func (m *mockCourseAPIClient) AdminGetLessons(ctx context.Context, req *pb.AdminGetLessonsRequest, opts ...grpc.CallOption) (*pb.AdminGetLessonsResponse, error) {
+	args := m.Called(ctx, req)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*pb.AdminGetLessonsResponse), args.Error(1)
+}
+
 // mockUserAPIClient is a mock implementation of pbUser.UserAPIClient for courses tests
 type mockUserAPIClient struct {
 	mock.Mock
@@ -615,6 +623,58 @@ func TestBackofficeRoutes_RequireAdmin(t *testing.T) {
 		HeaderName:   "X-Admin-Token",
 		HeaderSecret: "secret123",
 	}
+
+	t.Run("lessons_without_admin_header", func(t *testing.T) {
+		client := &mockCourseAPIClient{}
+		userClient := &mockUserAPIClient{}
+
+		router := gin.New()
+		RegisterCoursesRoutes(router.Group("/"), client, userClient, adminCfg)
+
+		req := httptest.NewRequest(http.MethodGet, "/admin/courses/fb9ffe2c-ad66-4766-9b7b-46fd5d9acd72/lessons", nil)
+		w := httptest.NewRecorder()
+		router.ServeHTTP(w, req)
+
+		assert.Equal(t, http.StatusForbidden, w.Code)
+		client.AssertNotCalled(t, "AdminGetLessons", mock.Anything, mock.Anything)
+	})
+
+	t.Run("lessons_with_invalid_admin_header", func(t *testing.T) {
+		client := &mockCourseAPIClient{}
+		userClient := &mockUserAPIClient{}
+
+		router := gin.New()
+		RegisterCoursesRoutes(router.Group("/"), client, userClient, adminCfg)
+
+		req := httptest.NewRequest(http.MethodGet, "/admin/courses/fb9ffe2c-ad66-4766-9b7b-46fd5d9acd72/lessons", nil)
+		req.Header.Set("X-Admin-Token", "wrong-secret")
+		w := httptest.NewRecorder()
+		router.ServeHTTP(w, req)
+
+		assert.Equal(t, http.StatusForbidden, w.Code)
+		client.AssertNotCalled(t, "AdminGetLessons", mock.Anything, mock.Anything)
+	})
+
+	t.Run("lessons_with_valid_admin_header", func(t *testing.T) {
+		client := &mockCourseAPIClient{}
+		userClient := &mockUserAPIClient{}
+
+		client.On("AdminGetLessons", mock.Anything, mock.Anything).Return(&pb.AdminGetLessonsResponse{
+			Lessons: &pb.LessonsConnection{
+				PageInfo: &pb.PageInfo{},
+			},
+		}, nil)
+
+		router := gin.New()
+		RegisterCoursesRoutes(router.Group("/"), client, userClient, adminCfg)
+
+		req := httptest.NewRequest(http.MethodGet, "/admin/courses/fb9ffe2c-ad66-4766-9b7b-46fd5d9acd72/lessons", nil)
+		req.Header.Set("X-Admin-Token", "secret123")
+		w := httptest.NewRecorder()
+		router.ServeHTTP(w, req)
+
+		assert.Equal(t, http.StatusOK, w.Code)
+	})
 
 	t.Run("students_progress_without_admin_header", func(t *testing.T) {
 		client := &mockCourseAPIClient{}
@@ -1113,6 +1173,159 @@ func TestGetLessons(t *testing.T) {
 		router.ServeHTTP(w, req)
 
 		assert.Equal(t, http.StatusNotFound, w.Code)
+	})
+}
+
+func TestAdminGetLessons(t *testing.T) {
+	t.Run("success_returns_lessons_with_body_without_progress", func(t *testing.T) {
+		client := &mockCourseAPIClient{}
+
+		client.On("AdminGetLessons", mock.Anything, &pb.AdminGetLessonsRequest{
+			CourseId:   "fb9ffe2c-ad66-4766-9b7b-46fd5d9acd72",
+			Pagination: &pb.Pagination{First: DefaultPageSize},
+		}).Return(&pb.AdminGetLessonsResponse{
+			Lessons: &pb.LessonsConnection{
+				Edges: []*pb.LessonsConnection_Edge{
+					{
+						Node: &pb.Lesson{
+							Id:          "334ddbf8-1acc-405b-86d8-49f0d1ca636c",
+							CourseId:    "fb9ffe2c-ad66-4766-9b7b-46fd5d9acd72",
+							Order:       1,
+							Title:       "Introduction",
+							Description: "Getting started",
+							Body:        "Content ![deck](1f30a72f-5d7a-48da-a5c2-42efece6972a)",
+							CreatedAt:   timestamppb.New(time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC)),
+						},
+						Cursor: "cursor1",
+					},
+				},
+				PageInfo: &pb.PageInfo{
+					HasNextPage: true,
+					StartCursor: "cursor1",
+					EndCursor:   "cursor1",
+				},
+			},
+		}, nil)
+
+		router := gin.New()
+		router.GET("/admin/courses/:courseId/lessons", func(ctx *gin.Context) {
+			AdminGetLessons(ctx, client)
+		})
+
+		req := httptest.NewRequest(http.MethodGet, "/admin/courses/fb9ffe2c-ad66-4766-9b7b-46fd5d9acd72/lessons", nil)
+		w := httptest.NewRecorder()
+		router.ServeHTTP(w, req)
+
+		require.Equal(t, http.StatusOK, w.Code)
+
+		expected := `{
+			"edges": [{
+				"node": {
+					"id": "334ddbf8-1acc-405b-86d8-49f0d1ca636c",
+					"course_id": "fb9ffe2c-ad66-4766-9b7b-46fd5d9acd72",
+					"order": 1,
+					"title": "Introduction",
+					"description": "Getting started",
+					"body": "Content ![deck](1f30a72f-5d7a-48da-a5c2-42efece6972a)",
+					"created_at": "2024-01-01T00:00:00Z"
+				},
+				"cursor": "cursor1"
+			}],
+			"page_info": {
+				"has_previous_page": false,
+				"has_next_page": true,
+				"start_cursor": "cursor1",
+				"end_cursor": "cursor1"
+			}
+		}`
+		assert.JSONEq(t, expected, w.Body.String())
+	})
+
+	t.Run("success_with_pagination", func(t *testing.T) {
+		client := &mockCourseAPIClient{}
+
+		client.On("AdminGetLessons", mock.Anything, &pb.AdminGetLessonsRequest{
+			CourseId:   "fb9ffe2c-ad66-4766-9b7b-46fd5d9acd72",
+			Pagination: &pb.Pagination{First: 10, After: "cursor1"},
+		}).Return(&pb.AdminGetLessonsResponse{
+			Lessons: &pb.LessonsConnection{
+				PageInfo: &pb.PageInfo{},
+			},
+		}, nil)
+
+		router := gin.New()
+		router.GET("/admin/courses/:courseId/lessons", func(ctx *gin.Context) {
+			AdminGetLessons(ctx, client)
+		})
+
+		req := httptest.NewRequest(http.MethodGet, "/admin/courses/fb9ffe2c-ad66-4766-9b7b-46fd5d9acd72/lessons?first=10&after=cursor1", nil)
+		w := httptest.NewRecorder()
+		router.ServeHTTP(w, req)
+
+		require.Equal(t, http.StatusOK, w.Code)
+
+		expected := `{
+			"edges": [],
+			"page_info": {
+				"has_previous_page": false,
+				"has_next_page": false,
+				"start_cursor": "",
+				"end_cursor": ""
+			}
+		}`
+		assert.JSONEq(t, expected, w.Body.String())
+	})
+
+	t.Run("failure_invalid_course_id", func(t *testing.T) {
+		client := &mockCourseAPIClient{}
+
+		router := gin.New()
+		router.GET("/admin/courses/:courseId/lessons", func(ctx *gin.Context) {
+			AdminGetLessons(ctx, client)
+		})
+
+		req := httptest.NewRequest(http.MethodGet, "/admin/courses/not-a-uuid/lessons", nil)
+		w := httptest.NewRecorder()
+		router.ServeHTTP(w, req)
+
+		assert.Equal(t, http.StatusBadRequest, w.Code)
+		client.AssertNotCalled(t, "AdminGetLessons", mock.Anything, mock.Anything)
+	})
+
+	t.Run("failure_course_not_found", func(t *testing.T) {
+		client := &mockCourseAPIClient{}
+
+		client.On("AdminGetLessons", mock.Anything, mock.Anything).
+			Return(nil, status.Error(codes.NotFound, "courses: course not found"))
+
+		router := gin.New()
+		router.GET("/admin/courses/:courseId/lessons", func(ctx *gin.Context) {
+			AdminGetLessons(ctx, client)
+		})
+
+		req := httptest.NewRequest(http.MethodGet, "/admin/courses/fb9ffe2c-ad66-4766-9b7b-46fd5d9acd72/lessons", nil)
+		w := httptest.NewRecorder()
+		router.ServeHTTP(w, req)
+
+		assert.Equal(t, http.StatusNotFound, w.Code)
+	})
+
+	t.Run("failure_grpc_error", func(t *testing.T) {
+		client := &mockCourseAPIClient{}
+
+		client.On("AdminGetLessons", mock.Anything, mock.Anything).
+			Return(nil, status.Error(codes.Internal, "database unavailable"))
+
+		router := gin.New()
+		router.GET("/admin/courses/:courseId/lessons", func(ctx *gin.Context) {
+			AdminGetLessons(ctx, client)
+		})
+
+		req := httptest.NewRequest(http.MethodGet, "/admin/courses/fb9ffe2c-ad66-4766-9b7b-46fd5d9acd72/lessons", nil)
+		w := httptest.NewRecorder()
+		router.ServeHTTP(w, req)
+
+		assert.Equal(t, http.StatusInternalServerError, w.Code)
 	})
 }
 

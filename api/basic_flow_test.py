@@ -1694,6 +1694,73 @@ def run_lessons_require_enrolment_test(base_url: str, course_id: str) -> None:
     log_step("✓ Lessons list returns 404 for a user who isn't enrolled")
 
 
+def admin_get_lessons_response(base_url: str, headers: Dict[str, str], course_id: str, params: Dict[str, Any]) -> requests.Response:
+    response = requests.get(
+        f"{base_url}/admin/courses/{course_id}/lessons",
+        headers=headers,
+        params=params,
+        timeout=TIMEOUT,
+    )
+    log_response("GET /admin/courses/{courseId}/lessons", response)
+    return response
+
+
+def run_admin_get_lessons_tests(base_url: str, course_id: str, lessons: List[Dict[str, Any]]) -> None:
+    """Test GET /admin/courses/{courseId}/lessons with a user who isn't enrolled."""
+    log_step("")
+    log_step("Testing AdminGetLessons endpoint...")
+
+    token = create_user(base_url)["token"]
+
+    # Test 1: First page, with bodies and without progress
+    response = admin_get_lessons_response(base_url, auth_headers(token), course_id, {"first": 2})
+    assert response.status_code == 200, f"Expected 200, got {response.status_code}"
+    page1 = response.json()
+    assert [e["node"] for e in page1["edges"]] == lessons[0:2], "First page should hold the first two lessons, with bodies"
+    assert page1["page_info"]["has_next_page"] is True, "First page should have a next page"
+    log_step("  ✓ First page - success")
+
+    # Test 2: Second page
+    response = admin_get_lessons_response(base_url, auth_headers(token), course_id, {"first": 2, "after": page1["page_info"]["end_cursor"]})
+    assert response.status_code == 200, f"Expected 200, got {response.status_code}"
+    page2 = response.json()
+    assert [e["node"] for e in page2["edges"]] == lessons[2:4], "Second page should hold lessons 3 and 4"
+    assert page2["page_info"]["has_next_page"] is True, "Second page should have a next page"
+    log_step("  ✓ Second page - success")
+
+    # Test 3: Last page
+    response = admin_get_lessons_response(base_url, auth_headers(token), course_id, {"first": 2, "after": page2["page_info"]["end_cursor"]})
+    assert response.status_code == 200, f"Expected 200, got {response.status_code}"
+    page3 = response.json()
+    assert [e["node"] for e in page3["edges"]] == lessons[4:5], "Last page should hold lesson 5"
+    assert page3["page_info"]["has_next_page"] is False, "Last page should have no next page"
+    log_step("  ✓ Last page - success")
+
+    # Test 4: Back from the last page
+    response = admin_get_lessons_response(base_url, auth_headers(token), course_id, {"last": 2, "before": page3["page_info"]["start_cursor"]})
+    assert response.status_code == 200, f"Expected 200, got {response.status_code}"
+    back = response.json()
+    assert [e["node"] for e in back["edges"]] == lessons[2:4], "Paging back from lesson 5 should give lessons 3 and 4"
+    log_step("  ✓ Backward page - success")
+
+    # Test 5: Without the admin header
+    response = admin_get_lessons_response(base_url, {"Authorization": f"Bearer {token}"}, course_id, {})
+    assert response.status_code == 403, f"Expected 403 without the admin header, got {response.status_code}"
+    log_step("  ✓ Without admin header returns 403 - success")
+
+    # Test 6: Course that doesn't exist
+    response = admin_get_lessons_response(base_url, auth_headers(token), "00000000-0000-0000-0000-000000000000", {})
+    assert response.status_code == 404, f"Expected 404 for a course that doesn't exist, got {response.status_code}"
+    log_step("  ✓ Missing course returns 404 - success")
+
+    # Test 7: Malformed course ID
+    response = admin_get_lessons_response(base_url, auth_headers(token), "not-a-uuid", {})
+    assert response.status_code == 400, f"Expected 400 for a malformed course ID, got {response.status_code}"
+    log_step("  ✓ Malformed course ID returns 400 - success")
+
+    log_step("✓ AdminGetLessons tests passed")
+
+
 def run_backoffice_tests(base_url: str, token: str, course_id: str, created_course_ids: List[str]) -> None:
     """Test backoffice endpoints (admin-only)."""
     log_step("")
@@ -1946,6 +2013,8 @@ def test_basic_flow():
     run_get_lesson_tests(base_url, token, course_id, lessons[0], all_course_ids[1])
 
     run_lessons_require_enrolment_test(base_url, course_id)
+
+    run_admin_get_lessons_tests(base_url, course_id, lessons)
 
     run_pagination_before_answering(base_url, token, course_id, lessons)
 

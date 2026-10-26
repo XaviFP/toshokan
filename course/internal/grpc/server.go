@@ -878,6 +878,57 @@ func (s *Server) GetAllCourses(ctx context.Context, req *pb.GetAllCoursesRequest
 	}, nil
 }
 
+// AdminGetLessons retrieves a course's lessons with their bodies, without any user's progress (backoffice)
+func (s *Server) AdminGetLessons(ctx context.Context, req *pb.AdminGetLessonsRequest) (*pb.AdminGetLessonsResponse, error) {
+	courseID, err := uuid.Parse(req.CourseId)
+	if err != nil {
+		slog.Error("AdminGetLessons: failed to parse course ID", "error", err, "courseId", req.CourseId, "stack", errors.ErrorStack(err))
+		return nil, status.Errorf(codes.InvalidArgument, "invalid course_id: %s", req.CourseId)
+	}
+
+	if _, err := s.Repository.GetCourse(ctx, courseID); err != nil {
+		if errors.Is(err, course.ErrCourseNotFound) {
+			slog.Error("AdminGetLessons: course not found", "error", err, "courseId", courseID.String())
+			return nil, status.Error(codes.NotFound, course.ErrCourseNotFound.Error())
+		}
+		slog.Error("AdminGetLessons: failed to get course from repository", "error", err, "courseId", courseID.String(), "stack", errors.ErrorStack(err))
+		return nil, errors.Trace(err)
+	}
+
+	p := pagination.NewOldestFirstPagination(
+		pagination.WithFirst(int(req.GetPagination().GetFirst())),
+		pagination.WithLast(int(req.GetPagination().GetLast())),
+		pagination.WithAfter(pagination.Cursor(req.GetPagination().GetAfter())),
+		pagination.WithBefore(pagination.Cursor(req.GetPagination().GetBefore())),
+	)
+
+	result, err := s.LessonsBrowser.Browse(ctx, courseID, p, course.BrowseOptions{})
+	if err != nil {
+		slog.Error("AdminGetLessons: failed to browse lessons", "error", err, "courseId", courseID.String(), "stack", errors.ErrorStack(err))
+		return nil, errors.Trace(err)
+	}
+
+	resp := &pb.AdminGetLessonsResponse{
+		Lessons: &pb.LessonsConnection{
+			PageInfo: &pb.PageInfo{
+				HasPreviousPage: result.PublicLessons.PageInfo.HasPreviousPage,
+				HasNextPage:     result.PublicLessons.PageInfo.HasNextPage,
+				StartCursor:     result.PublicLessons.PageInfo.StartCursor.String(),
+				EndCursor:       result.PublicLessons.PageInfo.EndCursor.String(),
+			},
+		},
+	}
+
+	for _, edge := range result.PublicLessons.Edges {
+		resp.Lessons.Edges = append(resp.Lessons.Edges, &pb.LessonsConnection_Edge{
+			Node:   lessonToProto(&edge.Lesson),
+			Cursor: string(edge.Cursor),
+		})
+	}
+
+	return resp, nil
+}
+
 // GetStudentsProgress retrieves paginated student progress for a course (backoffice)
 func (s *Server) GetStudentsProgress(ctx context.Context, req *pb.GetStudentsProgressRequest) (*pb.GetStudentsProgressResponse, error) {
 	courseID, err := uuid.Parse(req.CourseId)

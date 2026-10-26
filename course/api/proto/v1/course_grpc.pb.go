@@ -39,6 +39,7 @@ const (
 	CourseAPI_GetUserState_FullMethodName        = "/course.v1.CourseAPI/GetUserState"
 	CourseAPI_SetUserState_FullMethodName        = "/course.v1.CourseAPI/SetUserState"
 	CourseAPI_GetAllCourses_FullMethodName       = "/course.v1.CourseAPI/GetAllCourses"
+	CourseAPI_AdminGetLessons_FullMethodName     = "/course.v1.CourseAPI/AdminGetLessons"
 )
 
 // CourseAPIClient is the client API for CourseAPI service.
@@ -66,6 +67,7 @@ type CourseAPIClient interface {
 	GetUserState(ctx context.Context, in *GetUserStateRequest, opts ...grpc.CallOption) (*GetUserStateResponse, error)
 	SetUserState(ctx context.Context, in *SetUserStateRequest, opts ...grpc.CallOption) (*SetUserStateResponse, error)
 	GetAllCourses(ctx context.Context, in *GetAllCoursesRequest, opts ...grpc.CallOption) (*GetAllCoursesResponse, error)
+	AdminGetLessons(ctx context.Context, in *AdminGetLessonsRequest, opts ...grpc.CallOption) (*AdminGetLessonsResponse, error)
 }
 
 type courseAPIClient struct {
@@ -276,6 +278,16 @@ func (c *courseAPIClient) GetAllCourses(ctx context.Context, in *GetAllCoursesRe
 	return out, nil
 }
 
+func (c *courseAPIClient) AdminGetLessons(ctx context.Context, in *AdminGetLessonsRequest, opts ...grpc.CallOption) (*AdminGetLessonsResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(AdminGetLessonsResponse)
+	err := c.cc.Invoke(ctx, CourseAPI_AdminGetLessons_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // CourseAPIServer is the server API for CourseAPI service.
 // All implementations should embed UnimplementedCourseAPIServer
 // for forward compatibility.
@@ -301,6 +313,7 @@ type CourseAPIServer interface {
 	GetUserState(context.Context, *GetUserStateRequest) (*GetUserStateResponse, error)
 	SetUserState(context.Context, *SetUserStateRequest) (*SetUserStateResponse, error)
 	GetAllCourses(context.Context, *GetAllCoursesRequest) (*GetAllCoursesResponse, error)
+	AdminGetLessons(context.Context, *AdminGetLessonsRequest) (*AdminGetLessonsResponse, error)
 }
 
 // UnimplementedCourseAPIServer should be embedded to have
@@ -369,6 +382,9 @@ func (UnimplementedCourseAPIServer) SetUserState(context.Context, *SetUserStateR
 }
 func (UnimplementedCourseAPIServer) GetAllCourses(context.Context, *GetAllCoursesRequest) (*GetAllCoursesResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method GetAllCourses not implemented")
+}
+func (UnimplementedCourseAPIServer) AdminGetLessons(context.Context, *AdminGetLessonsRequest) (*AdminGetLessonsResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method AdminGetLessons not implemented")
 }
 func (UnimplementedCourseAPIServer) testEmbeddedByValue() {}
 
@@ -750,6 +766,24 @@ func _CourseAPI_GetAllCourses_Handler(srv interface{}, ctx context.Context, dec 
 	return interceptor(ctx, in, info, handler)
 }
 
+func _CourseAPI_AdminGetLessons_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(AdminGetLessonsRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(CourseAPIServer).AdminGetLessons(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: CourseAPI_AdminGetLessons_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(CourseAPIServer).AdminGetLessons(ctx, req.(*AdminGetLessonsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // CourseAPI_ServiceDesc is the grpc.ServiceDesc for CourseAPI service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -836,6 +870,10 @@ var CourseAPI_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "GetAllCourses",
 			Handler:    _CourseAPI_GetAllCourses_Handler,
+		},
+		{
+			MethodName: "AdminGetLessons",
+			Handler:    _CourseAPI_AdminGetLessons_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},
