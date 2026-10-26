@@ -17,7 +17,6 @@ import (
 	pbDealer "github.com/XaviFP/toshokan/dealer/api/proto/v1"
 	pbDeck "github.com/XaviFP/toshokan/deck/api/proto/v1"
 	"github.com/XaviFP/toshokan/gate/internal/gate"
-	"github.com/XaviFP/toshokan/grapher"
 	pbUser "github.com/XaviFP/toshokan/user/api/proto/v1"
 )
 
@@ -129,15 +128,10 @@ func main() {
 	// Return 405 for routes that exist but do not support the requested HTTP method
 	router.HandleMethodNotAllowed = true
 
-	router.Use(gate.GinContextToContextMiddleware())
 	router.Use(corsMiddleware(c.gate.allowedOrigins))
-
-	queryPath := "/query"
-	router.GET("/play", grapher.NewPlaygroundHandler(queryPath))
 
 	authorized := router.Group("/")
 	gate.RegisterMiddlewares(authorized, userClient, deckClient)
-	authorized.POST(queryPath, grapher.NewGraphqlHandler(deckClient, userClient, dealerClient))
 	gate.RegisterDeckRoutes(authorized, userClient, deckClient, c.gate.adminConfig)
 	gate.RegisterUserRoutes(router, c.gate.signupEnabled, userClient, c.gate.adminConfig)
 	gate.RegisterCoursesRoutes(authorized, coursesClient, userClient, c.gate.adminConfig)
