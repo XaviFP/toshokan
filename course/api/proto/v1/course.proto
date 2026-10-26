@@ -18,7 +18,9 @@ service CourseAPI {
   rpc CreateCourse (CreateCourseRequest) returns (CreateCourseResponse) {}
   rpc CreateLesson (CreateLessonRequest) returns (CreateLessonResponse) {}
   rpc UpdateCourse (UpdateCourseRequest) returns (UpdateCourseResponse) {}
+  rpc DeleteCourse (DeleteCourseRequest) returns (DeleteCourseResponse) {}
   rpc UpdateLesson (UpdateLessonRequest) returns (UpdateLessonResponse) {}
+  rpc DeleteLesson (DeleteLessonRequest) returns (DeleteLessonResponse) {}
   rpc SyncState (SyncStateRequest) returns (SyncStateResponse) {}
   rpc GetCourseDeckIds (GetCourseDeckIdsRequest) returns (GetCourseDeckIdsResponse) {}
   rpc GetLessonDeckIds (GetLessonDeckIdsRequest) returns (GetLessonDeckIdsResponse) {}
@@ -297,6 +299,19 @@ message UpdateLessonRequest {
 message UpdateLessonResponse {
   Lesson lesson = 1;
 }
+
+message DeleteCourseRequest {
+  string course_id = 1;
+}
+
+message DeleteCourseResponse {}
+
+message DeleteLessonRequest {
+  string course_id = 1;
+  string lesson_id = 2;
+}
+
+message DeleteLessonResponse {}
 
 // ============================================
 // Backoffice: Student Progress Tracking

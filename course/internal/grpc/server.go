@@ -262,6 +262,15 @@ func (s *Server) GetLessons(ctx context.Context, req *pb.GetLessonsRequest) (*pb
 		return nil, errors.Trace(err)
 	}
 
+	if _, err := s.Repository.GetCourse(ctx, courseID); err != nil {
+		if errors.Is(err, course.ErrCourseNotFound) {
+			slog.Error("GetLessons: course not found", "error", err, "courseId", courseID.String())
+			return nil, status.Error(codes.NotFound, course.ErrCourseNotFound.Error())
+		}
+		slog.Error("GetLessons: failed to get course from repository", "error", err, "courseId", courseID.String(), "stack", errors.ErrorStack(err))
+		return nil, errors.Trace(err)
+	}
+
 	p := pagination.NewOldestFirstPagination(
 		pagination.WithFirst(int(req.GetPagination().GetFirst())),
 		pagination.WithLast(int(req.GetPagination().GetLast())),
@@ -541,6 +550,15 @@ func (s *Server) CreateLesson(ctx context.Context, req *pb.CreateLessonRequest) 
 		return nil, errors.Trace(course.ErrNoDescription)
 	}
 
+	if _, err := s.Repository.GetCourse(ctx, courseID); err != nil {
+		if errors.Is(err, course.ErrCourseNotFound) {
+			slog.Error("CreateLesson: course not found", "error", err, "courseId", courseID.String())
+			return nil, status.Error(codes.NotFound, course.ErrCourseNotFound.Error())
+		}
+		slog.Error("CreateLesson: failed to get course from repository", "error", err, "courseId", courseID.String(), "stack", errors.ErrorStack(err))
+		return nil, errors.Trace(err)
+	}
+
 	// Parse body for deck references
 	deckIDs := course.ParseDeckReferences(req.Body)
 
@@ -697,6 +715,52 @@ func (s *Server) UpdateLesson(ctx context.Context, req *pb.UpdateLessonRequest) 
 			DeletedAt:   toProtoTimestampPtr(updatedLesson.DeletedAt),
 		},
 	}, nil
+}
+
+// DeleteCourse soft-deletes a course
+func (s *Server) DeleteCourse(ctx context.Context, req *pb.DeleteCourseRequest) (*pb.DeleteCourseResponse, error) {
+	courseID, err := uuid.Parse(req.CourseId)
+	if err != nil {
+		slog.Error("DeleteCourse: failed to parse course ID", "error", err, "courseId", req.CourseId, "stack", errors.ErrorStack(err))
+		return nil, status.Errorf(codes.InvalidArgument, "invalid course_id: %s", req.CourseId)
+	}
+
+	if _, err := s.Repository.DeleteCourse(ctx, courseID); err != nil {
+		if errors.Is(err, course.ErrCourseNotFound) {
+			slog.Error("DeleteCourse: course not found", "error", err, "courseId", courseID.String())
+			return nil, status.Error(codes.NotFound, course.ErrCourseNotFound.Error())
+		}
+		slog.Error("DeleteCourse: failed to delete course", "error", err, "courseId", courseID.String(), "stack", errors.ErrorStack(err))
+		return nil, errors.Trace(err)
+	}
+
+	return &pb.DeleteCourseResponse{}, nil
+}
+
+// DeleteLesson soft-deletes a lesson of a course
+func (s *Server) DeleteLesson(ctx context.Context, req *pb.DeleteLessonRequest) (*pb.DeleteLessonResponse, error) {
+	courseID, err := uuid.Parse(req.CourseId)
+	if err != nil {
+		slog.Error("DeleteLesson: failed to parse course ID", "error", err, "courseId", req.CourseId, "stack", errors.ErrorStack(err))
+		return nil, status.Errorf(codes.InvalidArgument, "invalid course_id: %s", req.CourseId)
+	}
+
+	lessonID, err := uuid.Parse(req.LessonId)
+	if err != nil {
+		slog.Error("DeleteLesson: failed to parse lesson ID", "error", err, "lessonId", req.LessonId, "stack", errors.ErrorStack(err))
+		return nil, status.Errorf(codes.InvalidArgument, "invalid lesson_id: %s", req.LessonId)
+	}
+
+	if err := s.Repository.DeleteLesson(ctx, courseID, lessonID); err != nil {
+		if errors.Is(err, course.ErrLessonNotFound) {
+			slog.Error("DeleteLesson: lesson not found", "error", err, "courseId", courseID.String(), "lessonId", lessonID.String())
+			return nil, status.Error(codes.NotFound, course.ErrLessonNotFound.Error())
+		}
+		slog.Error("DeleteLesson: failed to delete lesson", "error", err, "courseId", courseID.String(), "lessonId", lessonID.String(), "stack", errors.ErrorStack(err))
+		return nil, errors.Trace(err)
+	}
+
+	return &pb.DeleteLessonResponse{}, nil
 }
 
 // GetLessonState returns the completion state of a lesson and its decks

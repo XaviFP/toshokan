@@ -214,7 +214,47 @@ func TestDeleteDeck(t *testing.T) {
 		w := httptest.NewRecorder()
 		router.ServeHTTP(w, req)
 
-		assert.Equal(t, http.StatusOK, w.Code)
+		assert.Equal(t, http.StatusNoContent, w.Code)
+		assert.Empty(t, w.Body.String())
+	})
+
+	t.Run("success_with_admin_header", func(t *testing.T) {
+		decksClient := &mockDecksClient{}
+		usersClient := &mockUsersClient{}
+
+		decksClient.On("DeleteDeck", mock.Anything, &pbDeck.DeleteDeckRequest{Id: "fb9ffe2c-ad66-4766-9b7b-46fd5d9acd72"}).Return(&pbDeck.DeleteDeckResponse{}, nil)
+
+		router := gin.New()
+		RegisterDeckRoutes(router.Group("/"), usersClient, decksClient, AdminConfig{
+			HeaderName:   "X-Admin-Token",
+			HeaderSecret: "secret123",
+		})
+
+		req := httptest.NewRequest(http.MethodDelete, "/decks/fb9ffe2c-ad66-4766-9b7b-46fd5d9acd72", nil)
+		req.Header.Set("X-Admin-Token", "secret123")
+		w := httptest.NewRecorder()
+		router.ServeHTTP(w, req)
+
+		assert.Equal(t, http.StatusNoContent, w.Code)
+		decksClient.AssertExpectations(t)
+	})
+
+	t.Run("failure_missing_admin_header", func(t *testing.T) {
+		decksClient := &mockDecksClient{}
+		usersClient := &mockUsersClient{}
+
+		router := gin.New()
+		RegisterDeckRoutes(router.Group("/"), usersClient, decksClient, AdminConfig{
+			HeaderName:   "X-Admin-Token",
+			HeaderSecret: "secret123",
+		})
+
+		req := httptest.NewRequest(http.MethodDelete, "/decks/fb9ffe2c-ad66-4766-9b7b-46fd5d9acd72", nil)
+		w := httptest.NewRecorder()
+		router.ServeHTTP(w, req)
+
+		assert.Equal(t, http.StatusForbidden, w.Code)
+		decksClient.AssertNotCalled(t, "DeleteDeck", mock.Anything, mock.Anything)
 	})
 
 	t.Run("failure_missing_id", func(t *testing.T) {
@@ -291,6 +331,119 @@ func TestDeleteDeck(t *testing.T) {
 		router.ServeHTTP(w, req)
 
 		assert.Equal(t, http.StatusNotFound, w.Code)
+	})
+}
+
+func TestDeleteCard(t *testing.T) {
+	adminCfg := AdminConfig{
+		HeaderName:   "X-Admin-Token",
+		HeaderSecret: "secret123",
+	}
+
+	t.Run("success", func(t *testing.T) {
+		decksClient := &mockDecksClient{}
+		usersClient := &mockUsersClient{}
+
+		decksClient.On("DeleteCard", mock.Anything, &pbDeck.DeleteCardRequest{
+			DeckId: "fb9ffe2c-ad66-4766-9b7b-46fd5d9acd72",
+			CardId: "72bdff92-5bc8-4e1d-9217-d0b23e22ff33",
+		}).Return(&pbDeck.DeleteCardResponse{}, nil)
+
+		router := gin.New()
+		RegisterDeckRoutes(router.Group("/"), usersClient, decksClient, adminCfg)
+
+		req := httptest.NewRequest(http.MethodDelete, "/decks/fb9ffe2c-ad66-4766-9b7b-46fd5d9acd72/cards/72bdff92-5bc8-4e1d-9217-d0b23e22ff33", nil)
+		req.Header.Set("X-Admin-Token", "secret123")
+		w := httptest.NewRecorder()
+		router.ServeHTTP(w, req)
+
+		assert.Equal(t, http.StatusNoContent, w.Code)
+		assert.Empty(t, w.Body.String())
+		decksClient.AssertExpectations(t)
+	})
+
+	t.Run("failure_missing_admin_header", func(t *testing.T) {
+		decksClient := &mockDecksClient{}
+		usersClient := &mockUsersClient{}
+
+		router := gin.New()
+		RegisterDeckRoutes(router.Group("/"), usersClient, decksClient, adminCfg)
+
+		req := httptest.NewRequest(http.MethodDelete, "/decks/fb9ffe2c-ad66-4766-9b7b-46fd5d9acd72/cards/72bdff92-5bc8-4e1d-9217-d0b23e22ff33", nil)
+		w := httptest.NewRecorder()
+		router.ServeHTTP(w, req)
+
+		assert.Equal(t, http.StatusForbidden, w.Code)
+		decksClient.AssertNotCalled(t, "DeleteCard", mock.Anything, mock.Anything)
+	})
+
+	t.Run("failure_invalid_deck_id", func(t *testing.T) {
+		decksClient := &mockDecksClient{}
+		usersClient := &mockUsersClient{}
+
+		router := gin.New()
+		RegisterDeckRoutes(router.Group("/"), usersClient, decksClient, adminCfg)
+
+		req := httptest.NewRequest(http.MethodDelete, "/decks/invalid-uuid/cards/72bdff92-5bc8-4e1d-9217-d0b23e22ff33", nil)
+		req.Header.Set("X-Admin-Token", "secret123")
+		w := httptest.NewRecorder()
+		router.ServeHTTP(w, req)
+
+		assert.Equal(t, http.StatusBadRequest, w.Code)
+		assert.Contains(t, w.Body.String(), "invalid deck id format")
+		decksClient.AssertNotCalled(t, "DeleteCard", mock.Anything, mock.Anything)
+	})
+
+	t.Run("failure_invalid_card_id", func(t *testing.T) {
+		decksClient := &mockDecksClient{}
+		usersClient := &mockUsersClient{}
+
+		router := gin.New()
+		RegisterDeckRoutes(router.Group("/"), usersClient, decksClient, adminCfg)
+
+		req := httptest.NewRequest(http.MethodDelete, "/decks/fb9ffe2c-ad66-4766-9b7b-46fd5d9acd72/cards/invalid-uuid", nil)
+		req.Header.Set("X-Admin-Token", "secret123")
+		w := httptest.NewRecorder()
+		router.ServeHTTP(w, req)
+
+		assert.Equal(t, http.StatusBadRequest, w.Code)
+		assert.Contains(t, w.Body.String(), "invalid card id format")
+		decksClient.AssertNotCalled(t, "DeleteCard", mock.Anything, mock.Anything)
+	})
+
+	t.Run("failure_card_not_found", func(t *testing.T) {
+		decksClient := &mockDecksClient{}
+		usersClient := &mockUsersClient{}
+
+		decksClient.On("DeleteCard", mock.Anything, mock.Anything).Return(nil, status.Error(codes.NotFound, "deck: card not found"))
+
+		router := gin.New()
+		RegisterDeckRoutes(router.Group("/"), usersClient, decksClient, adminCfg)
+
+		req := httptest.NewRequest(http.MethodDelete, "/decks/fb9ffe2c-ad66-4766-9b7b-46fd5d9acd72/cards/00000000-0000-0000-0000-000000000000", nil)
+		req.Header.Set("X-Admin-Token", "secret123")
+		w := httptest.NewRecorder()
+		router.ServeHTTP(w, req)
+
+		assert.Equal(t, http.StatusNotFound, w.Code)
+		assert.Contains(t, w.Body.String(), "card not found")
+	})
+
+	t.Run("failure_grpc_error", func(t *testing.T) {
+		decksClient := &mockDecksClient{}
+		usersClient := &mockUsersClient{}
+
+		decksClient.On("DeleteCard", mock.Anything, mock.Anything).Return(nil, assert.AnError)
+
+		router := gin.New()
+		RegisterDeckRoutes(router.Group("/"), usersClient, decksClient, adminCfg)
+
+		req := httptest.NewRequest(http.MethodDelete, "/decks/fb9ffe2c-ad66-4766-9b7b-46fd5d9acd72/cards/72bdff92-5bc8-4e1d-9217-d0b23e22ff33", nil)
+		req.Header.Set("X-Admin-Token", "secret123")
+		w := httptest.NewRecorder()
+		router.ServeHTTP(w, req)
+
+		assert.Equal(t, http.StatusInternalServerError, w.Code)
 	})
 }
 
@@ -753,6 +906,14 @@ func (m *mockDecksClient) UpdateCard(ctx context.Context, req *pbDeck.UpdateCard
 		return nil, args.Error(1)
 	}
 	return args.Get(0).(*pbDeck.UpdateCardResponse), args.Error(1)
+}
+
+func (m *mockDecksClient) DeleteCard(ctx context.Context, req *pbDeck.DeleteCardRequest, opts ...grpc.CallOption) (*pbDeck.DeleteCardResponse, error) {
+	args := m.Called(ctx, req)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*pbDeck.DeleteCardResponse), args.Error(1)
 }
 
 func (m *mockDecksClient) UpdateAnswer(ctx context.Context, req *pbDeck.UpdateAnswerRequest, opts ...grpc.CallOption) (*pbDeck.UpdateAnswerResponse, error) {

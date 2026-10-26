@@ -152,7 +152,7 @@ func DeleteDeck(ctx *gin.Context, usersClient pbUser.UserAPIClient, decksClient 
 		return
 	}
 
-	ctx.JSON(http.StatusOK, gin.H{})
+	ctx.Status(http.StatusNoContent)
 }
 
 func UpdateDeck(ctx *gin.Context, usersClient pbUser.UserAPIClient, decksClient pbDeck.DecksAPIClient) {
@@ -201,6 +201,37 @@ func UpdateDeck(ctx *gin.Context, usersClient pbUser.UserAPIClient, decksClient 
 	}
 
 	ctx.JSON(http.StatusOK, toDeckResponse(res.Deck))
+}
+
+func DeleteCard(ctx *gin.Context, usersClient pbUser.UserAPIClient, decksClient pbDeck.DecksAPIClient) {
+	deckID := ctx.Param("deckId")
+	cardID := ctx.Param("cardId")
+
+	if _, err := uuid.Parse(deckID); err != nil {
+		slog.Error("DeleteCard: failed to parse deck ID", "error", err, "deckId", deckID, "stack", errors.ErrorStack(err))
+		ctx.JSON(http.StatusBadRequest, gin.H{"error": "invalid deck id format"})
+		return
+	}
+	if _, err := uuid.Parse(cardID); err != nil {
+		slog.Error("DeleteCard: failed to parse card ID", "error", err, "cardId", cardID, "stack", errors.ErrorStack(err))
+		ctx.JSON(http.StatusBadRequest, gin.H{"error": "invalid card id format"})
+		return
+	}
+
+	if _, err := decksClient.DeleteCard(ctx, &pbDeck.DeleteCardRequest{
+		DeckId: deckID,
+		CardId: cardID,
+	}); err != nil {
+		if status.Code(err) == codes.NotFound {
+			ctx.JSON(http.StatusNotFound, gin.H{"error": "card not found"})
+			return
+		}
+		slog.Error("DeleteCard: gRPC call failed", "error", err, "deckId", deckID, "cardId", cardID, "stack", errors.ErrorStack(err))
+		ctx.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	ctx.Status(http.StatusNoContent)
 }
 
 func UpdateCard(ctx *gin.Context, usersClient pbUser.UserAPIClient, decksClient pbDeck.DecksAPIClient) {
@@ -341,7 +372,7 @@ func RegisterDeckRoutes(r *gin.RouterGroup, usersClient pbUser.UserAPIClient, de
 		CreateCard(ctx, usersClient, decksClient)
 	})
 
-	r.DELETE("/decks/:deckId", func(ctx *gin.Context) {
+	r.DELETE("/decks/:deckId", RequireAdmin(adminCfg, true), func(ctx *gin.Context) {
 		DeleteDeck(ctx, usersClient, decksClient)
 	})
 
@@ -355,6 +386,10 @@ func RegisterDeckRoutes(r *gin.RouterGroup, usersClient pbUser.UserAPIClient, de
 
 	r.PATCH("/decks/:deckId/cards/:cardId", RequireAdmin(adminCfg, adminCfg.UpdateCardAdminOnly), func(ctx *gin.Context) {
 		UpdateCard(ctx, usersClient, decksClient)
+	})
+
+	r.DELETE("/decks/:deckId/cards/:cardId", RequireAdmin(adminCfg, true), func(ctx *gin.Context) {
+		DeleteCard(ctx, usersClient, decksClient)
 	})
 
 	r.PATCH("/decks/:deckId/cards/:cardId/answers/:answerId", RequireAdmin(adminCfg, adminCfg.UpdateAnswerAdminOnly), func(ctx *gin.Context) {

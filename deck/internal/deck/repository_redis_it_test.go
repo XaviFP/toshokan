@@ -8,6 +8,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/mediocregopher/radix/v4"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"github.com/XaviFP/toshokan/common/pagination"
 )
@@ -192,6 +193,66 @@ func TestRedisRepository_DeleteDeck_InvalidatesCache(t *testing.T) {
 
 	assert.True(t, mb.Null)
 
+	mockDB.AssertExpectations(t)
+}
+
+func TestRedisRepository_DeleteCard_InvalidatesCache(t *testing.T) {
+	h := newRedisTestHarness(t)
+	mockDB := new(RepositoryMock)
+
+	repo := NewRedisRepository(h.redisClient, mockDB)
+
+	ctx := context.Background()
+	deckID := uuid.New()
+	cardID := uuid.New()
+
+	deckJSON, err := json.Marshal(Deck{ID: deckID, Title: "Test Deck"})
+	require.NoError(t, err)
+	key := "cache:deck:" + deckID.String()
+	err = h.redisClient.Do(ctx, radix.FlatCmd(nil, "SETEX", key, 3600, string(deckJSON)))
+	require.NoError(t, err)
+
+	mockDB.On("DeleteCard", ctx, deckID, cardID).Return(nil)
+
+	err = repo.DeleteCard(ctx, deckID, cardID)
+	require.NoError(t, err)
+
+	var cached string
+	mb := radix.Maybe{Rcv: &cached}
+	err = h.redisClient.Do(ctx, radix.Cmd(&mb, "GET", key))
+	require.NoError(t, err)
+
+	assert.True(t, mb.Null)
+	mockDB.AssertExpectations(t)
+}
+
+func TestRedisRepository_DeleteCard_InvalidatesCacheWhenAlreadyDeleted(t *testing.T) {
+	h := newRedisTestHarness(t)
+	mockDB := new(RepositoryMock)
+
+	repo := NewRedisRepository(h.redisClient, mockDB)
+
+	ctx := context.Background()
+	deckID := uuid.New()
+	cardID := uuid.New()
+
+	deckJSON, err := json.Marshal(Deck{ID: deckID, Title: "Test Deck"})
+	require.NoError(t, err)
+	key := "cache:deck:" + deckID.String()
+	err = h.redisClient.Do(ctx, radix.FlatCmd(nil, "SETEX", key, 3600, string(deckJSON)))
+	require.NoError(t, err)
+
+	mockDB.On("DeleteCard", ctx, deckID, cardID).Return(ErrCardNotFound)
+
+	err = repo.DeleteCard(ctx, deckID, cardID)
+	assert.ErrorIs(t, err, ErrCardNotFound)
+
+	var cached string
+	mb := radix.Maybe{Rcv: &cached}
+	err = h.redisClient.Do(ctx, radix.Cmd(&mb, "GET", key))
+	require.NoError(t, err)
+
+	assert.True(t, mb.Null)
 	mockDB.AssertExpectations(t)
 }
 

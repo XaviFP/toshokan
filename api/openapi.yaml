@@ -298,6 +298,57 @@ paths:
               schema:
                 $ref: '#/components/schemas/Error'
 
+    delete:
+      tags:
+        - Courses
+      summary: Delete a course (Admin only)
+      description: |
+        Delete a course and its lessons. The course disappears from learners' enrolled courses.
+        The decks its lessons embed aren't deleted.
+
+        **Requires admin access** (`X-Admin-Token` header).
+      operationId: deleteCourse
+      security:
+        - BearerAuth: []
+          AdminAuth: []
+      parameters:
+        - name: courseId
+          in: path
+          required: true
+          description: Course UUID
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '204':
+          description: Course deleted
+        '400':
+          description: Invalid course ID
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          description: Admin access required
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Course not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
   /courses/{courseId}/sync:
     post:
       tags:
@@ -1077,6 +1128,64 @@ paths:
               schema:
                 $ref: '#/components/schemas/Error'
 
+    delete:
+      tags:
+        - Lessons
+      summary: Delete a lesson (Admin only)
+      description: |
+        Delete a lesson of the course. The decks it embeds aren't deleted.
+        Learners' progress drops the lesson on their next sync.
+
+        **Requires admin access** (`X-Admin-Token` header).
+      operationId: deleteLesson
+      security:
+        - BearerAuth: []
+          AdminAuth: []
+      parameters:
+        - name: courseId
+          in: path
+          required: true
+          description: Course UUID
+          schema:
+            type: string
+            format: uuid
+        - name: lessonId
+          in: path
+          required: true
+          description: Lesson UUID
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '204':
+          description: Lesson deleted
+        '400':
+          description: Invalid course ID or lesson ID
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          description: Admin access required
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Lesson not found in this course
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
   /courses/{courseId}/lessons/{lessonId}/state:
     get:
       tags:
@@ -1238,11 +1347,15 @@ paths:
     delete:
       tags:
         - Decks
-      summary: Delete a deck
-      description: Delete an existing deck
+      summary: Delete a deck (Admin only)
+      description: |
+        Delete an existing deck.
+
+        **Requires admin access** (`X-Admin-Token` header).
       operationId: deleteDeck
       security:
         - BearerAuth: []
+          AdminAuth: []
       parameters:
         - name: deckId
           in: path
@@ -1252,16 +1365,28 @@ paths:
             type: string
             format: uuid
       responses:
-        '200':
-          description: Deck deleted successfully
+        '204':
+          description: Deck deleted
         '400':
-          description: Missing deck ID
+          description: Invalid deck ID
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
         '401':
           $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          description: Admin access required
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Deck not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
         '500':
           description: Internal server error
           content:
@@ -1446,6 +1571,63 @@ paths:
                 $ref: '#/components/schemas/Error'
         '404':
           description: Card not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+    delete:
+      tags:
+        - Decks
+      summary: Delete a card (Admin only)
+      description: |
+        Delete a card of the deck. Learners' progress drops the card on their next sync.
+
+        **Requires admin access** (`X-Admin-Token` header).
+      operationId: deleteCard
+      security:
+        - BearerAuth: []
+          AdminAuth: []
+      parameters:
+        - name: deckId
+          in: path
+          required: true
+          description: Deck UUID
+          schema:
+            type: string
+            format: uuid
+        - name: cardId
+          in: path
+          required: true
+          description: Card UUID
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '204':
+          description: Card deleted
+        '400':
+          description: Invalid deck ID or card ID
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          description: Admin access required
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Card not found in this deck
           content:
             application/json:
               schema:

@@ -51,6 +51,7 @@ type Repository interface {
 	// Update operations
 	UpdateDeck(ctx context.Context, id uuid.UUID, updates DeckUpdates) (Deck, error)
 	UpdateCard(ctx context.Context, deckID, cardID uuid.UUID, updates CardUpdates) (Card, error)
+	DeleteCard(ctx context.Context, deckID, cardID uuid.UUID) error
 	UpdateAnswer(ctx context.Context, deckID, cardID, answerID uuid.UUID, updates AnswerUpdates) (Answer, error)
 }
 
@@ -171,6 +172,17 @@ func (r *redisRepository) UpdateCard(ctx context.Context, deckID, cardID uuid.UU
 	}
 
 	return c, nil
+}
+
+func (r *redisRepository) DeleteCard(ctx context.Context, deckID, cardID uuid.UUID) error {
+	err := r.pgRepo.DeleteCard(ctx, deckID, cardID)
+
+	// Invalidate even when the card was already deleted, so a retry after a failed invalidation clears the stale deck.
+	if cacheErr := r.delete(ctx, r.getDeckCacheKey(deckID)); cacheErr != nil && err == nil {
+		return errors.Trace(cacheErr)
+	}
+
+	return errors.Trace(err)
 }
 
 func (r *redisRepository) UpdateAnswer(ctx context.Context, deckID, cardID, answerID uuid.UUID, updates AnswerUpdates) (Answer, error) {
@@ -712,6 +724,28 @@ func (r *pgRepository) UpdateCard(ctx context.Context, deckID, cardID uuid.UUID,
 	c.PossibleAnswers = answers
 
 	return c, nil
+}
+
+// DeleteCard soft-deletes a card of a deck
+func (r *pgRepository) DeleteCard(ctx context.Context, deckID, cardID uuid.UUID) error {
+	result, err := r.db.ExecContext(ctx,
+		`UPDATE cards SET deleted_at = NOW() WHERE id = $1 AND deck_id = $2 AND deleted_at IS NULL`,
+		cardID, deckID,
+	)
+	if err != nil {
+		return errors.Trace(err)
+	}
+
+	rowsAffected, err := result.RowsAffected()
+	if err != nil {
+		return errors.Trace(err)
+	}
+
+	if rowsAffected == 0 {
+		return errors.Trace(ErrCardNotFound)
+	}
+
+	return nil
 }
 
 // UpdateAnswer updates an answer with the provided fields

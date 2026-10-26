@@ -330,8 +330,10 @@ func TestServer_GetLessons(t *testing.T) {
 	createdAt := time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC)
 
 	t.Run("success_returns_lessons_with_progress_without_body", func(t *testing.T) {
+		repoMock := &course.RepositoryMock{}
 		browserMock := &course.LessonsBrowserMock{}
-		srv := &Server{LessonsBrowser: browserMock}
+		srv := &Server{Repository: repoMock, LessonsBrowser: browserMock}
+		repoMock.On("GetCourse", mock.Anything, courseID).Return(course.Course{ID: courseID}, nil)
 
 		lessonID := uuid.MustParse("334ddbf8-1acc-405b-86d8-49f0d1ca636c")
 		browserMock.On("Browse", mock.Anything, courseID, pagination.NewOldestFirstPagination(pagination.WithFirst(10)), course.BrowseOptions{
@@ -403,8 +405,10 @@ func TestServer_GetLessons(t *testing.T) {
 	})
 
 	t.Run("success_without_pagination", func(t *testing.T) {
+		repoMock := &course.RepositoryMock{}
 		browserMock := &course.LessonsBrowserMock{}
-		srv := &Server{LessonsBrowser: browserMock}
+		srv := &Server{Repository: repoMock, LessonsBrowser: browserMock}
+		repoMock.On("GetCourse", mock.Anything, courseID).Return(course.Course{ID: courseID}, nil)
 
 		browserMock.On("Browse", mock.Anything, courseID, pagination.NewOldestFirstPagination(), course.BrowseOptions{
 			UserID:   &userID,
@@ -459,9 +463,45 @@ func TestServer_GetLessons(t *testing.T) {
 		browserMock.AssertNotCalled(t, "Browse")
 	})
 
-	t.Run("browse_error", func(t *testing.T) {
+	t.Run("failure_course_not_found", func(t *testing.T) {
+		repoMock := &course.RepositoryMock{}
 		browserMock := &course.LessonsBrowserMock{}
-		srv := &Server{LessonsBrowser: browserMock}
+		srv := &Server{Repository: repoMock, LessonsBrowser: browserMock}
+		repoMock.On("GetCourse", mock.Anything, courseID).Return(course.Course{}, errors.Trace(course.ErrCourseNotFound))
+
+		actual, err := srv.GetLessons(context.Background(), &pb.GetLessonsRequest{
+			CourseId:   courseID.String(),
+			UserId:     userID.String(),
+			Pagination: &pb.Pagination{First: 10},
+		})
+
+		assert.Equal(t, codes.NotFound, status.Code(err))
+		assert.Nil(t, actual)
+		browserMock.AssertNotCalled(t, "Browse")
+	})
+
+	t.Run("failure_get_course_error", func(t *testing.T) {
+		repoMock := &course.RepositoryMock{}
+		browserMock := &course.LessonsBrowserMock{}
+		srv := &Server{Repository: repoMock, LessonsBrowser: browserMock}
+		repoMock.On("GetCourse", mock.Anything, courseID).Return(course.Course{}, assert.AnError)
+
+		actual, err := srv.GetLessons(context.Background(), &pb.GetLessonsRequest{
+			CourseId:   courseID.String(),
+			UserId:     userID.String(),
+			Pagination: &pb.Pagination{First: 10},
+		})
+
+		assert.ErrorIs(t, err, assert.AnError)
+		assert.Nil(t, actual)
+		browserMock.AssertNotCalled(t, "Browse")
+	})
+
+	t.Run("browse_error", func(t *testing.T) {
+		repoMock := &course.RepositoryMock{}
+		browserMock := &course.LessonsBrowserMock{}
+		srv := &Server{Repository: repoMock, LessonsBrowser: browserMock}
+		repoMock.On("GetCourse", mock.Anything, courseID).Return(course.Course{ID: courseID}, nil)
 
 		browserMock.On("Browse", mock.Anything, courseID, pagination.NewOldestFirstPagination(pagination.WithFirst(10)), course.BrowseOptions{
 			UserID:   &userID,
@@ -778,6 +818,193 @@ func TestServer_UpdateCourse(t *testing.T) {
 		assert.Error(t, err)
 		assert.Nil(t, res)
 		repoMock.AssertExpectations(t)
+	})
+}
+
+func TestServer_CreateLesson(t *testing.T) {
+	courseID := uuid.MustParse("fb9ffe2c-ad66-4766-9b7b-46fd5d9acd72")
+	deckID := uuid.MustParse("22222222-2222-2222-2222-222222222222")
+	body := "Content ![deck](" + deckID.String() + ")"
+
+	t.Run("success", func(t *testing.T) {
+		repoMock := &course.RepositoryMock{}
+		deckClientMock := &DeckClientMock{}
+		srv := &Server{Repository: repoMock, DeckClient: deckClientMock}
+		repoMock.On("GetCourse", mock.Anything, courseID).Return(course.Course{ID: courseID}, nil)
+		deckClientMock.On("GetDeck", mock.Anything, &pbDeck.GetDeckRequest{DeckId: deckID.String()}).Return(&pbDeck.GetDeckResponse{}, nil)
+		repoMock.On("StoreLesson", mock.Anything, mock.Anything).Return(nil)
+
+		actual, err := srv.CreateLesson(context.Background(), &pb.CreateLessonRequest{
+			CourseId:    courseID.String(),
+			Order:       1,
+			Title:       "Introduction",
+			Description: "Getting started",
+			Body:        body,
+		})
+
+		require.NoError(t, err)
+
+		expected := &pb.CreateLessonResponse{
+			Lesson: &pb.Lesson{
+				Id:          actual.Lesson.Id,
+				CourseId:    courseID.String(),
+				Order:       1,
+				Title:       "Introduction",
+				Description: "Getting started",
+				Body:        body,
+				CreatedAt:   actual.Lesson.CreatedAt,
+			},
+		}
+		assert.Equal(t, expected, actual)
+		repoMock.AssertExpectations(t)
+	})
+
+	t.Run("failure_course_not_found", func(t *testing.T) {
+		repoMock := &course.RepositoryMock{}
+		deckClientMock := &DeckClientMock{}
+		srv := &Server{Repository: repoMock, DeckClient: deckClientMock}
+		repoMock.On("GetCourse", mock.Anything, courseID).Return(course.Course{}, errors.Trace(course.ErrCourseNotFound))
+
+		actual, err := srv.CreateLesson(context.Background(), &pb.CreateLessonRequest{
+			CourseId:    courseID.String(),
+			Order:       1,
+			Title:       "Introduction",
+			Description: "Getting started",
+			Body:        body,
+		})
+
+		assert.Equal(t, codes.NotFound, status.Code(err))
+		assert.Nil(t, actual)
+		repoMock.AssertNotCalled(t, "StoreLesson", mock.Anything, mock.Anything)
+	})
+
+	t.Run("failure_get_course_error", func(t *testing.T) {
+		repoMock := &course.RepositoryMock{}
+		deckClientMock := &DeckClientMock{}
+		srv := &Server{Repository: repoMock, DeckClient: deckClientMock}
+		repoMock.On("GetCourse", mock.Anything, courseID).Return(course.Course{}, assert.AnError)
+
+		actual, err := srv.CreateLesson(context.Background(), &pb.CreateLessonRequest{
+			CourseId:    courseID.String(),
+			Order:       1,
+			Title:       "Introduction",
+			Description: "Getting started",
+			Body:        body,
+		})
+
+		assert.ErrorIs(t, err, assert.AnError)
+		assert.Nil(t, actual)
+		repoMock.AssertNotCalled(t, "StoreLesson", mock.Anything, mock.Anything)
+	})
+}
+
+func TestServer_DeleteCourse(t *testing.T) {
+	courseID := uuid.MustParse("fb9ffe2c-ad66-4766-9b7b-46fd5d9acd72")
+
+	t.Run("success", func(t *testing.T) {
+		repoMock := &course.RepositoryMock{}
+		srv := &Server{Repository: repoMock}
+		repoMock.On("DeleteCourse", mock.Anything, courseID).Return([]uuid.UUID{uuid.MustParse("334ddbf8-1acc-405b-86d8-49f0d1ca636c")}, nil)
+
+		actual, err := srv.DeleteCourse(context.Background(), &pb.DeleteCourseRequest{CourseId: courseID.String()})
+
+		require.NoError(t, err)
+		assert.Equal(t, &pb.DeleteCourseResponse{}, actual)
+		repoMock.AssertExpectations(t)
+	})
+
+	t.Run("failure_invalid_course_id", func(t *testing.T) {
+		repoMock := &course.RepositoryMock{}
+		srv := &Server{Repository: repoMock}
+
+		actual, err := srv.DeleteCourse(context.Background(), &pb.DeleteCourseRequest{CourseId: "invalid"})
+
+		assert.Equal(t, codes.InvalidArgument, status.Code(err))
+		assert.Nil(t, actual)
+		repoMock.AssertNotCalled(t, "DeleteCourse", mock.Anything, mock.Anything)
+	})
+
+	t.Run("failure_not_found", func(t *testing.T) {
+		repoMock := &course.RepositoryMock{}
+		srv := &Server{Repository: repoMock}
+		repoMock.On("DeleteCourse", mock.Anything, courseID).Return([]uuid.UUID(nil), errors.Trace(course.ErrCourseNotFound))
+
+		actual, err := srv.DeleteCourse(context.Background(), &pb.DeleteCourseRequest{CourseId: courseID.String()})
+
+		assert.Equal(t, codes.NotFound, status.Code(err))
+		assert.Nil(t, actual)
+	})
+
+	t.Run("failure_repository_error", func(t *testing.T) {
+		repoMock := &course.RepositoryMock{}
+		srv := &Server{Repository: repoMock}
+		repoMock.On("DeleteCourse", mock.Anything, courseID).Return([]uuid.UUID(nil), assert.AnError)
+
+		actual, err := srv.DeleteCourse(context.Background(), &pb.DeleteCourseRequest{CourseId: courseID.String()})
+
+		assert.ErrorIs(t, err, assert.AnError)
+		assert.Nil(t, actual)
+	})
+}
+
+func TestServer_DeleteLesson(t *testing.T) {
+	courseID := uuid.MustParse("fb9ffe2c-ad66-4766-9b7b-46fd5d9acd72")
+	lessonID := uuid.MustParse("334ddbf8-1acc-405b-86d8-49f0d1ca636c")
+
+	t.Run("success", func(t *testing.T) {
+		repoMock := &course.RepositoryMock{}
+		srv := &Server{Repository: repoMock}
+		repoMock.On("DeleteLesson", mock.Anything, courseID, lessonID).Return(nil)
+
+		actual, err := srv.DeleteLesson(context.Background(), &pb.DeleteLessonRequest{CourseId: courseID.String(), LessonId: lessonID.String()})
+
+		require.NoError(t, err)
+		assert.Equal(t, &pb.DeleteLessonResponse{}, actual)
+		repoMock.AssertExpectations(t)
+	})
+
+	t.Run("failure_invalid_course_id", func(t *testing.T) {
+		repoMock := &course.RepositoryMock{}
+		srv := &Server{Repository: repoMock}
+
+		actual, err := srv.DeleteLesson(context.Background(), &pb.DeleteLessonRequest{CourseId: "invalid", LessonId: lessonID.String()})
+
+		assert.Equal(t, codes.InvalidArgument, status.Code(err))
+		assert.Nil(t, actual)
+		repoMock.AssertNotCalled(t, "DeleteLesson", mock.Anything, mock.Anything, mock.Anything)
+	})
+
+	t.Run("failure_invalid_lesson_id", func(t *testing.T) {
+		repoMock := &course.RepositoryMock{}
+		srv := &Server{Repository: repoMock}
+
+		actual, err := srv.DeleteLesson(context.Background(), &pb.DeleteLessonRequest{CourseId: courseID.String(), LessonId: "invalid"})
+
+		assert.Equal(t, codes.InvalidArgument, status.Code(err))
+		assert.Nil(t, actual)
+		repoMock.AssertNotCalled(t, "DeleteLesson", mock.Anything, mock.Anything, mock.Anything)
+	})
+
+	t.Run("failure_not_found", func(t *testing.T) {
+		repoMock := &course.RepositoryMock{}
+		srv := &Server{Repository: repoMock}
+		repoMock.On("DeleteLesson", mock.Anything, courseID, lessonID).Return(errors.Trace(course.ErrLessonNotFound))
+
+		actual, err := srv.DeleteLesson(context.Background(), &pb.DeleteLessonRequest{CourseId: courseID.String(), LessonId: lessonID.String()})
+
+		assert.Equal(t, codes.NotFound, status.Code(err))
+		assert.Nil(t, actual)
+	})
+
+	t.Run("failure_repository_error", func(t *testing.T) {
+		repoMock := &course.RepositoryMock{}
+		srv := &Server{Repository: repoMock}
+		repoMock.On("DeleteLesson", mock.Anything, courseID, lessonID).Return(assert.AnError)
+
+		actual, err := srv.DeleteLesson(context.Background(), &pb.DeleteLessonRequest{CourseId: courseID.String(), LessonId: lessonID.String()})
+
+		assert.ErrorIs(t, err, assert.AnError)
+		assert.Nil(t, actual)
 	})
 }
 
@@ -1133,6 +1360,14 @@ func (m *DeckClientMock) UpdateCard(ctx context.Context, in *pbDeck.UpdateCardRe
 		return nil, args.Error(1)
 	}
 	return args.Get(0).(*pbDeck.UpdateCardResponse), args.Error(1)
+}
+
+func (m *DeckClientMock) DeleteCard(ctx context.Context, in *pbDeck.DeleteCardRequest, opts ...grpc.CallOption) (*pbDeck.DeleteCardResponse, error) {
+	args := m.Called(ctx, in)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*pbDeck.DeleteCardResponse), args.Error(1)
 }
 
 func (m *DeckClientMock) UpdateAnswer(ctx context.Context, in *pbDeck.UpdateAnswerRequest, opts ...grpc.CallOption) (*pbDeck.UpdateAnswerResponse, error) {

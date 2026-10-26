@@ -73,6 +73,10 @@ func (m *RepositoryMock) UpdateCard(ctx context.Context, deckID, cardID uuid.UUI
 	return args.Get(0).(Card), args.Error(1)
 }
 
+func (m *RepositoryMock) DeleteCard(ctx context.Context, deckID, cardID uuid.UUID) error {
+	return m.Called(ctx, deckID, cardID).Error(0)
+}
+
 func (m *RepositoryMock) UpdateAnswer(ctx context.Context, deckID, cardID, answerID uuid.UUID, updates AnswerUpdates) (Answer, error) {
 	args := m.Called(ctx, deckID, cardID, answerID, updates)
 

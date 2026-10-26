@@ -13,6 +13,7 @@ import (
 	"github.com/juju/errors"
 	_ "github.com/lib/pq"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"github.com/XaviFP/toshokan/common/config"
 	"github.com/XaviFP/toshokan/common/db"
@@ -219,6 +220,64 @@ func TestRepository_DeleteDeck(t *testing.T) {
 		// Try to delete the same deck again - should return not found
 		err := repo.DeleteDeck(context.Background(), deckID)
 		assert.ErrorIs(t, err, ErrDeckNotFound)
+	})
+}
+
+func TestRepository_DeleteCard(t *testing.T) {
+	deckID := uuid.MustParse("fb9ffe2c-ad66-4766-9b7b-46fd5d9acd72")
+	otherDeckID := uuid.MustParse("334ddbf8-1acc-405b-86d8-49f0d1ca636c")
+
+	t.Run("success", func(t *testing.T) {
+		h := newTestHarness(t)
+		repo := NewPGRepository(h.db)
+
+		cardID := uuid.MustParse("d42a90dd-818c-4eed-8e9f-9e8af1a654f4")
+
+		err := repo.DeleteCard(context.Background(), deckID, cardID)
+		require.NoError(t, err)
+
+		actual, err := repo.GetCards(context.Background(), []uuid.UUID{cardID})
+		require.NoError(t, err)
+
+		assert.Empty(t, actual)
+	})
+
+	t.Run("failure_already_deleted", func(t *testing.T) {
+		h := newTestHarness(t)
+		repo := NewPGRepository(h.db)
+
+		cardID := uuid.MustParse("72bdff92-5bc8-4e1d-9217-d0b23e22ff33")
+		err := repo.DeleteCard(context.Background(), deckID, cardID)
+		require.NoError(t, err)
+
+		err = repo.DeleteCard(context.Background(), deckID, cardID)
+		assert.ErrorIs(t, err, ErrCardNotFound)
+	})
+
+	t.Run("failure_not_found", func(t *testing.T) {
+		h := newTestHarness(t)
+		repo := NewPGRepository(h.db)
+
+		err := repo.DeleteCard(context.Background(), deckID, uuid.MustParse("00000000-0000-0000-0000-000000000000"))
+		assert.ErrorIs(t, err, ErrCardNotFound)
+	})
+
+	t.Run("failure_card_of_another_deck", func(t *testing.T) {
+		h := newTestHarness(t)
+		repo := NewPGRepository(h.db)
+
+		cardID := uuid.MustParse("c924f7e0-efd8-4c2d-9c43-8eafb7102ebc")
+		expected, err := repo.GetCards(context.Background(), []uuid.UUID{cardID})
+		require.NoError(t, err)
+
+		err = repo.DeleteCard(context.Background(), otherDeckID, cardID)
+		assert.ErrorIs(t, err, ErrCardNotFound)
+
+		actual, err := repo.GetCards(context.Background(), []uuid.UUID{cardID})
+		require.NoError(t, err)
+
+		require.Len(t, actual, 1)
+		assert.Equal(t, expected, actual)
 	})
 }
 

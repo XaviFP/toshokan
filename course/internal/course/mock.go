@@ -56,6 +56,15 @@ func (m *RepositoryMock) UpdateLesson(ctx context.Context, id uuid.UUID, updates
 	return args.Get(0).(Lesson), args.Error(1)
 }
 
+func (m *RepositoryMock) DeleteCourse(ctx context.Context, id uuid.UUID) ([]uuid.UUID, error) {
+	args := m.Called(ctx, id)
+	return args.Get(0).([]uuid.UUID), args.Error(1)
+}
+
+func (m *RepositoryMock) DeleteLesson(ctx context.Context, courseID, lessonID uuid.UUID) error {
+	return m.Called(ctx, courseID, lessonID).Error(0)
+}
+
 func (m *RepositoryMock) GetCourseDeckIDs(ctx context.Context, courseID uuid.UUID) ([]uuid.UUID, error) {
 	args := m.Called(ctx, courseID)
 	return args.Get(0).([]uuid.UUID), args.Error(1)
