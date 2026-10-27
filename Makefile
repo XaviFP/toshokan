@@ -3,29 +3,9 @@
 # =============================================================================
 # No local dependencies required (go, rust, protoc, etc.)
 # Everything is built inside Docker containers
-#
-# Resource Control:
-# Build automatically detects system resources and adjusts strategy.
-# Low-end machines (< 3GB RAM or <= 4 cores) build services sequentially.
-# Override: BUILD_MODE=sequential make services
 # =============================================================================
 
-.PHONY: services clean rebuild test-api-schema test-api-basic-flow test test-dealer sqlx-prepare coverage dev proto migrations
-
-# Build all services (uses docker buildx bake for shared proto generation)
-# Auto-detects system resources and adjusts parallelism for low-end machines
-services:
-	@eval $$(./scripts/detect-resources.sh) && \
-	if [ "$$BUILD_MODE" = "sequential" ]; then \
-		echo "Building services sequentially (low-resource mode)..." && \
-		for target in proto deck user course gate dealer; do \
-			echo "==> Building $$target..." && \
-			docker buildx bake $$target || exit 1; \
-		done; \
-	else \
-		echo "Building services in parallel..." && \
-		docker buildx bake; \
-	fi
+.PHONY: clean rebuild test-api-schema test-api-basic-flow test test-dealer sqlx-prepare coverage dev proto migrations
 
 # Clean up containers, images, and build artifacts
 clean:
@@ -85,18 +65,15 @@ coverage: test
 dev:
 	docker compose up --build
 
-# Start production environment
-prod:
-	docker compose --env-file .env.prod -f docker-compose.prod.yaml up --build -d
-
 # Stop all containers
 stop:
 	docker compose down
 
-# Generate proto files (builds proto image, useful for IDE support)
+# Regenerate the committed .pb.go files after changing a .proto
 proto:
-	docker build -f proto.Dockerfile -t toshokan-proto .
-	@echo "Proto files generated in toshokan-proto image"
+	@docker build -q --target protoc -t toshokan-protoc . > /dev/null
+	docker run --rm -v $(PWD):/app -w /app --user $(shell id -u):$(shell id -g) \
+		toshokan-protoc sh scripts/generate-protos.sh
 
 # =============================================================================
 # Migrations

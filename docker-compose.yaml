@@ -2,7 +2,7 @@ services:
   db:
     build:
       context: .
-      dockerfile: Dockerfile
+      dockerfile: postgres.Dockerfile
 #    volumes:
 #      - ./data/db:/var/lib/postgresql/data
     environment:
@@ -30,35 +30,29 @@ services:
   user:
     build:
       context: .
-      dockerfile: user/Dockerfile
+      target: user
     depends_on:
       db:
         condition: service_healthy
       cache:
         condition: service_started
-    env_file: 
+    env_file:
       - env/.common
       - env/.user
     restart: unless-stopped
-    labels:
-      - "logging=promtail"
-      - "service=user"
   deck:
     build:
       context: .
-      dockerfile: deck/Dockerfile
+      target: deck
     depends_on:
       db:
         condition: service_healthy
       cache:
         condition: service_started
-    env_file: 
+    env_file:
       - env/.common
       - env/.deck
     restart: unless-stopped
-    labels:
-      - "logging=promtail"
-      - "service=deck"
   dealer:
     build:
       context: .
@@ -73,7 +67,7 @@ services:
   course:
     build:
       context: .
-      dockerfile: course/Dockerfile
+      target: course
     depends_on:
       db:
         condition: service_healthy
@@ -83,13 +77,10 @@ services:
       - env/.common
       - env/.course
     restart: unless-stopped
-    labels:
-      - "logging=promtail"
-      - "service=course"
   gate:
     build:
       context: .
-      dockerfile: gate/Dockerfile
+      target: gate
     depends_on:
       - user
       - deck
@@ -104,50 +95,6 @@ services:
       - env/.common
       - env/.gate
     restart: unless-stopped
-    labels:
-      - "logging=promtail"
-      - "service=gate"
-
-  # Observability Stack
-  loki:
-    image: grafana/loki:2.9.0
-    volumes:
-      - ./observability/loki/loki-config.yaml:/etc/loki/local-config.yaml
-      - loki-data:/loki
-    command: -config.file=/etc/loki/local-config.yaml
-    ports:
-      - "3100:3100"
-    restart: unless-stopped
-
-  promtail:
-    image: grafana/promtail:2.9.0
-    volumes:
-      - ./observability/promtail/promtail-config.yaml:/etc/promtail/config.yaml
-      - /var/lib/docker/containers:/var/lib/docker/containers:ro
-      - /var/run/docker.sock:/var/run/docker.sock
-    command: -config.file=/etc/promtail/config.yaml
-    depends_on:
-      - loki
-    restart: unless-stopped
-
-  grafana:
-    image: grafana/grafana:10.2.0
-    volumes:
-      - ./observability/grafana/provisioning:/etc/grafana/provisioning
-      - grafana-data:/var/lib/grafana
-    environment:
-      - GF_SECURITY_ADMIN_USER=admin
-      - GF_SECURITY_ADMIN_PASSWORD=admin
-      - GF_USERS_ALLOW_SIGN_UP=false
-    ports:
-      - "3000:3000"
-    depends_on:
-      - loki
-    restart: unless-stopped
-
-volumes:
-  loki-data:
-  grafana-data:
 
 networks:
   default:
