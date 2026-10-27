@@ -5,7 +5,7 @@
 # Everything is built inside Docker containers
 # =============================================================================
 
-.PHONY: clean rebuild test-api-schema test-api-basic-flow test test-dealer sqlx-prepare coverage dev proto migrations
+.PHONY: clean rebuild test-api-schema test-api-basic-flow test test-dealer fmt-dealer sqlx-prepare coverage dev proto migrations
 
 # Clean up containers, images, and build artifacts
 clean:
@@ -29,7 +29,7 @@ test-api-basic-flow:
 # Run unit and integration tests in Docker
 test:
 	docker run --rm -v $(PWD):/app -w /app --network host \
-		golang:1.24-bookworm \
+		golang:1.27-bookworm \
 		go test ./... -p=1 -coverprofile=coverage.out
 
 # dealer's tests and query cache run in the `dev` stage of dealer/Dockerfile (Rust, protoc, sqlx-cli),
@@ -45,10 +45,15 @@ DEALER_DEV = docker build -q -f dealer/Dockerfile --target dev -t toshokan-deale
 		-e DATABASE_URL=$(DEALER_DATABASE_URL) toshokan-dealer-dev
 
 # Run dealer's unit and integration tests; needs the db container running and `make migrations`.
-# Fails first if the committed query cache (dealer/.sqlx) is out of date with the deck schema.
+# Fails first if the code isn't formatted with rustfmt, or if the committed query cache
+# (dealer/.sqlx) is out of date with the deck schema.
 # Each DB test gets its own temporary database, created through DATABASE_URL's user.
 test-dealer:
-	$(DEALER_DEV) sh -c "cargo sqlx prepare --check -- --all-targets && SQLX_OFFLINE=true cargo test"
+	$(DEALER_DEV) sh -c "cargo fmt --check && cargo sqlx prepare --check -- --all-targets && SQLX_OFFLINE=true cargo test"
+
+# Format dealer's code with rustfmt
+fmt-dealer:
+	$(DEALER_DEV) sh -c "cargo fmt && chown -R $(shell id -u):$(shell id -g) src build.rs"
 
 # Regenerate dealer's query cache (dealer/.sqlx) after changing a query; needs `make migrations`
 sqlx-prepare:
@@ -57,7 +62,7 @@ sqlx-prepare:
 # Generate coverage report (requires test to have run first)
 coverage: test
 	docker run --rm -v $(PWD):/app -w /app \
-		golang:1.24-bookworm \
+		golang:1.27-bookworm \
 		go tool cover -html=coverage.out -o coverage.html
 	@echo "Coverage report: coverage.html"
 

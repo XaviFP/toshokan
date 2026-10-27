@@ -13,7 +13,7 @@
 # SERVICE can be: deck, user, course, all
 # =============================================================================
 
-FROM golang:1.24-bookworm AS builder
+FROM golang:1.27-bookworm AS builder
 
 WORKDIR /app
 

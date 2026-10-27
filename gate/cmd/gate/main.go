@@ -11,6 +11,7 @@ import (
 	"github.com/juju/errors"
 	grpc "google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
+	healthpb "google.golang.org/grpc/health/grpc_health_v1"
 
 	"github.com/XaviFP/toshokan/common/logging"
 	pbCourse "github.com/XaviFP/toshokan/course/api/proto/v1"
@@ -136,6 +137,12 @@ func main() {
 	gate.RegisterUserRoutes(router, c.gate.signupEnabled, userClient, c.gate.adminConfig)
 	gate.RegisterCoursesRoutes(authorized, coursesClient, userClient, c.gate.adminConfig)
 	gate.RegisterReviewRoutes(authorized, dealerClient, deckClient)
+	gate.RegisterHealthRoutes(router, []gate.HealthCheck{
+		{Service: "user", Client: healthpb.NewHealthClient(userGRPCConn)},
+		{Service: "deck", Client: healthpb.NewHealthClient(deckGRPCConn)},
+		{Service: "dealer", Client: healthpb.NewHealthClient(dealerGRPCConn)},
+		{Service: "course", Client: healthpb.NewHealthClient(coursesGRPCConn)},
+	})
 
 	logger.Info("Starting HTTP server", "address", c.gate.HTTPAddress())
 

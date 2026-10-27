@@ -9,6 +9,7 @@ import (
 	"github.com/juju/errors"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
+	healthpb "google.golang.org/grpc/health/grpc_health_v1"
 	"google.golang.org/grpc/status"
 
 	"github.com/XaviFP/toshokan/common/pagination"
@@ -21,6 +22,7 @@ type Server struct {
 	GRPCTransport string
 
 	Repository deck.Repository
+	Health     healthpb.HealthServer
 
 	grpcServer *grpc.Server
 }
@@ -30,6 +32,7 @@ func (s *Server) Start() error {
 
 	s.grpcServer = grpc.NewServer()
 	pb.RegisterDecksAPIServer(s.grpcServer, s)
+	healthpb.RegisterHealthServer(s.grpcServer, s.Health)
 
 	listener, err := net.Listen(s.GRPCTransport, s.GRPCAddr)
 	if err != nil {

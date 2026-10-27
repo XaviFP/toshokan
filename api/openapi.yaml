@@ -60,6 +60,8 @@ tags:
     description: Admin/professor endpoints for monitoring and debugging (requires admin access)
   - name: Review
     description: Spaced repetition review of cards the user has answered (requires authentication)
+  - name: Health
+    description: Whether the API can serve requests (no auth required)
 
 paths:
   /signup:
@@ -139,6 +141,29 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
+
+  /health:
+    get:
+      tags:
+        - Health
+      summary: Check that the API can serve requests
+      description: |
+        Answers within a few seconds, with 503 when part of the API can't serve requests.
+      operationId: getHealth
+      security: []
+      responses:
+        '200':
+          description: The API can serve requests
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthResponse'
+        '503':
+          description: Part of the API can't serve requests
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthResponse'
 
   /courses:
     post:
@@ -2114,6 +2139,15 @@ components:
           description: Error message
       required:
         - error
+
+    HealthResponse:
+      type: object
+      properties:
+        status:
+          type: string
+          enum: [ok, unavailable]
+      required:
+        - status
 
     TokenResponse:
       type: object

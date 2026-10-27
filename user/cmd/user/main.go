@@ -14,6 +14,7 @@ import (
 
 	"github.com/XaviFP/toshokan/common/config"
 	"github.com/XaviFP/toshokan/common/db"
+	"github.com/XaviFP/toshokan/common/health"
 	"github.com/XaviFP/toshokan/common/logging"
 	"github.com/XaviFP/toshokan/user/internal/grpc"
 	"github.com/XaviFP/toshokan/user/internal/user"
@@ -61,6 +62,7 @@ func main() {
 		Authorizer:      user.NewAuthorizer(repository, tokenRepository),
 		Repository:      repository,
 		TokenRepository: tokenRepository,
+		Health:          health.NewServer(health.Postgres(db), health.Redis(redis)),
 	}
 
 	var serverError chan error

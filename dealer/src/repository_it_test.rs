@@ -6,7 +6,11 @@ use uuid::{uuid, Uuid};
 
 use super::pb::dealer_server::Dealer as _;
 use super::pb::{DealRequest, ReviewAnswersRequest, StoreAnswersRequest};
-use super::{new_pool, CourseDecks, Dealer, Repository, DB_TIMEOUT};
+use tonic_health::proto::health_check_response::ServingStatus;
+use tonic_health::proto::health_server::Health as _;
+use tonic_health::proto::HealthCheckRequest;
+
+use super::{new_pool, CourseDecks, Dealer, DealerHealth, Repository, DB_TIMEOUT};
 
 const USER: Uuid = uuid!("11111111-0000-0000-0000-000000000000");
 const OTHER_USER: Uuid = uuid!("22222222-0000-0000-0000-000000000000");
@@ -1108,4 +1112,48 @@ async fn deal_without_a_database_is_internal() {
         .unwrap_err();
 
     assert_eq!(Code::Internal, actual.code());
+}
+
+#[sqlx::test(migrations = "../deck/cmd/migrate/migrations")]
+async fn health_check_serving_when_the_database_answers(pool: PgPool) {
+    let health = DealerHealth { pool };
+
+    let actual = health
+        .check(Request::new(HealthCheckRequest::default()))
+        .await
+        .unwrap();
+
+    assert_eq!(ServingStatus::Serving as i32, actual.get_ref().status);
+}
+
+#[sqlx::test(migrations = "../deck/cmd/migrate/migrations")]
+async fn health_check_not_serving_when_the_database_is_unreachable(
+    _: PgPoolOptions,
+    options: PgConnectOptions,
+) {
+    // Nothing listens on port 1, so every connection attempt fails.
+    let health = DealerHealth {
+        pool: new_pool(options.port(1), 1, Duration::from_secs(1)),
+    };
+
+    let actual = health
+        .check(Request::new(HealthCheckRequest::default()))
+        .await
+        .unwrap();
+
+    assert_eq!(ServingStatus::NotServing as i32, actual.get_ref().status);
+}
+
+#[sqlx::test(migrations = "../deck/cmd/migrate/migrations")]
+async fn health_check_unknown_service_is_not_found(pool: PgPool) {
+    let health = DealerHealth { pool };
+
+    let actual = health
+        .check(Request::new(HealthCheckRequest {
+            service: "dealer.v1.Dealer".to_string(),
+        }))
+        .await
+        .unwrap_err();
+
+    assert_eq!(Code::NotFound, actual.code());
 }

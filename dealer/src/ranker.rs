@@ -31,7 +31,8 @@ impl Ranker {
         }
 
         loop {
-            let Some(timestamp_to_compare) = Local::now().checked_sub_signed(period_res.unwrap()) else {
+            let Some(timestamp_to_compare) = Local::now().checked_sub_signed(period_res.unwrap())
+            else {
                 return Err("Datetime formation is wrong".to_owned());
             };
 

@@ -7,7 +7,7 @@
 # Build: docker build --target gate -t toshokan-gate .
 # =============================================================================
 
-FROM golang:1.24-bookworm AS builder
+FROM golang:1.27-bookworm AS builder
 
 WORKDIR /app
 
@@ -35,7 +35,7 @@ FROM builder AS gate-builder
 RUN CGO_ENABLED=0 GOOS=linux go build -o /gate ./gate/cmd/gate/
 
 # protoc and its Go plugins, which `make proto` runs
-FROM golang:1.24-bookworm AS protoc
+FROM golang:1.27-bookworm AS protoc
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
     protobuf-compiler \

@@ -15,6 +15,7 @@ import (
 
 	"github.com/XaviFP/toshokan/common/config"
 	"github.com/XaviFP/toshokan/common/db"
+	"github.com/XaviFP/toshokan/common/health"
 	"github.com/XaviFP/toshokan/common/logging"
 	"github.com/XaviFP/toshokan/course/internal/course"
 	courseGRPC "github.com/XaviFP/toshokan/course/internal/grpc"
@@ -90,6 +91,7 @@ func main() {
 		Answerer:       course.NewAnswerer(redisRepo, deckClient, dealerClient),
 		StateSyncer:    course.NewStateSyncer(redisRepo, deckClient),
 		Clock:          realClock,
+		Health:         health.NewServer(health.Postgres(db), health.Redis(redisClient)),
 	}
 
 	var serverError chan error
