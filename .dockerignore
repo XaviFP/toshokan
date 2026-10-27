@@ -33,11 +33,5 @@ env/
 # Data directories
 data/
 
-# Observability configs (not needed for service builds)
-observability/
-
 # API tests
 api/
-
-# Nginx configs
-nginx/
