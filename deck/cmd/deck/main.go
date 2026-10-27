@@ -12,6 +12,7 @@ import (
 
 	"github.com/XaviFP/toshokan/common/config"
 	"github.com/XaviFP/toshokan/common/db"
+	"github.com/XaviFP/toshokan/common/health"
 	"github.com/XaviFP/toshokan/common/logging"
 	"github.com/XaviFP/toshokan/deck/internal/deck"
 	"github.com/XaviFP/toshokan/deck/internal/grpc"
@@ -47,6 +48,7 @@ func main() {
 		GRPCTransport: conf.GRPCConf.TransportProtocol,
 		GRPCAddr:      fmt.Sprintf("%s:%s", conf.GRPCConf.Host, conf.GRPCConf.Port),
 		Repository:    redisRepo,
+		Health:        health.NewServer(health.Postgres(db), health.Redis(redisClient)),
 	}
 
 	var serverError chan error

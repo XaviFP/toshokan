@@ -12,6 +12,7 @@ import (
 	"github.com/tilinna/clock"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
+	healthpb "google.golang.org/grpc/health/grpc_health_v1"
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/types/known/timestamppb"
 
@@ -34,6 +35,7 @@ type Server struct {
 	Answerer       course.Answerer
 	StateSyncer    course.StateSyncer
 	Clock          clock.Clock
+	Health         healthpb.HealthServer
 
 	grpcServer *grpc.Server
 }
@@ -45,6 +47,7 @@ func (s *Server) Start() error {
 	// lets print all operations
 	s.grpcServer = grpc.NewServer(grpc.UnaryInterceptor(invalidCursorInterceptor))
 	pb.RegisterCourseAPIServer(s.grpcServer, s)
+	healthpb.RegisterHealthServer(s.grpcServer, s.Health)
 
 	listener, err := net.Listen(s.GRPCTransport, s.GRPCAddr)
 	if err != nil {

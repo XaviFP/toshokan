@@ -1,8 +1,6 @@
 module github.com/XaviFP/toshokan
 
-go 1.24.0
-
-toolchain go1.24.11
+go 1.27.3
 
 require (
 	aidanwoods.dev/go-paseto v1.6.0

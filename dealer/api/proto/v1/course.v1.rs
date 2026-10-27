@@ -209,16 +209,17 @@ pub struct GetLessonDeckIdsResponse {
 pub struct GetLessonsRequest {
     #[prost(string, tag = "1")]
     pub course_id: ::prost::alloc::string::String,
-    /// No user_id - this is public endpoint, returns Lesson without progress
     #[prost(message, optional, tag = "2")]
     pub pagination: ::core::option::Option<Pagination>,
+    #[prost(string, tag = "3")]
+    pub user_id: ::prost::alloc::string::String,
 }
+/// Lessons come with the user's progress and without their body.
 #[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct GetLessonsResponse {
-    /// Public - bare lessons
     #[prost(message, optional, tag = "1")]
-    pub lessons: ::core::option::Option<LessonsConnection>,
+    pub lessons: ::core::option::Option<LessonsWithProgressConnection>,
 }
 #[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Clone, PartialEq, ::prost::Message)]
@@ -449,6 +450,26 @@ pub struct UpdateLessonResponse {
 }
 #[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Clone, PartialEq, ::prost::Message)]
+pub struct DeleteCourseRequest {
+    #[prost(string, tag = "1")]
+    pub course_id: ::prost::alloc::string::String,
+}
+#[allow(clippy::derive_partial_eq_without_eq)]
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct DeleteCourseResponse {}
+#[allow(clippy::derive_partial_eq_without_eq)]
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct DeleteLessonRequest {
+    #[prost(string, tag = "1")]
+    pub course_id: ::prost::alloc::string::String,
+    #[prost(string, tag = "2")]
+    pub lesson_id: ::prost::alloc::string::String,
+}
+#[allow(clippy::derive_partial_eq_without_eq)]
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct DeleteLessonResponse {}
+#[allow(clippy::derive_partial_eq_without_eq)]
+#[derive(Clone, PartialEq, ::prost::Message)]
 pub struct StudentProgressSummary {
     #[prost(string, tag = "1")]
     pub user_id: ::prost::alloc::string::String,
@@ -612,6 +633,21 @@ pub struct GetAllCoursesResponse {
     pub courses: ::core::option::Option<CoursesConnection>,
     #[prost(int32, tag = "2")]
     pub total_count: i32,
+}
+#[allow(clippy::derive_partial_eq_without_eq)]
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct AdminGetLessonsRequest {
+    #[prost(string, tag = "1")]
+    pub course_id: ::prost::alloc::string::String,
+    #[prost(message, optional, tag = "2")]
+    pub pagination: ::core::option::Option<Pagination>,
+}
+/// Lessons come with their body and without any user's progress.
+#[allow(clippy::derive_partial_eq_without_eq)]
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct AdminGetLessonsResponse {
+    #[prost(message, optional, tag = "1")]
+    pub lessons: ::core::option::Option<LessonsConnection>,
 }
 /// Generated client implementations.
 pub mod course_api_client {
@@ -910,6 +946,25 @@ pub mod course_api_client {
             );
             self.inner.unary(request.into_request(), path, codec).await
         }
+        pub async fn delete_course(
+            &mut self,
+            request: impl tonic::IntoRequest<super::DeleteCourseRequest>,
+        ) -> Result<tonic::Response<super::DeleteCourseResponse>, tonic::Status> {
+            self.inner
+                .ready()
+                .await
+                .map_err(|e| {
+                    tonic::Status::new(
+                        tonic::Code::Unknown,
+                        format!("Service was not ready: {}", e.into()),
+                    )
+                })?;
+            let codec = tonic::codec::ProstCodec::default();
+            let path = http::uri::PathAndQuery::from_static(
+                "/course.v1.CourseAPI/DeleteCourse",
+            );
+            self.inner.unary(request.into_request(), path, codec).await
+        }
         pub async fn update_lesson(
             &mut self,
             request: impl tonic::IntoRequest<super::UpdateLessonRequest>,
@@ -926,6 +981,25 @@ pub mod course_api_client {
             let codec = tonic::codec::ProstCodec::default();
             let path = http::uri::PathAndQuery::from_static(
                 "/course.v1.CourseAPI/UpdateLesson",
+            );
+            self.inner.unary(request.into_request(), path, codec).await
+        }
+        pub async fn delete_lesson(
+            &mut self,
+            request: impl tonic::IntoRequest<super::DeleteLessonRequest>,
+        ) -> Result<tonic::Response<super::DeleteLessonResponse>, tonic::Status> {
+            self.inner
+                .ready()
+                .await
+                .map_err(|e| {
+                    tonic::Status::new(
+                        tonic::Code::Unknown,
+                        format!("Service was not ready: {}", e.into()),
+                    )
+                })?;
+            let codec = tonic::codec::ProstCodec::default();
+            let path = http::uri::PathAndQuery::from_static(
+                "/course.v1.CourseAPI/DeleteLesson",
             );
             self.inner.unary(request.into_request(), path, codec).await
         }
@@ -1060,6 +1134,25 @@ pub mod course_api_client {
             let codec = tonic::codec::ProstCodec::default();
             let path = http::uri::PathAndQuery::from_static(
                 "/course.v1.CourseAPI/GetAllCourses",
+            );
+            self.inner.unary(request.into_request(), path, codec).await
+        }
+        pub async fn admin_get_lessons(
+            &mut self,
+            request: impl tonic::IntoRequest<super::AdminGetLessonsRequest>,
+        ) -> Result<tonic::Response<super::AdminGetLessonsResponse>, tonic::Status> {
+            self.inner
+                .ready()
+                .await
+                .map_err(|e| {
+                    tonic::Status::new(
+                        tonic::Code::Unknown,
+                        format!("Service was not ready: {}", e.into()),
+                    )
+                })?;
+            let codec = tonic::codec::ProstCodec::default();
+            let path = http::uri::PathAndQuery::from_static(
+                "/course.v1.CourseAPI/AdminGetLessons",
             );
             self.inner.unary(request.into_request(), path, codec).await
         }

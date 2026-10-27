@@ -5,8 +5,12 @@ use sqlx::error::{DatabaseError, ErrorKind};
 use sqlx::postgres::{PgConnectOptions, PgDatabaseError, PgPool, PgPoolOptions};
 use tokio::signal::unix::{signal, SignalKind};
 use tokio_util::sync::CancellationToken;
+use tonic::codegen::BoxStream;
 use tonic::transport::{Channel, Endpoint, Server};
 use tonic::{Code, Request, Response, Status};
+use tonic_health::proto::health_check_response::ServingStatus;
+use tonic_health::proto::health_server::{Health, HealthServer};
+use tonic_health::proto::{HealthCheckRequest, HealthCheckResponse};
 use uuid::Uuid;
 
 mod pb {
@@ -49,6 +53,45 @@ struct Dealer {
     courses: Box<dyn CourseDecks>,
 }
 
+// Answers the standard gRPC health check for the whole service, by running a query on the pool.
+struct DealerHealth {
+    pool: PgPool,
+}
+
+#[tonic::async_trait]
+impl Health for DealerHealth {
+    async fn check(
+        &self,
+        request: Request<HealthCheckRequest>,
+    ) -> Result<Response<HealthCheckResponse>, Status> {
+        let service = &request.get_ref().service;
+        if !service.is_empty() {
+            return Err(Status::not_found(format!("unknown service {:?}", service)));
+        }
+
+        let status = match sqlx::query("SELECT 1").execute(&self.pool).await {
+            Ok(_) => ServingStatus::Serving,
+            Err(err) => {
+                eprintln!("health check failed: {}", err);
+                ServingStatus::NotServing
+            }
+        };
+
+        Ok(Response::new(HealthCheckResponse {
+            status: status as i32,
+        }))
+    }
+
+    type WatchStream = BoxStream<HealthCheckResponse>;
+
+    async fn watch(
+        &self,
+        _: Request<HealthCheckRequest>,
+    ) -> Result<Response<Self::WatchStream>, Status> {
+        Err(Status::unimplemented("watch isn't supported"))
+    }
+}
+
 // Looks up which decks belong to a course or lesson, in the course service.
 #[tonic::async_trait]
 trait CourseDecks: Send + Sync + 'static {
@@ -82,7 +125,9 @@ impl CourseDecks for CourseApiClient<Channel> {
 fn parse_deck_ids(deck_ids: &[String]) -> Result<Vec<Uuid>, Status> {
     deck_ids
         .iter()
-        .map(|id| Uuid::try_parse(id).map_err(|_| Status::internal("invalid deck_id from course service")))
+        .map(|id| {
+            Uuid::try_parse(id).map_err(|_| Status::internal("invalid deck_id from course service"))
+        })
         .collect()
 }
 struct Repository {
@@ -103,7 +148,6 @@ fn new_pool(options: PgConnectOptions, max_connections: u32, timeout: Duration) 
 }
 
 impl Repository {
-
     async fn get_max_cards_per_level(
         &self,
         user_id: &Uuid,
@@ -221,7 +265,10 @@ fn parse_uuid(field: &str, value: &str) -> Result<Uuid, Status> {
     Uuid::try_parse(value).map_err(|_| Status::invalid_argument(format!("invalid {}", field)))
 }
 
-fn parse_answers_request(user_id: &str, answer_ids: &[String]) -> Result<(Uuid, Vec<Uuid>), Status> {
+fn parse_answers_request(
+    user_id: &str,
+    answer_ids: &[String],
+) -> Result<(Uuid, Vec<Uuid>), Status> {
     let user_id = parse_uuid("user_id", user_id)?;
     if answer_ids.is_empty() {
         return Err(Status::invalid_argument("no answers provided"));
@@ -251,10 +298,16 @@ fn parse_deal_request(request: &DealRequest) -> Result<(Uuid, Scope), Status> {
     }
 
     if !request.course_id.is_empty() {
-        return Ok((user_id, Scope::Course(parse_uuid("course_id", &request.course_id)?)));
+        return Ok((
+            user_id,
+            Scope::Course(parse_uuid("course_id", &request.course_id)?),
+        ));
     }
     if !request.lesson_id.is_empty() {
-        return Ok((user_id, Scope::Lesson(parse_uuid("lesson_id", &request.lesson_id)?)));
+        return Ok((
+            user_id,
+            Scope::Lesson(parse_uuid("lesson_id", &request.lesson_id)?),
+        ));
     }
     if request.deck_ids.is_empty() {
         return Ok((user_id, Scope::All));
@@ -312,9 +365,9 @@ impl pbDealer for Dealer {
             Err(err) if is_unknown_answer(&err) => {
                 Err(Status::invalid_argument("unknown answer_id"))
             }
-            Err(err) if is_null_card_id(&err) => {
-                Err(Status::invalid_argument("answer_id does not belong to a card"))
-            }
+            Err(err) if is_null_card_id(&err) => Err(Status::invalid_argument(
+                "answer_id does not belong to a card",
+            )),
             Err(err) => Err(internal_error("store answers", err)),
         }
     }
@@ -435,11 +488,16 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         courses: Box::new(CourseApiClient::new(course_channel)),
     };
 
+    let health = DealerHealth { pool: pool.clone() };
+
     Server::builder()
+        .add_service(HealthServer::new(health))
         .add_service(DealerServer::new(dealer))
         .serve_with_shutdown(addr, async move {
-            let mut sigterm = signal(SignalKind::terminate()).expect("Failed to register SIGTERM handler");
-            let mut sigint = signal(SignalKind::interrupt()).expect("Failed to register SIGINT handler");
+            let mut sigterm =
+                signal(SignalKind::terminate()).expect("Failed to register SIGTERM handler");
+            let mut sigint =
+                signal(SignalKind::interrupt()).expect("Failed to register SIGINT handler");
             tokio::select! {
                 _ = sigterm.recv() => println!("Received SIGTERM, stopping server..."),
                 _ = sigint.recv() => println!("Received SIGINT, stopping server..."),

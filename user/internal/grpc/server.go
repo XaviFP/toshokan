@@ -10,6 +10,7 @@ import (
 	_ "github.com/lib/pq"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
+	healthpb "google.golang.org/grpc/health/grpc_health_v1"
 	"google.golang.org/grpc/status"
 
 	pb "github.com/XaviFP/toshokan/user/api/proto/v1"
@@ -24,6 +25,7 @@ type Server struct {
 	Creator         user.Creator
 	Repository      user.Repository
 	TokenRepository user.TokenRepository
+	Health          healthpb.HealthServer
 
 	grpcServer *grpc.Server
 }
@@ -33,6 +35,7 @@ func (s *Server) Start() error {
 
 	grpcServer := grpc.NewServer()
 	pb.RegisterUserAPIServer(grpcServer, s)
+	healthpb.RegisterHealthServer(grpcServer, s.Health)
 
 	listener, err := net.Listen(s.GRPCTransport, s.GRPCAddr)
 	if err != nil {

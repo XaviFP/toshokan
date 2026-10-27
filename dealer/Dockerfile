@@ -41,7 +41,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     protobuf-compiler \
     libprotobuf-dev \
     && rm -rf /var/lib/apt/lists/* \
-    && cargo install sqlx-cli --version 0.8.6 --locked --no-default-features --features postgres,rustls
+    && cargo install sqlx-cli --version 0.8.6 --locked --no-default-features --features postgres,rustls \
+    && rustup component add rustfmt
 
 WORKDIR /app/dealer
 
